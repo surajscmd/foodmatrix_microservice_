@@ -1,0 +1,254 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- ENUMS ---
+enum PayType {
+  HOURLY
+  SALARY
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum ShiftType {
+  MORNING
+  EVENING
+  NIGHT
+  SPLIT
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PayrollStatus {
+  DRAFT
+  APPROVED
+  PAID
+}
+
+enum PaymentMethod {
+  DIRECT_DEPOSIT
+  CHECK
+  CASH
+}
+
+enum ShiftTemplateStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ShiftScheduleStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+// --- MODELS ---
+model Staff {
+  id           String         @id @default(uuid())
+  restaurantId String
+  employeeCode String
+  firstName    String
+  lastName     String
+  role         String
+  pinHash      String
+  status       EmployeeStatus @default(ACTIVE)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  leaves         Leave[]
+  payslips       Payslip[]
+  shifts         Shift[]
+  wageHistories  WageHistory[]
+  shiftSchedules ShiftSchedule[]
+
+  @@unique([restaurantId, employeeCode])
+  @@index([restaurantId])
+}
+
+model WageHistory {
+  id      String @id @default(uuid())
+  staffId String
+  staff   Staff  @relation(fields: [staffId], references: [id])
+
+  payType      PayType  @default(HOURLY)
+  hourlyWage   Decimal? @db.Decimal(8, 2)
+  overtimeRate Decimal? @db.Decimal(8, 2)
+  salaryAmount Decimal? @db.Decimal(10, 2)
+
+  effectiveStartDate DateTime  @db.Date
+  effectiveEndDate   DateTime? @db.Date
+
+  approvedById String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([staffId, effectiveStartDate])
+}
+
+model Shift {
+  id           String    @id @default(uuid())
+  staffId      String
+  staff        Staff     @relation(fields: [staffId], references: [id])
+  restaurantId String
+  shiftType    ShiftType
+
+  clockInAt  DateTime  @default(now())
+  clockOutAt DateTime?
+
+  totalHours    Decimal? @db.Decimal(5, 2)
+  regularHours  Decimal? @db.Decimal(5, 2)
+  overtimeHours Decimal? @default(0) @db.Decimal(5, 2)
+
+  hourlyWageAtShift   Decimal? @db.Decimal(8, 2)
+  overtimeRateAtShift Decimal? @db.Decimal(8, 2)
+
+  isProcessedForPay Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, isProcessedForPay])
+  @@index([staffId])
+  @@index([clockInAt])
+}
+
+model ShiftTemplate {
+  id           String @id @default(uuid())
+  restaurantId String
+
+  name String
+  type ShiftType
+
+  status ShiftTemplateStatus @default(ACTIVE)
+
+  segments  ShiftTemplateSegment[]
+  schedules ShiftSchedule[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, name])
+  @@index([restaurantId])
+  @@index([restaurantId, status])
+}
+
+model ShiftTemplateSegment {
+  id              String        @id @default(uuid())
+  shiftTemplateId String
+  shiftTemplate   ShiftTemplate @relation(fields: [shiftTemplateId], references: [id], onDelete: Cascade)
+
+  sequence        Int
+  startTime       String
+  endTime         String
+  crossesMidnight Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([shiftTemplateId, sequence])
+  @@index([shiftTemplateId])
+}
+
+model ShiftSchedule {
+  id              String @id @default(uuid())
+  restaurantId    String
+  staffId         String
+  shiftTemplateId String
+
+  staff         Staff         @relation(fields: [staffId], references: [id])
+  shiftTemplate ShiftTemplate @relation(fields: [shiftTemplateId], references: [id])
+
+  scheduledStart DateTime
+  scheduledEnd   DateTime
+
+  status ShiftScheduleStatus @default(SCHEDULED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, scheduledStart])
+  @@index([staffId, scheduledStart])
+  @@index([shiftTemplateId])
+}
+
+model Leave {
+  id           String      @id @default(uuid())
+  staffId      String
+  staff        Staff       @relation(fields: [staffId], references: [id])
+  type         String
+  isPaidLeave  Boolean     @default(false)
+  startDate    DateTime    @db.Date
+  endDate      DateTime    @db.Date
+  totalDays    Decimal?    @db.Decimal(5, 2)
+  reason       String?
+  status       LeaveStatus @default(PENDING)
+  approvedById String?
+  approvedAt   DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([staffId])
+}
+
+model PayrollRun {
+  id              String        @id @default(uuid())
+  restaurantId    String
+  periodStartDate DateTime      @db.Date
+  periodEndDate   DateTime      @db.Date
+  status          PayrollStatus @default(DRAFT)
+  processedById   String
+
+  totalGrossPay Decimal @default(0) @db.Decimal(12, 2)
+  totalTaxes    Decimal @default(0) @db.Decimal(12, 2)
+  totalNetPay   Decimal @default(0) @db.Decimal(12, 2)
+
+  payslips Payslip[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId, periodStartDate])
+}
+
+model Payslip {
+  id           String     @id @default(uuid())
+  payrollRunId String
+  payrollRun   PayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  staffId      String
+  staff        Staff      @relation(fields: [staffId], references: [id])
+
+  regularHours   Decimal @default(0) @db.Decimal(5, 2)
+  overtimeHours  Decimal @default(0) @db.Decimal(5, 2)
+  paidLeaveHours Decimal @default(0) @db.Decimal(5, 2)
+
+  regularPay  Decimal @default(0) @db.Decimal(10, 2)
+  overtimePay Decimal @default(0) @db.Decimal(10, 2)
+  grossPay    Decimal @default(0) @db.Decimal(10, 2)
+
+  taxDeductions   Decimal @default(0) @db.Decimal(10, 2)
+  otherDeductions Decimal @default(0) @db.Decimal(10, 2)
+  netPay          Decimal @default(0) @db.Decimal(10, 2)
+
+  paymentMethod PaymentMethod
+  status        PayrollStatus @default(DRAFT)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([payrollRunId, staffId])
+}

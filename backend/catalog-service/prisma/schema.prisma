@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// MENU CATEGORY
+// ============================================================
+
+model MenuCategory {
+  id        String     @id @default(uuid())
+  name      String
+  sortOrder Int        @default(0)
+  isActive  Boolean    @default(true)
+
+  items     MenuItem[]
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+// ============================================================
+// MENU ITEM
+// ============================================================
+
+model MenuItem {
+  id          String       @id @default(uuid())
+  categoryId  String
+
+  category    MenuCategory @relation(fields: [categoryId],references: [id])
+
+  name        String
+  sku         String       @unique
+  description String?
+  basePrice   Decimal      @db.Decimal(10, 2)
+  isAvailable Boolean      @default(true)
+
+  modifierGroups ItemModifierGroup[]
+  recipe         RecipeItem[]
+
+  restaurantMenus RestaurantMenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categoryId])
+  @@index([isAvailable])
+}
+
+// ============================================================
+// RESTAURANT-SPECIFIC MENU ITEM
+// ============================================================
+//
+// Organization Service owns the restaurant.
+// restaurantId is a soft reference — NO cross-service FK.
+//
+// Allows:
+// Restaurant A → ₹299 → available
+// Restaurant B → ₹329 → available
+// Restaurant C → ₹299 → disabled
+//
+// ============================================================
+
+model RestaurantMenuItem {
+  id           String   @id @default(uuid())
+
+  restaurantId String
+  menuItemId   String
+
+  price        Decimal  @db.Decimal(10, 2)
+  isAvailable  Boolean  @default(true)
+
+  menuItem     MenuItem @relation(fields: [menuItemId],references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, menuItemId])
+  @@index([restaurantId])
+  @@index([menuItemId])
+  @@index([restaurantId, isAvailable])
+}
+
+// ============================================================
+// MODIFIER GROUP
+// ============================================================
+
+model ModifierGroup {
+  id            String   @id @default(uuid())
+  name          String
+
+  sortOrder     Int      @default(0)
+
+  minSelections Int      @default(0)
+  maxSelections Int      @default(1)
+
+  isActive      Boolean  @default(true)
+
+  modifiers     Modifier[]
+  menuItems     ItemModifierGroup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive, sortOrder])
+}
+
+// ============================================================
+// MODIFIER
+// ============================================================
+
+model Modifier {
+  id         String   @id @default(uuid())
+  groupId    String
+
+  group      ModifierGroup @relation(fields: [groupId],references: [id],onDelete: Cascade)
+
+  name       String
+  sortOrder  Int      @default(0)
+
+  extraPrice Decimal  @default(0) @db.Decimal(10, 2)
+
+  isActive   Boolean  @default(true)
+
+  recipe     RecipeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([groupId, isActive, sortOrder])
+}
+
+// ============================================================
+// MENU ITEM ↔ MODIFIER GROUP
+// ============================================================
+
+model ItemModifierGroup {
+  menuItemId String
+  groupId    String
+
+  menuItem   MenuItem @relation(fields: [menuItemId],references: [id],onDelete: Cascade)
+
+  group      ModifierGroup @relation( fields: [groupId],references: [id],onDelete: Cascade)
+
+  @@id([menuItemId, groupId])
+  @@index([groupId])
+}
+
+// ============================================================
+// INGREDIENT
+// ============================================================
+//
+// This is ONLY the global ingredient/material dictionary.
+// Stock quantities belong to Inventory Service.
+//
+// ============================================================
+
+model Ingredient {
+  id       String   @id @default(uuid())
+  name     String
+  uom      String
+
+  isActive Boolean  @default(true)
+
+  recipes  RecipeItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// ============================================================
+// RECIPE ITEM / BILL OF MATERIALS
+// ============================================================
+//
+// A recipe belongs to EITHER:
+//   1. MenuItem
+//   2. Modifier
+//
+// Exactly ONE of menuItemId / modifierId must be populated.
+//
+// ============================================================
+
+model RecipeItem {
+  id String @id @default(uuid())
+
+  menuItemId String?
+  menuItem   MenuItem? @relation(fields: [menuItemId],references: [id],onDelete: Cascade)
+
+  modifierId String?
+  modifier   Modifier? @relation(fields: [modifierId],references: [id],onDelete: Cascade)
+
+  ingredientId String
+  ingredient   Ingredient @relation(fields: [ingredientId],references: [id])
+
+  quantityNeeded Decimal @db.Decimal(10, 4)
+
+  @@unique([menuItemId, ingredientId])
+  @@unique([modifierId, ingredientId])
+
+  @@index([ingredientId])
+  @@index([menuItemId])
+  @@index([modifierId])
+}

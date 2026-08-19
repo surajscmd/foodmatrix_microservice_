@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/
+build/
+coverage/
+
+# Logs
+*.log
+logs/
+
+# NestJS
+.nest/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.nyc_output/
+
+# Temporary
+tmp/
+temp/
