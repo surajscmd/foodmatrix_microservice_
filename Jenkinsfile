@@ -8,9 +8,17 @@ pipeline {
             }
         }
 
+        stage('Environment Check') {
+            steps {
+                bat 'node --version'
+                bat 'npm --version'
+                bat 'where node'
+            }
+        }
+
         stage('Test') {
             steps {
-                echo 'CI pipeline is working!'
+                echo 'Node.js is available to Jenkins!'
             }
         }
     }
