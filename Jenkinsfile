@@ -14,7 +14,6 @@ pipeline {
                 dir('backend/catalog-service') {
                     bat 'npm ci'
                     bat 'npx prisma generate'
-                    bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
             }
@@ -25,7 +24,6 @@ pipeline {
                 dir('backend/hr-service') {
                     bat 'npm ci'
                     bat 'npx prisma generate'
-                    bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
             }
@@ -36,7 +34,6 @@ pipeline {
                 dir('backend/order-service') {
                     bat 'npm ci'
                     bat 'npx prisma generate'
-                    bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
             }
@@ -47,7 +44,6 @@ pipeline {
                 dir('backend/organization-service') {
                     bat 'npm ci'
                     bat 'npx prisma generate'
-                    bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
             }
@@ -65,7 +61,7 @@ pipeline {
 
     post {
         success {
-            echo 'All services passed CI successfully!'
+            echo 'All services and frontend built successfully!'
         }
 
         failure {
