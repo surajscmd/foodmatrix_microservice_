@@ -10,7 +10,7 @@ interface Attendance {
   id: string;
   employeeName: string;
   checkIn: string;
-  checkOut?: string;
+  checkOut?: string | null;
   status: string;
 }
 

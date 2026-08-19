@@ -6,7 +6,7 @@ export interface User {
   avatar: string;
 }
 // new types for sidebar navigation
-import type { LucideIcon } from "lucide-react";
+import { LucideIcon } from "lucide-react";
 export interface SidebarHeaderConfig {
   title: string;
   subtitle: string;

@@ -57,7 +57,7 @@ export default function CategoryChart() {
               <div className="text-right">
 
                 <p className="text-sm font-bold text-white">
-                  {category.revenue}
+                  {category.amount}
                 </p>
 
                 <p className="text-xs text-zinc-500">
