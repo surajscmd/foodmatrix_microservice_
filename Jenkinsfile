@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        SONAR_PROJECT_KEY = 'foodmatrix'
+        SONAR_PROJECT_NAME = 'FoodMatrix'
+    }
+
     stages {
 
         stage('Checkout') {
@@ -57,11 +62,29 @@ pipeline {
                 }
             }
         }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    script {
+                        def scannerHome = tool 'sonar-scanner'
+
+                        sh """
+                            ${scannerHome}/bin/sonar-scanner \
+                              -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                              -Dsonar.projectName="${SONAR_PROJECT_NAME}" \
+                              -Dsonar.sources=backend,frontend \
+                              -Dsonar.exclusions="**/node_modules/**,**/dist/**,**/.next/**,**/coverage/**"
+                        """
+                    }
+                }
+            }
+        }
     }
 
     post {
         success {
-            echo 'All services and frontend built successfully!'
+            echo 'All services, frontend and SonarQube analysis completed successfully!'
         }
 
         failure {
