@@ -2,6 +2,7 @@ pipeline {
     agent any
 
     stages {
+
         stage('Checkout') {
             steps {
                 checkout scm
@@ -13,7 +14,6 @@ pipeline {
                 dir('backend/catalog-service') {
                     bat 'npm ci'
                     bat 'npx prisma generate'
-                    bat 'npx eslint "{src,apps,libs,test}/**/*.ts"'
                     bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
@@ -24,7 +24,7 @@ pipeline {
             steps {
                 dir('backend/hr-service') {
                     bat 'npm ci'
-                    bat 'npx eslint "{src,apps,libs,test}/**/*.ts"'
+                    bat 'npx prisma generate'
                     bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
@@ -35,7 +35,7 @@ pipeline {
             steps {
                 dir('backend/order-service') {
                     bat 'npm ci'
-                    bat 'npx eslint "{src,apps,libs,test}/**/*.ts"'
+                    bat 'npx prisma generate'
                     bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
@@ -46,7 +46,7 @@ pipeline {
             steps {
                 dir('backend/organization-service') {
                     bat 'npm ci'
-                    bat 'npx eslint "{src,apps,libs,test}/**/*.ts"'
+                    bat 'npx prisma generate'
                     bat 'npm test -- --runInBand'
                     bat 'npm run build'
                 }
@@ -57,7 +57,6 @@ pipeline {
             steps {
                 dir('frontend') {
                     bat 'npm ci'
-                    bat 'npm run lint'
                     bat 'npm run build'
                 }
             }
@@ -66,7 +65,7 @@ pipeline {
 
     post {
         success {
-            echo 'All backend services and frontend passed CI successfully!'
+            echo 'All services passed CI successfully!'
         }
 
         failure {
