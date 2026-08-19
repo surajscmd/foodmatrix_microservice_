@@ -1,10 +1,11 @@
 pipeline {
     agent any
 
-  environment {
-    SONAR_PROJECT_KEY = 'FoodMatrix'
-    SONAR_PROJECT_NAME = 'FoodMatrix'
-}
+    environment {
+        SONAR_PROJECT_KEY = 'FoodMatrix'
+        SONAR_PROJECT_NAME = 'FoodMatrix'
+    }
+
     stages {
 
         stage('Checkout') {
@@ -79,16 +80,17 @@ pipeline {
                 }
             }
         }
-    }
-    stage('Docker Build') {
-    steps {
-        sh 'docker compose build'
-          }
+
+        stage('Docker Build') {
+            steps {
+                sh 'docker compose build'
+            }
+        }
     }
 
     post {
         success {
-            echo 'All services, frontend and SonarQube analysis completed successfully!'
+            echo 'All services, frontend, SonarQube and Docker build completed successfully!'
         }
 
         failure {
