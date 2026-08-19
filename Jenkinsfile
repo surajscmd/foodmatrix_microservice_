@@ -12,9 +12,9 @@ pipeline {
         stage('Catalog Service') {
             steps {
                 dir('backend/catalog-service') {
-                    bat 'npm ci'
-                    bat 'npx prisma generate'
-                    bat 'npm run build'
+                    sh 'npm ci'
+                    sh 'npx prisma generate'
+                    sh 'npm run build'
                 }
             }
         }
@@ -22,9 +22,9 @@ pipeline {
         stage('HR Service') {
             steps {
                 dir('backend/hr-service') {
-                    bat 'npm ci'
-                    bat 'npx prisma generate'
-                    bat 'npm run build'
+                    sh 'npm ci'
+                    sh 'npx prisma generate'
+                    sh 'npm run build'
                 }
             }
         }
@@ -32,9 +32,9 @@ pipeline {
         stage('Order Service') {
             steps {
                 dir('backend/order-service') {
-                    bat 'npm ci'
-                    bat 'npx prisma generate'
-                    bat 'npm run build'
+                    sh 'npm ci'
+                    sh 'npx prisma generate'
+                    sh 'npm run build'
                 }
             }
         }
@@ -42,9 +42,9 @@ pipeline {
         stage('Organization Service') {
             steps {
                 dir('backend/organization-service') {
-                    bat 'npm ci'
-                    bat 'npx prisma generate'
-                    bat 'npm run build'
+                    sh 'npm ci'
+                    sh 'npx prisma generate'
+                    sh 'npm run build'
                 }
             }
         }
@@ -52,8 +52,8 @@ pipeline {
         stage('Frontend') {
             steps {
                 dir('frontend') {
-                    bat 'npm ci'
-                    bat 'npm run build'
+                    sh 'npm ci'
+                    sh 'npm run build'
                 }
             }
         }
