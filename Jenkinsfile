@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     stages {
-
         stage('Checkout') {
             steps {
                 checkout scm
@@ -13,6 +12,7 @@ pipeline {
             steps {
                 dir('backend/catalog-service') {
                     bat 'npm ci'
+                    bat 'npx prisma generate'
                     bat 'npx eslint "{src,apps,libs,test}/**/*.ts"'
                     bat 'npm test -- --runInBand'
                     bat 'npm run build'
