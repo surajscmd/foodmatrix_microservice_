@@ -80,6 +80,11 @@ pipeline {
             }
         }
     }
+    stage('Docker Build') {
+    steps {
+        sh 'docker compose build'
+          }
+    }
 
     post {
         success {
