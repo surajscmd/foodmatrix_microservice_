@@ -1,11 +1,10 @@
 pipeline {
     agent any
 
-    environment {
-        SONAR_PROJECT_KEY = 'foodmatrix'
-        SONAR_PROJECT_NAME = 'FoodMatrix'
-    }
-
+  environment {
+    SONAR_PROJECT_KEY = 'FoodMatrix'
+    SONAR_PROJECT_NAME = 'FoodMatrix'
+}
     stages {
 
         stage('Checkout') {
