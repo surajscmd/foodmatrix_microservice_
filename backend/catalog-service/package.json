@@ -25,7 +25,7 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/mapped-types": "^2.1.1",
     "@nestjs/platform-express": "^11.0.1",
-    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.9.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
@@ -58,6 +58,7 @@
     "ts-loader": "^9.5.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
+    "tsx": "^4.23.12",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   },
@@ -70,7 +71,22 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.ts$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "module": "commonjs",
+            "target": "ES2021",
+            "esModuleInterop": true,
+            "experimentalDecorators": true,
+            "emitDecoratorMetadata": true,
+            "isolatedModules": false
+          }
+        }
+      ]
+    },
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
     },
     "collectCoverageFrom": [
       "**/*.(t|j)s"

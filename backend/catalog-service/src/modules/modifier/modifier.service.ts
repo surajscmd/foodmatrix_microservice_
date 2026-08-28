@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   BadRequestException,
   Injectable,
@@ -16,6 +11,10 @@ import { PrismaService } from '../../lib/prisma/prisma.service';
 @Injectable()
 export class ModifierService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ============================================================
+  // CREATE
+  // ============================================================
 
   async create(createDto: CreateModifierDto) {
     const group = await this.prisma.modifierGroup.findUnique({
@@ -34,7 +33,7 @@ export class ModifierService {
       );
     }
 
-    return this.prisma.modifier.create({
+    const modifier = await this.prisma.modifier.create({
       data: {
         groupId: createDto.groupId,
         name: createDto.name,
@@ -42,14 +41,36 @@ export class ModifierService {
         extraPrice: createDto.extraPrice ?? 0,
         isActive: createDto.isActive ?? true,
       },
-      include: {
-        group: true,
-      },
     });
+
+    return {
+      group: {
+        id: group.id,
+        name: group.name,
+        sortOrder: group.sortOrder,
+        minSelections: group.minSelections,
+        maxSelections: group.maxSelections,
+        isActive: group.isActive,
+      },
+      modifier: {
+        id: modifier.id,
+        groupId: modifier.groupId,
+        name: modifier.name,
+        sortOrder: modifier.sortOrder,
+        extraPrice: Number(modifier.extraPrice),
+        isActive: modifier.isActive,
+        createdAt: modifier.createdAt,
+        updatedAt: modifier.updatedAt,
+      },
+    };
   }
 
+  // ============================================================
+  // FIND ALL
+  // ============================================================
+
   async findAll(groupId?: string) {
-    return this.prisma.modifier.findMany({
+    const modifiers = await this.prisma.modifier.findMany({
       where: {
         isActive: true,
         ...(groupId !== undefined && {
@@ -68,7 +89,67 @@ export class ModifierService {
         },
       ],
     });
+
+    const grouped = modifiers.reduce<
+      {
+        group: {
+          id: string;
+          name: string;
+          sortOrder: number;
+          minSelections: number;
+          maxSelections: number;
+          isActive: boolean;
+        };
+        modifiers: {
+          id: string;
+          groupId: string;
+          name: string;
+          sortOrder: number;
+          extraPrice: number;
+          isActive: boolean;
+          createdAt: Date;
+          updatedAt: Date;
+        }[];
+      }[]
+    >((groups, modifier) => {
+      let group = groups.find((item) => item.group.id === modifier.group.id);
+
+      if (!group) {
+        group = {
+          group: {
+            id: modifier.group.id,
+            name: modifier.group.name,
+            sortOrder: modifier.group.sortOrder,
+            minSelections: modifier.group.minSelections,
+            maxSelections: modifier.group.maxSelections,
+            isActive: modifier.group.isActive,
+          },
+          modifiers: [],
+        };
+
+        groups.push(group);
+      }
+
+      group.modifiers.push({
+        id: modifier.id,
+        groupId: modifier.groupId,
+        name: modifier.name,
+        sortOrder: modifier.sortOrder,
+        extraPrice: Number(modifier.extraPrice),
+        isActive: modifier.isActive,
+        createdAt: modifier.createdAt,
+        updatedAt: modifier.updatedAt,
+      });
+
+      return groups;
+    }, []);
+
+    return grouped;
   }
+
+  // ============================================================
+  // FIND ONE
+  // ============================================================
 
   async findOne(id: string) {
     const modifier = await this.prisma.modifier.findUnique({
@@ -84,11 +165,42 @@ export class ModifierService {
       throw new NotFoundException('Modifier not found');
     }
 
-    return modifier;
+    return {
+      group: {
+        id: modifier.group.id,
+        name: modifier.group.name,
+        sortOrder: modifier.group.sortOrder,
+        minSelections: modifier.group.minSelections,
+        maxSelections: modifier.group.maxSelections,
+        isActive: modifier.group.isActive,
+      },
+      modifier: {
+        id: modifier.id,
+        groupId: modifier.groupId,
+        name: modifier.name,
+        sortOrder: modifier.sortOrder,
+        extraPrice: Number(modifier.extraPrice),
+        isActive: modifier.isActive,
+        createdAt: modifier.createdAt,
+        updatedAt: modifier.updatedAt,
+      },
+    };
   }
 
+  // ============================================================
+  // UPDATE
+  // ============================================================
+
   async update(id: string, updateDto: UpdateModifierDto) {
-    const existing = await this.findOne(id);
+    const existing = await this.prisma.modifier.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Modifier not found');
+    }
 
     if (!existing.isActive) {
       throw new BadRequestException('Cannot update an inactive modifier');
@@ -112,7 +224,7 @@ export class ModifierService {
       }
     }
 
-    return this.prisma.modifier.update({
+    const modifier = await this.prisma.modifier.update({
       where: {
         id,
       },
@@ -120,19 +232,15 @@ export class ModifierService {
         ...(updateDto.groupId !== undefined && {
           groupId: updateDto.groupId,
         }),
-
         ...(updateDto.name !== undefined && {
           name: updateDto.name,
         }),
-
         ...(updateDto.sortOrder !== undefined && {
           sortOrder: updateDto.sortOrder,
         }),
-
         ...(updateDto.extraPrice !== undefined && {
           extraPrice: updateDto.extraPrice,
         }),
-
         ...(updateDto.isActive !== undefined && {
           isActive: updateDto.isActive,
         }),
@@ -141,10 +249,43 @@ export class ModifierService {
         group: true,
       },
     });
+
+    return {
+      group: {
+        id: modifier.group.id,
+        name: modifier.group.name,
+        sortOrder: modifier.group.sortOrder,
+        minSelections: modifier.group.minSelections,
+        maxSelections: modifier.group.maxSelections,
+        isActive: modifier.group.isActive,
+      },
+      modifier: {
+        id: modifier.id,
+        groupId: modifier.groupId,
+        name: modifier.name,
+        sortOrder: modifier.sortOrder,
+        extraPrice: Number(modifier.extraPrice),
+        isActive: modifier.isActive,
+        createdAt: modifier.createdAt,
+        updatedAt: modifier.updatedAt,
+      },
+    };
   }
 
+  // ============================================================
+  // REMOVE / SOFT DELETE
+  // ============================================================
+
   async remove(id: string) {
-    const modifier = await this.findOne(id);
+    const modifier = await this.prisma.modifier.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!modifier) {
+      throw new NotFoundException('Modifier not found');
+    }
 
     if (!modifier.isActive) {
       throw new BadRequestException('Modifier is already inactive');

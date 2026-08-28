@@ -1,7 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   ConflictException,
   Injectable,
@@ -11,6 +7,7 @@ import {
 import { CreateRestaurantMenuItemDto } from './dto/create-restaurant-menu-item.dto';
 import { UpdateRestaurantMenuItemDto } from './dto/update-restaurant-menu-item.dto';
 import { PrismaService } from '../../lib/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class RestaurantMenuItemService {
@@ -25,6 +22,17 @@ export class RestaurantMenuItemService {
 
     if (!menuItem) {
       throw new NotFoundException('Menu item not found');
+    }
+
+    // If restaurant price is the same as global price,
+    // no restaurant-specific record is required.
+    if (
+      dto.price !== undefined &&
+      new Prisma.Decimal(dto.price).equals(menuItem.basePrice)
+    ) {
+      throw new ConflictException(
+        'Restaurant price is the same as the default price. No override is required.',
+      );
     }
 
     const existing = await this.prisma.restaurantMenuItem.findUnique({
@@ -50,27 +58,273 @@ export class RestaurantMenuItemService {
         isAvailable: dto.isAvailable ?? true,
       },
       include: {
-        menuItem: true,
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
       },
     });
+  }
+  // ============================================================
+  // GET ALL MENU ITEMS FOR ONE RESTAURANT
+  // ============================================================
+  // Returns ALL global menu items.
+  //
+  // Configured restaurant item:
+  //     use RestaurantMenuItem.price
+  //
+  // Not configured:
+  //     use MenuItem.basePrice
+  //
+  // Pagination is applied to global MenuItems.
+  // ============================================================
+
+  async findAll(restaurantId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [menuItems, total] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        where: {
+          isAvailable: true,
+        },
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+        include: {
+          category: true,
+          restaurantMenus: {
+            where: {
+              restaurantId,
+            },
+          },
+        },
+      }),
+
+      this.prisma.menuItem.count({
+        where: {
+          isAvailable: true,
+        },
+      }),
+    ]);
+
+    return {
+      data: menuItems.map((menuItem) => {
+        const restaurantMenu = menuItem.restaurantMenus[0];
+
+        return {
+          id: menuItem.id,
+          name: menuItem.name,
+          sku: menuItem.sku,
+          description: menuItem.description,
+
+          // Restaurant price if configured,
+          // otherwise global base price.
+          price: Number(restaurantMenu?.price ?? menuItem.basePrice),
+
+          isAvailable: restaurantMenu?.isAvailable ?? menuItem.isAvailable,
+
+          restaurantConfigured: restaurantMenu !== undefined,
+
+          restaurantMenuItemId: restaurantMenu?.id ?? null,
+
+          category: {
+            id: menuItem.category.id,
+            name: menuItem.category.name,
+            sortOrder: menuItem.category.sortOrder,
+          },
+        };
+      }),
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
-  async findAll(restaurantId?: string) {
-    return this.prisma.restaurantMenuItem.findMany({
-      where: restaurantId
-        ? {
-            restaurantId,
-          }
-        : undefined,
+  // ============================================================
+  // GET ONLY CHANGED ITEMS FOR ONE RESTAURANT
+  // ============================================================
+  // Only returns items where:
+  //
+  // RestaurantMenuItem.price
+  //        !=
+  // MenuItem.basePrice
+  //
+  // Example:
+  //
+  // Global       Restaurant
+  // ₹399         ₹399    -> NOT returned
+  // ₹399         ₹429    -> returned
+  // ============================================================
+
+  async findChangedItems(restaurantId: string, page = 1, limit = 10) {
+    const items = await this.prisma.restaurantMenuItem.findMany({
+      where: {
+        restaurantId,
+      },
       include: {
-        menuItem: true,
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
       },
       orderBy: {
-        createdAt: 'desc',
+        updatedAt: 'desc',
       },
     });
+
+    const changedItems = items.filter(
+      (item) => !item.price.equals(item.menuItem.basePrice),
+    );
+
+    const total = changedItems.length;
+
+    const skip = (page - 1) * limit;
+
+    return {
+      data: changedItems.slice(skip, skip + limit).map((item) => ({
+        id: item.id,
+        restaurantId: item.restaurantId,
+
+        menuItem: {
+          id: item.menuItem.id,
+          name: item.menuItem.name,
+          sku: item.menuItem.sku,
+        },
+
+        defaultPrice: Number(item.menuItem.basePrice),
+
+        restaurantPrice: Number(item.price),
+
+        priceDifference: Number(item.price) - Number(item.menuItem.basePrice),
+
+        isAvailable: item.isAvailable,
+      })),
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
+
+  // ============================================================
+  // GET ONLY CHANGED ITEMS ACROSS ALL RESTAURANTS
+  // ============================================================
+  // Only returns genuine price overrides.
+  //
+  // Same price as global:
+  //     NOT returned
+  //
+  // Different price:
+  //     returned
+  // ============================================================
+
+  async findAllChangedItems(page = 1, limit = 10) {
+    const items = await this.prisma.restaurantMenuItem.findMany({
+      include: {
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
+      },
+      orderBy: {
+        updatedAt: 'desc',
+      },
+    });
+
+    const changedItems = items.filter(
+      (item) => !item.price.equals(item.menuItem.basePrice),
+    );
+
+    const restaurantMap = new Map<
+      string,
+      {
+        restaurantId: string;
+        menuItems: {
+          id: string;
+          menuItem: {
+            id: string;
+            name: string;
+            sku: string;
+          };
+          category: {
+            id: string;
+            name: string;
+          };
+          defaultPrice: number;
+          restaurantPrice: number;
+          priceDifference: number;
+          isAvailable: boolean;
+        }[];
+      }
+    >();
+
+    for (const item of changedItems) {
+      if (!restaurantMap.has(item.restaurantId)) {
+        restaurantMap.set(item.restaurantId, {
+          restaurantId: item.restaurantId,
+          menuItems: [],
+        });
+      }
+
+      restaurantMap.get(item.restaurantId)!.menuItems.push({
+        id: item.id,
+
+        menuItem: {
+          id: item.menuItem.id,
+          name: item.menuItem.name,
+          sku: item.menuItem.sku,
+        },
+
+        category: {
+          id: item.menuItem.category.id,
+          name: item.menuItem.category.name,
+        },
+
+        defaultPrice: Number(item.menuItem.basePrice),
+
+        restaurantPrice: Number(item.price),
+
+        priceDifference: Number(item.price) - Number(item.menuItem.basePrice),
+
+        isAvailable: item.isAvailable,
+      });
+    }
+
+    const restaurants = Array.from(restaurantMap.values());
+
+    const totalRestaurants = restaurants.length;
+    const totalChangedItems = changedItems.length;
+
+    const skip = (page - 1) * limit;
+
+    return {
+      data: restaurants.slice(skip, skip + limit),
+
+      pagination: {
+        page,
+        limit,
+        totalRestaurants,
+        totalChangedItems,
+        totalPages: Math.ceil(totalRestaurants / limit),
+      },
+    };
+  }
+
+  // ============================================================
+  // FIND ONE
+  // ============================================================
 
   async findOne(id: string) {
     const item = await this.prisma.restaurantMenuItem.findUnique({
@@ -78,7 +332,11 @@ export class RestaurantMenuItemService {
         id,
       },
       include: {
-        menuItem: true,
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
       },
     });
 
@@ -86,25 +344,54 @@ export class RestaurantMenuItemService {
       throw new NotFoundException('Restaurant menu item not found');
     }
 
-    return item;
+    return {
+      id: item.id,
+      restaurantId: item.restaurantId,
+
+      menuItem: {
+        id: item.menuItem.id,
+        name: item.menuItem.name,
+        sku: item.menuItem.sku,
+        description: item.menuItem.description,
+      },
+
+      defaultPrice: Number(item.menuItem.basePrice),
+
+      restaurantPrice: Number(item.price),
+
+      priceDifference: Number(item.price) - Number(item.menuItem.basePrice),
+
+      isAvailable: item.isAvailable,
+
+      category: {
+        id: item.menuItem.category.id,
+        name: item.menuItem.category.name,
+        sortOrder: item.menuItem.category.sortOrder,
+      },
+    };
   }
 
+  // ============================================================
+  // UPDATE
+  // ============================================================
+
   async update(id: string, dto: UpdateRestaurantMenuItemDto) {
-    await this.findOne(id);
+    const existing = await this.prisma.restaurantMenuItem.findUnique({
+      where: {
+        id,
+      },
+    });
 
-    // If restaurantId or menuItemId is being changed,
-    // make sure the new combination doesn't already exist.
-    if (dto.restaurantId || dto.menuItemId) {
-      const current = await this.prisma.restaurantMenuItem.findUnique({
-        where: { id },
-      });
+    if (!existing) {
+      throw new NotFoundException('Restaurant menu item not found');
+    }
 
-      if (!current) {
-        throw new NotFoundException('Restaurant menu item not found');
-      }
+    // If restaurant or menu item changes,
+    // validate that the combination is unique.
+    if (dto.restaurantId !== undefined || dto.menuItemId !== undefined) {
+      const restaurantId = dto.restaurantId ?? existing.restaurantId;
 
-      const restaurantId = dto.restaurantId ?? current.restaurantId;
-      const menuItemId = dto.menuItemId ?? current.menuItemId;
+      const menuItemId = dto.menuItemId ?? existing.menuItemId;
 
       const duplicate = await this.prisma.restaurantMenuItem.findUnique({
         where: {
@@ -120,18 +407,18 @@ export class RestaurantMenuItemService {
           'This menu item is already configured for this restaurant',
         );
       }
+    }
 
-      // Make sure the menu item exists if changing it
-      if (dto.menuItemId) {
-        const menuItem = await this.prisma.menuItem.findUnique({
-          where: {
-            id: dto.menuItemId,
-          },
-        });
+    // Validate new menu item if changed.
+    if (dto.menuItemId !== undefined) {
+      const menuItem = await this.prisma.menuItem.findUnique({
+        where: {
+          id: dto.menuItemId,
+        },
+      });
 
-        if (!menuItem) {
-          throw new NotFoundException('Menu item not found');
-        }
+      if (!menuItem) {
+        throw new NotFoundException('Menu item not found');
       }
     }
 
@@ -157,13 +444,29 @@ export class RestaurantMenuItemService {
         }),
       },
       include: {
-        menuItem: true,
+        menuItem: {
+          include: {
+            category: true,
+          },
+        },
       },
     });
   }
 
+  // ============================================================
+  // DELETE
+  // ============================================================
+
   async remove(id: string) {
-    await this.findOne(id);
+    const existing = await this.prisma.restaurantMenuItem.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException('Restaurant menu item not found');
+    }
 
     await this.prisma.restaurantMenuItem.delete({
       where: {

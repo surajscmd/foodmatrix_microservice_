@@ -40,12 +40,30 @@ export class IngredientService {
   }
 
   // GET ALL
-  async findAll() {
-    return this.prisma.ingredient.findMany({
-      orderBy: {
-        createdAt: 'desc',
+  async findAll(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [ingredients, total] = await Promise.all([
+      this.prisma.ingredient.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+
+      this.prisma.ingredient.count(),
+    ]);
+
+    return {
+      data: ingredients,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   // GET ONE

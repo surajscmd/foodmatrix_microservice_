@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { MenuItemService } from './menu-item.service';
@@ -31,12 +32,15 @@ export class MenuItemController {
   }
 
   @Get()
-  async findAll() {
-    const result = await this.menuItemService.findAll();
+  async findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
+    const result = await this.menuItemService.findAll(
+      Number(page),
+      Number(limit),
+    );
 
     return {
-      message: 'Menu items fetched successfully',
-      data: result,
+      message: 'Menu items retrieved successfully',
+      ...result,
     };
   }
 
@@ -49,7 +53,15 @@ export class MenuItemController {
       data: result,
     };
   }
+  @Get('category/:categoryId')
+  async findByCategory(@Param('categoryId') categoryId: string) {
+    const result = await this.menuItemService.findByCategory(categoryId);
 
+    return {
+      message: 'Menu items by category retrieved successfully',
+      ...result,
+    };
+  }
   @Patch(':id')
   async update(@Param('id') id: string, @Body() updateDto: UpdateMenuItemDto) {
     const result = await this.menuItemService.update(id, updateDto);

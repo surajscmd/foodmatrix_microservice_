@@ -60,15 +60,33 @@ export class MenuItemService {
   }
 
   // GET ALL
-  findAll() {
-    return this.prisma.menuItem.findMany({
-      include: {
-        category: true,
+  async findAll(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [menuItems, total] = await Promise.all([
+      this.prisma.menuItem.findMany({
+        skip,
+        take: limit,
+        include: {
+          category: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+
+      this.prisma.menuItem.count(),
+    ]);
+
+    return {
+      data: menuItems,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    };
   }
 
   // GET ONE
@@ -97,6 +115,32 @@ export class MenuItemService {
     }
 
     return item;
+  }
+  // GET MENU ITEMS BY CATEGORY
+  async findByCategory(categoryId: string) {
+    const category = await this.prisma.menuCategory.findUnique({
+      where: {
+        id: categoryId,
+      },
+    });
+
+    if (!category) {
+      throw new NotFoundException('Menu category not found');
+    }
+
+    const menuItems = await this.prisma.menuItem.findMany({
+      where: {
+        categoryId,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+
+    return {
+      category,
+      data: menuItems,
+    };
   }
 
   // UPDATE

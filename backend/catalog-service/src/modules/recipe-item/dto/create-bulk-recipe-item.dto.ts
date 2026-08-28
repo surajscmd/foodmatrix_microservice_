@@ -2,6 +2,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsNumber,
+  IsOptional,
   IsUUID,
   Min,
   ValidateNested,
@@ -19,8 +20,13 @@ export class BulkRecipeDto {
 }
 
 export class CreateBulkRecipeItemDto {
+  @IsOptional()
   @IsUUID()
-  menuItemId!: string;
+  menuItemId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  modifierId?: string;
 
   @IsArray()
   @ArrayMinSize(1)

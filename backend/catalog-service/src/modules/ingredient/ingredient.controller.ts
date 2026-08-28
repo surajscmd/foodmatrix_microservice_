@@ -7,6 +7,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 
 import { IngredientService } from './ingredient.service.js';
@@ -28,15 +29,17 @@ export class IngredientController {
   }
 
   @Get()
-  async findAll() {
-    const result = await this.ingredientService.findAll();
+  async findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
+    const result = await this.ingredientService.findAll(
+      Number(page),
+      Number(limit),
+    );
 
     return {
       message: 'Ingredients fetched successfully',
-      data: result,
+      ...result,
     };
   }
-
   @Get(':id')
   async findOne(@Param('id') id: string) {
     const result = await this.ingredientService.findOne(id);
