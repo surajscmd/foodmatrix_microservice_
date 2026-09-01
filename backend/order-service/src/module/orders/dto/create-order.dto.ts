@@ -1,83 +1,70 @@
 import {
+  ArrayMinSize,
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
   IsString,
   IsUUID,
-  IsOptional,
-  IsEnum,
-  IsArray,
-  ValidateNested,
-  IsInt,
+  Matches,
   Min,
-  IsNumber,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+
 import { OrderType } from '@prisma/client';
 
-export class CreateOrderItemModifierDto {
+export class CreateOrderModifierDto {
   @IsUUID()
-  modifierId!: string;
+  modifierId: string;
 
-  @IsString()
-  name!: string;
-
-  @IsNumber()
-  @Min(0)
-  price!: number;
-
-  // NEW: Added modifier quantity
   @IsInt()
   @Min(1)
-  quantity!: number;
+  quantity: number = 1;
 }
 
 export class CreateOrderItemDto {
   @IsUUID()
-  menuItemId!: string;
-
-  @IsString()
-  name!: string;
-
-  @IsNumber()
-  @Min(0)
-  price!: number;
+  menuItemId: string;
 
   @IsInt()
   @Min(1)
-  quantity!: number;
+  quantity: number = 1;
 
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => CreateOrderItemModifierDto)
-  modifiers?: CreateOrderItemModifierDto[];
+  @Type(() => CreateOrderModifierDto)
+  modifiers?: CreateOrderModifierDto[];
 }
 
 export class CreateOrderDto {
   @IsUUID()
-  restaurantId!: string;
+  restaurantId: string;
 
-  @IsOptional()
-  @IsUUID()
-  staffId?: string;
+  @IsString()
+  @Matches(/^[0-9+\-\s]{7,20}$/, {
+    message: 'Invalid phone number.',
+  })
+  phone: string;
 
   @IsOptional()
   @IsString()
-  tableId?: string;
-
-  @IsOptional()
-  @IsUUID()
-  customerId?: string;
+  @IsNotEmpty()
+  name?: string;
 
   @IsEnum(OrderType)
   type: OrderType;
 
-  // NEW: Allow client to pass a discount amount (which backend will verify later if needed)
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  discount?: number;
+  @IsString()
+  @IsNotEmpty()
+  tableId?: string;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
-  items!: CreateOrderItemDto[];
+  items: CreateOrderItemDto[];
 }

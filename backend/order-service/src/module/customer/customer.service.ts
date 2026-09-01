@@ -4,19 +4,23 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { PrismaService } from '../../lib/prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { PrismaService } from '../../lib/prisma/prisma.service';
 
 @Injectable()
 export class CustomerService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // =========================================================
+  // CREATE CUSTOMER
+  // =========================================================
+
   async create(createCustomerDto: CreateCustomerDto) {
+    const { phone, name } = createCustomerDto;
+
     const existingCustomer = await this.prisma.customer.findUnique({
-      where: {
-        phone: createCustomerDto.phone,
-      },
+      where: { phone },
     });
 
     if (existingCustomer) {
@@ -27,34 +31,49 @@ export class CustomerService {
 
     return this.prisma.customer.create({
       data: {
-        phone: createCustomerDto.phone,
-        name: createCustomerDto.name,
+        phone,
+        name,
       },
     });
   }
 
-  async findAll() {
-    return this.prisma.customer.findMany({
-      orderBy: {
-        createdAt: 'desc',
+  // =========================================================
+  // GET ALL CUSTOMERS
+  // =========================================================
+
+  async findAll(page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const [customers, total] = await Promise.all([
+      this.prisma.customer.findMany({
+        skip,
+        take: limit,
+        orderBy: {
+          createdAt: 'desc',
+        },
+      }),
+
+      this.prisma.customer.count(),
+    ]);
+
+    return {
+      data: customers,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
+
+  // =========================================================
+  // GET CUSTOMER BY ID
+  // =========================================================
 
   async findOne(id: string) {
     const customer = await this.prisma.customer.findUnique({
-      where: {
-        id,
-      },
-      include: {
-        orders: {
-          orderBy: { createdAt: 'desc' }, // Order their history newest to oldest
-          take: 10, // Only grab their 5 most recent orders
-          include: {
-            items: true, // Bring in the order items too!
-          },
-        },
-      },
+      where: { id },
     });
 
     if (!customer) {
@@ -64,8 +83,48 @@ export class CustomerService {
     return customer;
   }
 
+  // =========================================================
+  // GET ALL ORDERS FOR CUSTOMER
+  // =========================================================
+
+  async findOrdersByCustomer(id: string) {
+    await this.ensureCustomerExists(id);
+
+    return this.prisma.order.findMany({
+      where: {
+        customerId: id,
+      },
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      include: {
+        items: {
+          orderBy: {
+            id: 'asc',
+          },
+
+          include: {
+            modifiers: true,
+          },
+        },
+
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+  }
+
+  // =========================================================
+  // UPDATE CUSTOMER
+  // =========================================================
+
   async update(id: string, updateCustomerDto: UpdateCustomerDto) {
-    await this.findOne(id);
+    await this.ensureCustomerExists(id);
 
     if (updateCustomerDto.phone !== undefined) {
       const existingCustomer = await this.prisma.customer.findUnique({
@@ -89,8 +148,12 @@ export class CustomerService {
     });
   }
 
+  // =========================================================
+  // DELETE CUSTOMER
+  // =========================================================
+
   async remove(id: string) {
-    await this.findOne(id);
+    await this.ensureCustomerExists(id);
 
     await this.prisma.customer.delete({
       where: {
@@ -101,5 +164,24 @@ export class CustomerService {
     return {
       message: 'Customer deleted successfully.',
     };
+  }
+
+  // =========================================================
+  // PRIVATE HELPERS
+  // =========================================================
+
+  private async ensureCustomerExists(id: string): Promise<void> {
+    const customer = await this.prisma.customer.findUnique({
+      where: {
+        id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!customer) {
+      throw new NotFoundException('Customer not found.');
+    }
   }
 }

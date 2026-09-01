@@ -16,6 +16,6 @@ async function bootstrap() {
       forbidNonWhitelisted: true, // 🟢 Rejects requests with unexpected fields
     }),
   );
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3001);
 }
 void bootstrap();

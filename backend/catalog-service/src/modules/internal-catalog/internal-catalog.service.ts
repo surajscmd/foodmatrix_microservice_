@@ -1,47 +1,212 @@
-// src/modules/internal-catalog/internal-catalog.service.ts
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
+
 import { PrismaService } from '../../lib/prisma/prisma.service';
 
 @Injectable()
 export class InternalCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ============================================================
+  // BULK PRICING fetch
+  // ============================================================
+
   async getBulkPricing(
     restaurantId: string,
     menuItemIds: string[],
     modifierIds: string[],
   ) {
-    // 1. Fetch both queries at the same time for speed
-    const [restaurantMenuItems, modifiers] = await Promise.all([
-      this.prisma.restaurantMenuItem.findMany({
-        where: { restaurantId, menuItemId: { in: menuItemIds } },
-        include: { menuItem: true },
-      }),
-      this.prisma.modifier.findMany({
-        where: { id: { in: modifierIds } },
-      }),
+    const uniqueMenuItemIds = this.getUniqueIds(menuItemIds);
+
+    const uniqueModifierIds = this.getUniqueIds(modifierIds);
+
+    const [restaurantMenuItems, menuItems, modifiers] = await Promise.all([
+      this.findRestaurantMenuItems(restaurantId, uniqueMenuItemIds),
+
+      this.findMenuItems(uniqueMenuItemIds),
+
+      this.findModifiers(uniqueModifierIds),
     ]);
 
-    // 2. Format the menu items cleanly
-    const mappedMenuItems = restaurantMenuItems.map((rmi) => ({
-      menuItemId: rmi.menuItemId,
-      name: rmi.menuItem.name,
-      sku: rmi.menuItem.sku,
-      price: Number(rmi.price), // Convert Decimal to Number for JSON
-      isAvailable: rmi.isAvailable && rmi.menuItem.isAvailable,
-    }));
+    const menuItemsResponse = this.buildMenuItemsResponse(
+      uniqueMenuItemIds,
+      restaurantMenuItems,
+      menuItems,
+    );
 
-    // 3. Format the modifiers cleanly
-    const mappedModifiers = modifiers.map((mod) => ({
-      id: mod.id,
-      name: mod.name,
-      extraPrice: Number(mod.extraPrice),
-      isActive: mod.isActive,
-    }));
+    const modifiersResponse = this.buildModifiersResponse(
+      uniqueModifierIds,
+      modifiers,
+    );
 
     return {
-      menuItems: mappedMenuItems,
-      modifiers: mappedModifiers,
+      menuItems: menuItemsResponse,
+
+      modifiers: modifiersResponse,
     };
+  }
+
+  // ============================================================
+  // FETCH RESTAURANT MENU ITEMS
+  // ============================================================
+
+  private findRestaurantMenuItems(restaurantId: string, menuItemIds: string[]) {
+    return this.prisma.restaurantMenuItem.findMany({
+      where: {
+        restaurantId,
+
+        menuItemId: {
+          in: menuItemIds,
+        },
+      },
+    });
+  }
+
+  // ============================================================
+  // FETCH GLOBAL MENU ITEMS
+  // ============================================================
+
+  private findMenuItems(menuItemIds: string[]) {
+    return this.prisma.menuItem.findMany({
+      where: {
+        id: {
+          in: menuItemIds,
+        },
+      },
+    });
+  }
+
+  // ============================================================
+  // FETCH MODIFIERS
+  // ============================================================
+
+  private findModifiers(modifierIds: string[]) {
+    return this.prisma.modifier.findMany({
+      where: {
+        id: {
+          in: modifierIds,
+        },
+      },
+    });
+  }
+
+  // ============================================================
+  // BUILD MENU ITEM RESPONSE
+  // ============================================================
+
+  private buildMenuItemsResponse(
+    menuItemIds: string[],
+    restaurantMenuItems: Awaited<
+      ReturnType<typeof this.findRestaurantMenuItems>
+    >,
+    menuItems: Awaited<ReturnType<typeof this.findMenuItems>>,
+  ) {
+    const restaurantItemMap = new Map(
+      restaurantMenuItems.map((item) => [item.menuItemId, item]),
+    );
+
+    const menuItemMap = new Map(menuItems.map((item) => [item.id, item]));
+
+    return menuItemIds.map((menuItemId) => {
+      const menuItem = menuItemMap.get(menuItemId);
+
+      if (!menuItem) {
+        throw new NotFoundException(`Menu item ${menuItemId} was not found.`);
+      }
+
+      const restaurantItem = restaurantItemMap.get(menuItemId);
+
+      // ------------------------------------------------------
+      // RESTAURANT-SPECIFIC PRICE
+      // ------------------------------------------------------
+
+      if (restaurantItem) {
+        const isAvailable = restaurantItem.isAvailable && menuItem.isAvailable;
+
+        if (!isAvailable) {
+          throw new NotFoundException(
+            `Menu item ${menuItemId} is not currently available.`,
+          );
+        }
+
+        return {
+          menuItemId: menuItem.id,
+
+          name: menuItem.name,
+
+          sku: menuItem.sku,
+
+          price: Number(restaurantItem.price),
+
+          isAvailable,
+        };
+      }
+
+      // ------------------------------------------------------
+      // GLOBAL FALLBACK PRICE
+      // ------------------------------------------------------
+
+      if (!menuItem.isAvailable) {
+        throw new NotFoundException(
+          `Menu item ${menuItemId} is not currently available.`,
+        );
+      }
+
+      return {
+        menuItemId: menuItem.id,
+
+        name: menuItem.name,
+
+        sku: menuItem.sku,
+
+        price: Number(menuItem.basePrice),
+
+        isAvailable: menuItem.isAvailable,
+      };
+    });
+  }
+
+  // ============================================================
+  // BUILD MODIFIER RESPONSE
+  // ============================================================
+
+  private buildModifiersResponse(
+    modifierIds: string[],
+    modifiers: Awaited<ReturnType<typeof this.findModifiers>>,
+  ) {
+    const modifierMap = new Map(
+      modifiers.map((modifier) => [modifier.id, modifier]),
+    );
+
+    return modifierIds.map((modifierId) => {
+      const modifier = modifierMap.get(modifierId);
+
+      if (!modifier) {
+        throw new NotFoundException(`Modifier ${modifierId} was not found.`);
+      }
+
+      if (!modifier.isActive) {
+        throw new NotFoundException(
+          `Modifier ${modifierId} is not currently available.`,
+        );
+      }
+
+      return {
+        id: modifier.id,
+
+        name: modifier.name,
+
+        extraPrice: Number(modifier.extraPrice),
+
+        isActive: modifier.isActive,
+      };
+    });
+  }
+
+  // ============================================================
+  // REMOVE DUPLICATES
+  // ============================================================
+
+  private getUniqueIds(ids: string[]): string[] {
+    return [...new Set(ids)];
   }
 }

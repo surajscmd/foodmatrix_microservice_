@@ -18,6 +18,12 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
 }
+enum OrderItemStatus {
+  PENDING
+  PREPARING
+  READY
+  CANCELLED
+}
 
 enum OrderType {
   DINE_IN
@@ -149,7 +155,7 @@ model OrderItem {
 
   orderId String @map("order_id") @db.Uuid
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
+  status OrderItemStatus @default(PENDING)
   // ------------------------------------------
   // CATALOG REFERENCE
   // ------------------------------------------

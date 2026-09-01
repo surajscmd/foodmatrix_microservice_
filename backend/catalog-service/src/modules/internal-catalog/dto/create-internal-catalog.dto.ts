@@ -1,14 +1,14 @@
-import { IsArray, IsString } from 'class-validator';
+import { IsArray, IsUUID } from 'class-validator';
 
 export class CreateInternalCatalogDto {
-  @IsString()
+  @IsUUID()
   restaurantId!: string;
 
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID('4', { each: true })
   menuItemIds!: string[];
 
   @IsArray()
-  @IsString({ each: true })
+  @IsUUID('4', { each: true })
   modifierIds!: string[];
 }
