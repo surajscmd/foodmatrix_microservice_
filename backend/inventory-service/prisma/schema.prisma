@@ -1,0 +1,363 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum LocationType {
+  WAREHOUSE
+  RESTAURANT
+  TRANSIT
+}
+
+enum MovementType {
+  POS_SALE
+  PURCHASE
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  WASTE
+}
+
+enum StockRequestStatus {
+  REQUESTED
+  APPROVED
+  REJECTED
+  FULFILLED
+  CANCELLED
+}
+
+enum TransferStatus {
+  REQUESTED
+  APPROVED
+  PICKING
+  READY_TO_SHIP
+  SHIPPED
+  IN_TRANSIT
+  RECEIVED
+  DISPUTED
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum TransferDiscrepancyType {
+  SHORT_RECEIPT
+  DAMAGED
+  MISSING
+  WRONG_ITEM
+  OTHER
+}
+
+// ======================================================
+// WAREHOUSE STOCK
+// Global bulk stock stored at warehouses
+// ======================================================
+
+model WarehouseStock {
+  id           String @id @default(uuid())
+  warehouseId  String
+  ingredientId String
+
+  quantityOnHand Decimal @default(0) @db.Decimal(12, 4)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([warehouseId, ingredientId])
+  @@index([warehouseId])
+  @@index([ingredientId])
+}
+
+// ======================================================
+// RESTAURANT STOCK
+// Current stock available at individual restaurants
+// ======================================================
+
+model RestaurantStock {
+  id           String @id @default(uuid())
+  restaurantId String
+  ingredientId String
+
+  quantityOnHand Decimal @default(0) @db.Decimal(12, 4)
+
+  // Replenishment configuration
+  reorderLevel    Decimal @default(0) @db.Decimal(12, 4)
+  reorderQuantity Decimal @default(0) @db.Decimal(12, 4)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([restaurantId, ingredientId])
+  @@index([restaurantId])
+  @@index([ingredientId])
+}
+
+// ======================================================
+// STOCK MOVEMENT
+// Immutable / append-only inventory audit ledger
+// ======================================================
+
+model StockMovement {
+  id             String       @id @default(uuid())
+  locationType   LocationType
+  locationId     String
+  ingredientId   String
+  movementType   MovementType
+  quantityChange Decimal      @db.Decimal(12,4)
+  referenceId    String?
+  reason         String?      @db.VarChar(255)
+  createdAt      DateTime     @default(now())
+
+  @@index([locationType, locationId])
+  @@index([ingredientId])
+  @@index([movementType])
+  @@index([referenceId])
+  @@index([createdAt])
+}
+
+// ======================================================
+// STOCK REQUEST
+// Restaurant asks warehouse for replenishment
+// ======================================================
+
+model StockRequest {
+  id           String  @id @default(uuid())
+  restaurantId String
+  warehouseId  String
+  requestedBy  String
+  approvedBy   String?
+  rejectedBy   String?
+
+  status StockRequestStatus @default(REQUESTED)
+
+  reason          String?
+  rejectionReason String?
+
+  requestedAt DateTime  @default(now())
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  fulfilledAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items StockRequestItem[]
+
+  transfers StockTransfer[]
+
+  @@index([restaurantId])
+  @@index([status])
+  @@index([requestedBy])
+  @@index([approvedBy])
+}
+
+// ======================================================
+// STOCK REQUEST ITEMS
+// What the restaurant actually requested
+// ======================================================
+
+model StockRequestItem {
+  id             String @id @default(uuid())
+  stockRequestId String
+  ingredientId   String
+
+  requestedQty Decimal  @db.Decimal(12, 4)
+  approvedQty  Decimal? @db.Decimal(12, 4)
+
+  stockRequest StockRequest @relation(fields: [stockRequestId], references: [id], onDelete: Cascade)
+
+  @@index([stockRequestId])
+  @@index([ingredientId])
+}
+
+// ======================================================
+// STOCK TRANSFER
+// Warehouse -> Restaurant
+// ======================================================
+
+model StockTransfer {
+  id             String  @id @default(uuid())
+  stockRequestId String?
+
+  fromWarehouseId String
+  toRestaurantId  String
+
+  status TransferStatus @default(REQUESTED)
+
+  requestedBy String?
+  approvedBy  String?
+  rejectedBy  String?
+  shippedBy   String?
+  receivedBy  String?
+
+  requestedAt DateTime  @default(now())
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  shippedAt   DateTime?
+  receivedAt  DateTime?
+  completedAt DateTime?
+
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items StockTransferItem[]
+
+  shipment Shipment?
+
+  discrepancies TransferDiscrepancy[]
+
+  stockRequest StockRequest? @relation(fields: [stockRequestId], references: [id], onDelete: SetNull)
+
+  @@index([stockRequestId])
+  @@index([fromWarehouseId])
+  @@index([toRestaurantId])
+  @@index([status])
+}
+
+// ======================================================
+// STOCK TRANSFER ITEMS
+// Tracks requested -> approved -> shipped -> received
+// ======================================================
+
+model StockTransferItem {
+  id           String @id @default(uuid())
+  transferId   String
+  ingredientId String
+
+  requestedQty Decimal  @db.Decimal(12, 4)
+  approvedQty  Decimal? @db.Decimal(12, 4)
+  shippedQty   Decimal? @db.Decimal(12, 4)
+  receivedQty  Decimal? @db.Decimal(12, 4)
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  discrepancies TransferDiscrepancy[]
+
+  @@index([transferId])
+  @@index([ingredientId])
+}
+
+// ======================================================
+// SHIPMENT
+// Physical logistics information for the transfer
+// ======================================================
+
+model Shipment {
+  id         String @id @default(uuid())
+  transferId String @unique
+
+  // Logistics provider
+  carrierName    String?
+  trackingNumber String?
+
+  // Shipper / dispatcher
+  shipperName  String?
+  shipperPhone String?
+
+  // Driver
+  driverName  String?
+  driverPhone String?
+
+  // Vehicle
+  vehicleNumber String?
+  vehicleType   String?
+
+  dispatchLocation String?
+  deliveryLocation String?
+
+  estimatedArrival DateTime?
+  dispatchedAt     DateTime?
+  deliveredAt      DateTime?
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  @@index([trackingNumber])
+  @@index([vehicleNumber])
+  @@index([dispatchedAt])
+}
+
+// ======================================================
+// TRANSIT INVENTORY
+// Stock that has left warehouse but is not yet received
+// ======================================================
+
+model InventoryTransit {
+  id           String @id @default(uuid())
+  transferId   String
+  ingredientId String
+
+  quantity Decimal @db.Decimal(12, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([transferId, ingredientId])
+  @@index([transferId])
+  @@index([ingredientId])
+}
+
+// ======================================================
+// TRANSFER DISCREPANCY
+// Difference between expected and physically received
+// ======================================================
+
+model TransferDiscrepancy {
+  id             String @id @default(uuid())
+  transferId     String
+  transferItemId String
+
+  type TransferDiscrepancyType
+
+  expectedQty Decimal? @db.Decimal(12, 4)
+  actualQty   Decimal? @db.Decimal(12, 4)
+
+  reason String?
+
+  reportedBy String
+  resolvedBy String?
+  resolution String?
+
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+
+  transferItem StockTransferItem @relation(fields: [transferItemId], references: [id], onDelete: Cascade)
+
+  @@index([transferId])
+  @@index([transferItemId])
+  @@index([type])
+}
+
+// ======================================================
+// WASTE LOG
+// Spoilage, expiry, damage, rejected ingredients, etc.
+// ======================================================
+
+model WasteLog {
+  id String @id @default(uuid())
+
+  restaurantId String
+  ingredientId String
+
+  qty    Decimal @db.Decimal(12, 4)
+  reason String  @db.VarChar(255)
+
+  createdAt DateTime @default(now())
+
+  @@index([restaurantId])
+  @@index([ingredientId])
+  @@index([createdAt])
+}

@@ -1,13 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { PrismaService } from '../../lib/prisma/prisma.service';
+import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 @Injectable()
 export class InternalCatalogService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ============================================================
-  // BULK PRICING fetch
+  // BULK PRICING
   // ============================================================
 
   async getBulkPricing(
@@ -40,7 +40,6 @@ export class InternalCatalogService {
 
     return {
       menuItems: menuItemsResponse,
-
       modifiers: modifiersResponse,
     };
   }
@@ -115,9 +114,9 @@ export class InternalCatalogService {
 
       const restaurantItem = restaurantItemMap.get(menuItemId);
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // RESTAURANT-SPECIFIC PRICE
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       if (restaurantItem) {
         const isAvailable = restaurantItem.isAvailable && menuItem.isAvailable;
@@ -141,9 +140,9 @@ export class InternalCatalogService {
         };
       }
 
-      // ------------------------------------------------------
+      // --------------------------------------------------------
       // GLOBAL FALLBACK PRICE
-      // ------------------------------------------------------
+      // --------------------------------------------------------
 
       if (!menuItem.isAvailable) {
         throw new NotFoundException(
@@ -208,5 +207,198 @@ export class InternalCatalogService {
 
   private getUniqueIds(ids: string[]): string[] {
     return [...new Set(ids)];
+  }
+
+  // ============================================================
+  // BULK RECIPE FETCH
+  //
+  // Fetch recipes for:
+  // - Menu items
+  // - Modifiers
+  //
+  // Inventory Service uses this information
+  // to calculate ingredient consumption.
+  // ============================================================
+
+  async getBulkRecipes(menuItemIds: string[], modifierIds: string[]) {
+    const uniqueMenuItemIds = this.getUniqueIds(menuItemIds);
+
+    const uniqueModifierIds = this.getUniqueIds(modifierIds);
+
+    const [menuItemRecipes, modifierRecipes] = await Promise.all([
+      this.findMenuItemRecipes(uniqueMenuItemIds),
+
+      this.findModifierRecipes(uniqueModifierIds),
+    ]);
+
+    return {
+      menuItems: this.buildMenuItemRecipesResponse(
+        uniqueMenuItemIds,
+        menuItemRecipes,
+      ),
+
+      modifiers: this.buildModifierRecipesResponse(
+        uniqueModifierIds,
+        modifierRecipes,
+      ),
+    };
+  }
+
+  // ============================================================
+  // FETCH MENU ITEM RECIPES
+  // ============================================================
+
+  private findMenuItemRecipes(menuItemIds: string[]) {
+    return this.prisma.recipeItem.findMany({
+      where: {
+        menuItemId: {
+          in: menuItemIds,
+        },
+      },
+
+      include: {
+        ingredient: true,
+      },
+    });
+  }
+
+  // ============================================================
+  // FETCH MODIFIER RECIPES
+  // ============================================================
+
+  private findModifierRecipes(modifierIds: string[]) {
+    return this.prisma.recipeItem.findMany({
+      where: {
+        modifierId: {
+          in: modifierIds,
+        },
+      },
+
+      include: {
+        ingredient: true,
+      },
+    });
+  }
+
+  // ============================================================
+  // BUILD MENU ITEM RECIPE RESPONSE
+  // ============================================================
+
+  private buildMenuItemRecipesResponse(
+    menuItemIds: string[],
+    recipes: Awaited<ReturnType<typeof this.findMenuItemRecipes>>,
+  ) {
+    const recipeMap = new Map<string, typeof recipes>();
+
+    for (const recipe of recipes) {
+      if (!recipe.menuItemId) {
+        continue;
+      }
+
+      const existing = recipeMap.get(recipe.menuItemId);
+
+      if (existing) {
+        existing.push(recipe);
+      } else {
+        recipeMap.set(recipe.menuItemId, [recipe]);
+      }
+    }
+
+    return menuItemIds.map((menuItemId) => ({
+      menuItemId,
+
+      ingredients: (recipeMap.get(menuItemId) ?? []).map((recipe) => ({
+        ingredientId: recipe.ingredientId,
+
+        ingredientName: recipe.ingredient.name,
+
+        uom: recipe.ingredient.uom,
+
+        quantityNeeded: Number(recipe.quantityNeeded),
+      })),
+    }));
+  }
+
+  // ============================================================
+  // BUILD MODIFIER RECIPE RESPONSE
+  // ============================================================
+
+  private buildModifierRecipesResponse(
+    modifierIds: string[],
+    recipes: Awaited<ReturnType<typeof this.findModifierRecipes>>,
+  ) {
+    const recipeMap = new Map<string, typeof recipes>();
+
+    for (const recipe of recipes) {
+      if (!recipe.modifierId) {
+        continue;
+      }
+
+      const existing = recipeMap.get(recipe.modifierId);
+
+      if (existing) {
+        existing.push(recipe);
+      } else {
+        recipeMap.set(recipe.modifierId, [recipe]);
+      }
+    }
+
+    return modifierIds.map((modifierId) => ({
+      modifierId,
+
+      ingredients: (recipeMap.get(modifierId) ?? []).map((recipe) => ({
+        ingredientId: recipe.ingredientId,
+
+        ingredientName: recipe.ingredient.name,
+
+        uom: recipe.ingredient.uom,
+
+        quantityNeeded: Number(recipe.quantityNeeded),
+      })),
+    }));
+  }
+
+  // ============================================================
+  // BULK INGREDIENT FETCH
+  //
+  // Supports:
+  // - Single ingredient ID
+  // - Multiple ingredient IDs
+  //
+  // ============================================================
+
+  async getIngredients(ingredientIds: string[]) {
+    const uniqueIngredientIds = this.getUniqueIds(ingredientIds);
+
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: {
+        id: {
+          in: uniqueIngredientIds,
+        },
+      },
+
+      select: {
+        id: true,
+        name: true,
+        uom: true,
+        isActive: true,
+      },
+    });
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    return uniqueIngredientIds.map((ingredientId) => {
+      const ingredient = ingredientMap.get(ingredientId);
+
+      if (!ingredient) {
+        throw new NotFoundException(
+          `Ingredient ${ingredientId} was not found.`,
+        );
+      }
+
+      return ingredient;
+    });
   }
 }

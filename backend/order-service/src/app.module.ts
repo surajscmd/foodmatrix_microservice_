@@ -6,6 +6,7 @@ import { OrdersModule } from './module/orders/orders.module';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './lib/prisma/prisma.module';
 import { PaymentModule } from './module/payment/payment.module';
+import { KafkaModule } from './kafka/kafka.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { PaymentModule } from './module/payment/payment.module';
     OrdersModule,
     CustomerModule,
     PaymentModule,
+    KafkaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

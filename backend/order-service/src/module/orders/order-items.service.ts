@@ -23,6 +23,7 @@ import { UpdateOrderItemStatusDto } from './dto/update-order-item-status.dto';
 import { CatalogGatewayService } from '../../utils/catalog-gateway.service';
 
 import { areModifiersEqual } from '../../utils/order-item.util';
+import { KafkaService } from '../../kafka/kafka.service';
 
 // ============================================================
 // EDITABLE ORDER STATUSES
@@ -59,6 +60,7 @@ export class OrderItemsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogGatewayService,
+    private readonly kafkaService: KafkaService,
   ) {}
 
   // ============================================================
@@ -395,7 +397,28 @@ export class OrderItemsService {
           });
         }
 
-        return updatedItem;
+        // ----------------------------------------------------
+        // KAFKA EVENT
+        // ONLY WHEN ITEM ACTUALLY BECOMES READY
+        // ----------------------------------------------------
+
+        const kafkaEvent =
+          orderItem.status !== OrderItemStatus.READY &&
+          status === OrderItemStatus.READY
+            ? {
+                orderItemId: updatedItem.id,
+                menuItemId: updatedItem.menuItemId,
+                quantity: updatedItem.quantity,
+
+                modifiers: updatedItem.modifiers.map((modifier) => ({
+                  modifierId: modifier.modifierId,
+                  quantity: modifier.quantity,
+                })),
+
+                restaurantId: order.restaurantId,
+              }
+            : null;
+        return { item: updatedItem, kafkaEvent };
       },
 
       {
@@ -405,6 +428,18 @@ export class OrderItemsService {
         timeout: 10000,
       },
     );
+
+    // --------------------------------------------------------
+    // PUBLISH AFTER DATABASE TRANSACTION COMMITS
+    // --------------------------------------------------------
+
+    if (result.kafkaEvent) {
+      await this.kafkaService.publish('order-complete', result.kafkaEvent);
+    }
+
+    // --------------------------------------------------------
+    // FETCH COMPLETE ORDER
+    // --------------------------------------------------------
 
     const order = await this.prisma.order.findUnique({
       where: {
@@ -422,7 +457,7 @@ export class OrderItemsService {
       message: 'Order item status updated successfully.',
 
       data: {
-        item: result,
+        item: result.item,
         order,
       },
     };
