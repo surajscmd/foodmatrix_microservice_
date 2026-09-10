@@ -12,10 +12,14 @@ import { ApproveStockRequestDto } from './dto/approve-stock-request.dto.js';
 import { RejectStockRequestDto } from './dto/reject-stock-request.dto.js';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { UpdateStockRequestDto } from './dto/update-stock-request.dto.js';
+import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 @Injectable()
 export class StockRequestService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogGatewayService: CatalogGatewayService,
+  ) {}
 
   // ======================================================
   // CREATE STOCK REQUEST
@@ -269,7 +273,40 @@ export class StockRequestService {
       throw new NotFoundException('Stock request not found');
     }
 
-    return request;
+    // ------------------------------------------------------
+    // COLLECT INGREDIENT IDS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(request.items.map((item) => item.ingredientId)),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENT DETAILS FROM CATALOG
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH REQUEST ITEMS
+    // ------------------------------------------------------
+
+    const items = request.items.map((item) => ({
+      ...item,
+      ingredient: ingredientMap.get(item.ingredientId) ?? null,
+    }));
+
+    return {
+      ...request,
+      items,
+    };
   }
 
   // ======================================================
@@ -278,36 +315,103 @@ export class StockRequestService {
   // RESTAURANT MANAGER
   // ======================================================
 
-  async findByRestaurant(restaurantId: string, status?: StockRequestStatus) {
-    return this.prisma.stockRequest.findMany({
-      where: {
-        restaurantId,
+  async findByRestaurant(
+    restaurantId: string,
+    status?: StockRequestStatus,
+    page = 1,
+    limit = 10,
+  ) {
+    const skip = (page - 1) * limit;
 
-        ...(status
-          ? {
-              status,
-            }
-          : {}),
-      },
+    const where = {
+      restaurantId,
+      ...(status ? { status } : {}),
+    };
 
-      include: {
-        items: true,
+    const [stockRequests, total] = await this.prisma.$transaction([
+      this.prisma.stockRequest.findMany({
+        where,
 
-        transfers: {
-          select: {
-            id: true,
-            status: true,
-            fromWarehouseId: true,
-            toRestaurantId: true,
-            createdAt: true,
+        include: {
+          items: true,
+
+          transfers: {
+            select: {
+              id: true,
+              status: true,
+              fromWarehouseId: true,
+              toRestaurantId: true,
+              createdAt: true,
+            },
           },
         },
-      },
 
-      orderBy: {
-        createdAt: 'desc',
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+      }),
+
+      this.prisma.stockRequest.count({
+        where,
+      }),
+    ]);
+
+    // ------------------------------------------------------
+    // COLLECT ALL INGREDIENT IDS FROM ALL REQUEST ITEMS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(
+        stockRequests.flatMap((request) =>
+          request.items.map((item) => item.ingredientId),
+        ),
+      ),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENT DETAILS FROM CATALOG SERVICE
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH REQUEST ITEMS
+    // ------------------------------------------------------
+
+    const data = stockRequests.map((request) => ({
+      ...request,
+
+      items: request.items.map((item) => ({
+        ...item,
+
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+    }));
+
+    // ------------------------------------------------------
+    // RETURN PAGINATED RESPONSE
+    // ------------------------------------------------------
+
+    return {
+      data,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   // ======================================================
@@ -318,26 +422,88 @@ export class StockRequestService {
   // Returns requests belonging to this warehouse.
   // ======================================================
 
-  async findByWarehouse(warehouseId: string, status?: StockRequestStatus) {
-    return this.prisma.stockRequest.findMany({
-      where: {
-        warehouseId,
+  async findByWarehouse(
+    warehouseId: string,
+    status?: StockRequestStatus,
+    page = 1,
+    limit = 10,
+  ) {
+    const skip = (page - 1) * limit;
 
-        ...(status
-          ? {
-              status,
-            }
-          : {}),
-      },
+    const where = {
+      warehouseId,
+      ...(status ? { status } : {}),
+    };
 
-      include: {
-        items: true,
-      },
+    const [stockRequests, total] = await this.prisma.$transaction([
+      this.prisma.stockRequest.findMany({
+        where,
 
-      orderBy: {
-        createdAt: 'desc',
+        include: {
+          items: true,
+        },
+
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+      }),
+
+      this.prisma.stockRequest.count({
+        where,
+      }),
+    ]);
+
+    // ------------------------------------------------------
+    // COLLECT INGREDIENT IDS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(
+        stockRequests.flatMap((request) =>
+          request.items.map((item) => item.ingredientId),
+        ),
+      ),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENTS FROM CATALOG SERVICE
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH ITEMS
+    // ------------------------------------------------------
+
+    const data = stockRequests.map((request) => ({
+      ...request,
+
+      items: request.items.map((item) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+    }));
+
+    return {
+      data,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   // ======================================================
@@ -346,22 +512,84 @@ export class StockRequestService {
   // INTERNAL / ADMIN
   // ======================================================
 
-  async findAll(status?: StockRequestStatus) {
-    return this.prisma.stockRequest.findMany({
-      where: status
-        ? {
-            status,
-          }
-        : undefined,
+  async findAll(status?: StockRequestStatus, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
 
-      include: {
-        items: true,
-      },
+    const where = status
+      ? {
+          status,
+        }
+      : undefined;
 
-      orderBy: {
-        createdAt: 'desc',
+    const [stockRequests, total] = await this.prisma.$transaction([
+      this.prisma.stockRequest.findMany({
+        where,
+
+        include: {
+          items: true,
+        },
+
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+      }),
+
+      this.prisma.stockRequest.count({
+        where,
+      }),
+    ]);
+
+    // ------------------------------------------------------
+    // COLLECT INGREDIENT IDS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(
+        stockRequests.flatMap((request) =>
+          request.items.map((item) => item.ingredientId),
+        ),
+      ),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENT DETAILS FROM CATALOG
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH ITEMS
+    // ------------------------------------------------------
+
+    const data = stockRequests.map((request) => ({
+      ...request,
+
+      items: request.items.map((item) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+    }));
+
+    return {
+      data,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
   // ======================================================
   // delete request
@@ -917,5 +1145,97 @@ export class StockRequestService {
       },
       requestedBy,
     );
+  }
+
+  // ======================================================
+  // GET LOW STOCK INGREDIENTS
+  //
+  // RESTAURANT MANAGER
+  //
+  // Finds:
+  // quantityOnHand <= reorderLevel
+  //
+  // Uses:
+  // reorderQuantity
+  //
+  // Does NOT create a stock request.
+  //
+  // ======================================================
+  async findLowStock(restaurantId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const lowStockItems = await this.prisma.$queryRaw<
+      Array<{
+        id: string;
+        restaurantId: string;
+        ingredientId: string;
+        quantityOnHand: unknown;
+        reorderLevel: unknown;
+        reorderQuantity: unknown;
+        updatedAt: Date;
+      }>
+    >`
+    SELECT
+      "id",
+      "restaurantId",
+      "ingredientId",
+      "quantityOnHand",
+      "reorderLevel",
+      "reorderQuantity",
+      "updatedAt"
+    FROM "RestaurantStock"
+    WHERE "restaurantId" = ${restaurantId}
+      AND "quantityOnHand" <= "reorderLevel"
+      AND "reorderQuantity" > 0
+    ORDER BY "quantityOnHand" ASC
+    OFFSET ${skip}
+    LIMIT ${limit}
+  `;
+
+    const totalResult = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
+    SELECT COUNT(*) AS count
+    FROM "RestaurantStock"
+    WHERE "restaurantId" = ${restaurantId}
+      AND "quantityOnHand" <= "reorderLevel"
+      AND "reorderQuantity" > 0
+  `;
+
+    const total = Number(totalResult[0]?.count ?? 0);
+
+    // ------------------------------------------------------
+    // GET INGREDIENT DETAILS FROM CATALOG
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(lowStockItems.map((item) => item.ingredientId)),
+    ];
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH LOW STOCK ITEMS
+    // ------------------------------------------------------
+
+    const data = lowStockItems.map((item) => ({
+      ...item,
+      ingredient: ingredientMap.get(item.ingredientId) ?? null,
+    }));
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 }

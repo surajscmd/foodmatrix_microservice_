@@ -3,7 +3,6 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './lib/prisma/prisma.module.js';
-import { InventoryModule } from './modules/inventory/inventory.module.js';
 import { KafkaModule } from './kafka/kafka.module.js';
 import { StockRequestModule } from './modules/stock-request/stock-request.module.js';
 import { StockTransferModule } from './modules/stock-transfer/stock-transfer.module.js';
@@ -19,7 +18,6 @@ import { StockMovementModule } from './modules/stock-movement/stock-movement.mod
       isGlobal: true,
     }),
     PrismaModule,
-    InventoryModule,
     KafkaModule,
     StockRequestModule,
     StockTransferModule,

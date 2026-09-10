@@ -1,27 +1,63 @@
 import { Injectable } from '@nestjs/common';
 
-import { LocationType} from '@prisma/client';
+import { LocationType, type StockMovement } from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+
+import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 import { GetStockMovementsDto } from './dto/get-stock-movements.dto.js';
 
 @Injectable()
 export class StockMovementService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogGatewayService: CatalogGatewayService,
+  ) {}
+
+  // ======================================================
+  // ENRICH MOVEMENTS WITH CATALOG INGREDIENT INFORMATION
+  // ======================================================
+
+  private async enrichMovements(movements: StockMovement[]) {
+    const ingredientIds = [
+      ...new Set(movements.map((movement) => movement.ingredientId)),
+    ];
+
+    if (ingredientIds.length === 0) {
+      return movements.map((movement) => ({
+        ...movement,
+        ingredient: null,
+      }));
+    }
+
+    const ingredients =
+      await this.catalogGatewayService.getBulkIngredients(ingredientIds);
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    return movements.map((movement) => {
+      const ingredient = ingredientMap.get(movement.ingredientId);
+
+      return {
+        ...movement,
+
+        ingredient: ingredient
+          ? {
+              id: ingredient.id,
+              name: ingredient.name,
+              uom: ingredient.uom,
+              isActive: ingredient.isActive,
+            }
+          : null,
+      };
+    });
+  }
 
   // ======================================================
   // GET ALL STOCK MOVEMENTS
-  //
-  // Optional filters:
-  // - ingredientId
-  // - movementType
-  // - fromDate
-  // - toDate
-  //
-  // Pagination:
-  // - page
-  // - limit
   // ======================================================
 
   async findAll(dto: GetStockMovementsDto) {
@@ -77,8 +113,10 @@ export class StockMovementService {
       }),
     ]);
 
+    const enrichedMovements = await this.enrichMovements(movements);
+
     return {
-      data: movements,
+      data: enrichedMovements,
 
       pagination: {
         page,
@@ -91,10 +129,6 @@ export class StockMovementService {
 
   // ======================================================
   // GET RESTAURANT MOVEMENTS
-  //
-  // Filters movements where:
-  // locationType = RESTAURANT
-  // locationId   = restaurantId
   // ======================================================
 
   async findByRestaurant(restaurantId: string, dto: GetStockMovementsDto) {
@@ -154,8 +188,10 @@ export class StockMovementService {
       }),
     ]);
 
+    const enrichedMovements = await this.enrichMovements(movements);
+
     return {
-      data: movements,
+      data: enrichedMovements,
 
       pagination: {
         page,
@@ -168,10 +204,6 @@ export class StockMovementService {
 
   // ======================================================
   // GET WAREHOUSE MOVEMENTS
-  //
-  // Filters movements where:
-  // locationType = WAREHOUSE
-  // locationId   = warehouseId
   // ======================================================
 
   async findByWarehouse(warehouseId: string, dto: GetStockMovementsDto) {
@@ -231,8 +263,10 @@ export class StockMovementService {
       }),
     ]);
 
+    const enrichedMovements = await this.enrichMovements(movements);
+
     return {
-      data: movements,
+      data: enrichedMovements,
 
       pagination: {
         page,

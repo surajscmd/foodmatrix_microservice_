@@ -13,10 +13,14 @@ import { CreateShipmentDto } from './dto/create-shipment.dto.js';
 import { ShipTransferDto } from './dto/ship-transfer.dto.js';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto.js';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto.js';
+import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 @Injectable()
 export class StockTransferService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogGatewayService: CatalogGatewayService,
+  ) {}
 
   // ======================================================
   // COMMON
@@ -49,7 +53,54 @@ export class StockTransferService {
       throw new NotFoundException('Stock transfer not found');
     }
 
-    return transfer;
+    // ------------------------------------------------------
+    // COLLECT INGREDIENT IDS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(transfer.items.map((item) => item.ingredientId)),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENTS FROM CATALOG SERVICE
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH TRANSFER ITEMS
+    // ------------------------------------------------------
+
+    return {
+      ...transfer,
+
+      items: transfer.items.map((item) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+
+      // ----------------------------------------------------
+      // ENRICH STOCK REQUEST ITEMS TOO
+      // ----------------------------------------------------
+
+      stockRequest: transfer.stockRequest
+        ? {
+            ...transfer.stockRequest,
+
+            items: transfer.stockRequest.items.map((item) => ({
+              ...item,
+              ingredient: ingredientMap.get(item.ingredientId) ?? null,
+            })),
+          }
+        : null,
+    };
   }
 
   // ======================================================
@@ -60,37 +111,75 @@ export class StockTransferService {
   // GET OUTGOING TRANSFERS
   // ------------------------------------------------------
 
-  async findByWarehouse(warehouseId: string, status?: TransferStatus) {
-    return this.prisma.stockTransfer.findMany({
-      where: {
-        fromWarehouseId: warehouseId,
+  async findByWarehouse(
+    warehouseId: string,
+    status?: TransferStatus,
+    page = 1,
+    limit = 10,
+  ) {
+    const skip = (page - 1) * limit;
 
-        ...(status
-          ? {
-              status,
-            }
-          : {}),
-      },
+    const where = {
+      fromWarehouseId: warehouseId,
+      ...(status ? { status } : {}),
+    };
 
-      include: {
-        items: true,
-        shipment: true,
-
-        stockRequest: {
-          select: {
-            id: true,
-            restaurantId: true,
-            warehouseId: true,
-            status: true,
-            requestedAt: true,
-          },
+    const [transfers, total] = await this.prisma.$transaction([
+      this.prisma.stockTransfer.findMany({
+        where,
+        include: {
+          items: true,
+          shipment: true,
+          discrepancies: true,
         },
-      },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
 
-      orderBy: {
-        createdAt: 'desc',
+      this.prisma.stockTransfer.count({
+        where,
+      }),
+    ]);
+
+    const ingredientIds = [
+      ...new Set(
+        transfers.flatMap((transfer) =>
+          transfer.items.map((item) => item.ingredientId),
+        ),
+      ),
+    ];
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    const data = transfers.map((transfer) => ({
+      ...transfer,
+
+      items: transfer.items.map((item) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+    }));
+
+    return {
+      data,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   // ======================================================
@@ -101,37 +190,99 @@ export class StockTransferService {
   // GET INCOMING TRANSFERS
   // ------------------------------------------------------
 
-  async findByRestaurant(restaurantId: string, status?: TransferStatus) {
-    return this.prisma.stockTransfer.findMany({
-      where: {
-        toRestaurantId: restaurantId,
+  async findByRestaurant(
+    restaurantId: string,
+    status?: TransferStatus,
+    page = 1,
+    limit = 10,
+  ) {
+    const skip = (page - 1) * limit;
 
-        ...(status
-          ? {
-              status,
-            }
-          : {}),
-      },
+    const where = {
+      toRestaurantId: restaurantId,
+      ...(status ? { status } : {}),
+    };
 
-      include: {
-        items: true,
-        shipment: true,
+    const [transfers, total] = await this.prisma.$transaction([
+      this.prisma.stockTransfer.findMany({
+        where,
 
-        stockRequest: {
-          select: {
-            id: true,
-            restaurantId: true,
-            warehouseId: true,
-            status: true,
-            requestedAt: true,
+        include: {
+          items: true,
+          shipment: true,
+
+          stockRequest: {
+            select: {
+              id: true,
+              restaurantId: true,
+              warehouseId: true,
+              status: true,
+              requestedAt: true,
+            },
           },
         },
-      },
 
-      orderBy: {
-        createdAt: 'desc',
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+      }),
+
+      this.prisma.stockTransfer.count({
+        where,
+      }),
+    ]);
+
+    // ------------------------------------------------------
+    // COLLECT INGREDIENT IDS
+    // ------------------------------------------------------
+
+    const ingredientIds = [
+      ...new Set(
+        transfers.flatMap((transfer) =>
+          transfer.items.map((item) => item.ingredientId),
+        ),
+      ),
+    ];
+
+    // ------------------------------------------------------
+    // GET INGREDIENTS FROM CATALOG SERVICE
+    // ------------------------------------------------------
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------------
+    // ENRICH TRANSFER ITEMS
+    // ------------------------------------------------------
+
+    const data = transfers.map((transfer) => ({
+      ...transfer,
+
+      items: transfer.items.map((item) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId) ?? null,
+      })),
+    }));
+
+    return {
+      data,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
       },
-    });
+    };
   }
 
   // ======================================================

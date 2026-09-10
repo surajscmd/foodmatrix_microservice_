@@ -32,15 +32,18 @@ export class StockTransferController {
   // Optional:
   // ?status=APPROVED
   // ------------------------------------------------------
-
   @Get('warehouse/:warehouseId')
   async findByWarehouse(
     @Param('warehouseId') warehouseId: string,
     @Query('status') status?: TransferStatus,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
   ) {
     const data = await this.stockTransferService.findByWarehouse(
       warehouseId,
       status,
+      Number(page),
+      Number(limit),
     );
 
     return {
@@ -204,10 +207,14 @@ export class StockTransferController {
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query('status') status?: TransferStatus,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
   ) {
     const data = await this.stockTransferService.findByRestaurant(
       restaurantId,
       status,
+      Number(page),
+      Number(limit),
     );
 
     return {
@@ -321,7 +328,6 @@ export class StockTransferController {
     };
   }
 }
-
 
 // GET    /stock-transfers/warehouse/:warehouseId
 // GET    /stock-transfers/restaurant/:restaurantId

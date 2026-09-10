@@ -3,15 +3,17 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-
 import { Prisma } from '@prisma/client';
-
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { AdjustStockDto } from './dto/adjust-stock.dto.js';
+import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 @Injectable()
 export class RestaurantStockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogGatewayService: CatalogGatewayService,
+  ) {}
 
   // ======================================================
   // GET ALL RESTAURANT STOCK
@@ -41,8 +43,48 @@ export class RestaurantStockService {
       }),
     ]);
 
+    // ------------------------------------------------
+    // Fetch ingredient information from Catalog
+    // ------------------------------------------------
+
+    const ingredientIds = stocks.map((stock) => stock.ingredientId);
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    // ------------------------------------------------
+    // Create lookup map
+    // ------------------------------------------------
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------
+    // Enrich stock
+    // ------------------------------------------------
+
+    const enrichedStocks = stocks.map((stock) => {
+      const ingredient = ingredientMap.get(stock.ingredientId);
+
+      return {
+        ...stock,
+
+        ingredient: ingredient
+          ? {
+              id: ingredient.id,
+              name: ingredient.name,
+              uom: ingredient.uom,
+              isActive: ingredient.isActive,
+            }
+          : null,
+      };
+    });
+
     return {
-      data: stocks,
+      data: enrichedStocks,
 
       pagination: {
         page,
@@ -71,7 +113,32 @@ export class RestaurantStockService {
       throw new NotFoundException('Restaurant stock not found');
     }
 
-    return stock;
+    // ------------------------------------------------
+    // Fetch ingredient information from Catalog
+    // ------------------------------------------------
+
+    const ingredients = await this.catalogGatewayService.getBulkIngredients([
+      ingredientId,
+    ]);
+
+    const ingredient = ingredients.find((item) => item.id === ingredientId);
+
+    // ------------------------------------------------
+    // Return stock + ingredient information
+    // ------------------------------------------------
+
+    return {
+      ...stock,
+
+      ingredient: ingredient
+        ? {
+            id: ingredient.id,
+            name: ingredient.name,
+            uom: ingredient.uom,
+            isActive: ingredient.isActive,
+          }
+        : null,
+    };
   }
 
   // ======================================================
@@ -92,33 +159,73 @@ export class RestaurantStockService {
         updatedAt: Date;
       }>
     >`
-        SELECT
-          id,
-          "restaurantId",
-          "ingredientId",
-          "quantityOnHand",
-          "reorderLevel",
-          "reorderQuantity",
-          "updatedAt"
-        FROM "RestaurantStock"
-        WHERE "restaurantId" = ${restaurantId}
-          AND "quantityOnHand" <= "reorderLevel"
-        ORDER BY "quantityOnHand" ASC
-        LIMIT ${limit}
-        OFFSET ${skip}
-      `;
+    SELECT
+      id,
+      "restaurantId",
+      "ingredientId",
+      "quantityOnHand",
+      "reorderLevel",
+      "reorderQuantity",
+      "updatedAt"
+    FROM "RestaurantStock"
+    WHERE "restaurantId" = ${restaurantId}
+      AND "quantityOnHand" <= "reorderLevel"
+    ORDER BY "quantityOnHand" ASC
+    LIMIT ${limit}
+    OFFSET ${skip}
+  `;
 
     const totalResult = await this.prisma.$queryRaw<Array<{ count: bigint }>>`
-        SELECT COUNT(*) AS count
-        FROM "RestaurantStock"
-        WHERE "restaurantId" = ${restaurantId}
-          AND "quantityOnHand" <= "reorderLevel"
-      `;
+      SELECT COUNT(*) AS count
+      FROM "RestaurantStock"
+      WHERE "restaurantId" = ${restaurantId}
+        AND "quantityOnHand" <= "reorderLevel"
+    `;
 
     const total = Number(totalResult[0]?.count ?? 0);
 
+    // ------------------------------------------------
+    // Fetch ingredient information from Catalog
+    // ------------------------------------------------
+
+    const ingredientIds = stocks.map((stock) => stock.ingredientId);
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    // ------------------------------------------------
+    // Create lookup map
+    // ------------------------------------------------
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------
+    // Enrich low-stock records
+    // ------------------------------------------------
+
+    const enrichedStocks = stocks.map((stock) => {
+      const ingredient = ingredientMap.get(stock.ingredientId);
+
+      return {
+        ...stock,
+
+        ingredient: ingredient
+          ? {
+              id: ingredient.id,
+              name: ingredient.name,
+              uom: ingredient.uom,
+              isActive: ingredient.isActive,
+            }
+          : null,
+      };
+    });
+
     return {
-      data: stocks,
+      data: enrichedStocks,
 
       pagination: {
         page,

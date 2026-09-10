@@ -80,15 +80,16 @@ export class StockRequestController {
 
   @Get('restaurant/:restaurantId')
   async findByRestaurant(
-    @Param('restaurantId')
-    restaurantId: string,
-
-    @Query('status')
-    status?: StockRequestStatus,
+    @Param('restaurantId') restaurantId: string,
+    @Query('status') status?: StockRequestStatus,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
   ) {
     const data = await this.stockRequestService.findByRestaurant(
       restaurantId,
       status,
+      Number(page),
+      Number(limit),
     );
 
     return {
@@ -189,15 +190,16 @@ export class StockRequestController {
 
   @Get('warehouse/:warehouseId')
   async findByWarehouse(
-    @Param('warehouseId')
-    warehouseId: string,
-
-    @Query('status')
-    status?: StockRequestStatus,
+    @Param('warehouseId') warehouseId: string,
+    @Query('status') status?: StockRequestStatus,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
   ) {
     const data = await this.stockRequestService.findByWarehouse(
       warehouseId,
       status,
+      Number(page),
+      Number(limit),
     );
 
     return {
@@ -329,13 +331,22 @@ export class StockRequestController {
   // Optional:
   // ?status=REQUESTED
   // ------------------------------------------------------
-
   @Get()
   async findAll(
     @Query('status')
     status?: StockRequestStatus,
+
+    @Query('page')
+    page = '1',
+
+    @Query('limit')
+    limit = '10',
   ) {
-    const data = await this.stockRequestService.findAll(status);
+    const data = await this.stockRequestService.findAll(
+      status,
+      Number(page),
+      Number(limit),
+    );
 
     return {
       message: 'Stock requests fetched successfully',
@@ -363,8 +374,36 @@ export class StockRequestController {
       data,
     };
   }
-}
+  // ======================================================
+  // GET LOW STOCK INGREDIENTS
+  //
+  // RESTAURANT MANAGER
+  //
+  // GET /stock-requests/restaurant/:restaurantId/low-stock
+  //
+  // Optional:
+  // ?page=1
+  // ?limit=10
+  // ------------------------------------------------------
+  // ======================================================
+  @Get('restaurant/:restaurantId/low-stock')
+  async findLowStock(
+    @Param('restaurantId') restaurantId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    const data = await this.stockRequestService.findLowStock(
+      restaurantId,
+      Number(page),
+      Number(limit),
+    );
 
+    return {
+      message: 'Low stock ingredients fetched successfully',
+      data,
+    };
+  }
+}
 
 // POST    /stock-requests
 // GET     /stock-requests/:id

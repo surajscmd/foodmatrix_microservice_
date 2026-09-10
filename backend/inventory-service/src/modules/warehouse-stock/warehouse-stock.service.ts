@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { Prisma } from '@prisma/client';
 
@@ -6,10 +10,15 @@ import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 import { ReceiveWarehouseStockDto } from './dto/receive-warehouse-stock.dto.js';
 import { AdjustWarehouseStockDto } from './dto/adjust-warehouse-stock.dto.js';
+import { BulkReceiveWarehouseStockDto } from './dto/bulk-receive-warehouse-stock.dto.js';
+import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 @Injectable()
 export class WarehouseStockService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly catalogGatewayService: CatalogGatewayService,
+  ) {}
 
   // ======================================================
   // RECEIVE STOCK INTO WAREHOUSE
@@ -88,17 +97,80 @@ export class WarehouseStockService {
   //
   // Used by warehouse dashboard.
   // ======================================================
+  async findByWarehouse(warehouseId: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
 
-  async findByWarehouse(warehouseId: string) {
-    return this.prisma.warehouseStock.findMany({
-      where: {
-        warehouseId,
-      },
+    const [stocks, total] = await Promise.all([
+      this.prisma.warehouseStock.findMany({
+        where: {
+          warehouseId,
+        },
 
-      orderBy: {
-        updatedAt: 'desc',
-      },
+        skip,
+        take: limit,
+
+        orderBy: {
+          updatedAt: 'desc',
+        },
+      }),
+
+      this.prisma.warehouseStock.count({
+        where: {
+          warehouseId,
+        },
+      }),
+    ]);
+
+    // ------------------------------------------------
+    // Fetch ingredient information from Catalog
+    // ------------------------------------------------
+
+    const ingredientIds = stocks.map((stock) => stock.ingredientId);
+
+    const ingredients =
+      ingredientIds.length > 0
+        ? await this.catalogGatewayService.getBulkIngredients(ingredientIds)
+        : [];
+
+    // ------------------------------------------------
+    // Create lookup map
+    // ------------------------------------------------
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    // ------------------------------------------------
+    // Enrich warehouse stock
+    // ------------------------------------------------
+
+    const enrichedStocks = stocks.map((stock) => {
+      const ingredient = ingredientMap.get(stock.ingredientId);
+
+      return {
+        ...stock,
+
+        ingredient: ingredient
+          ? {
+              id: ingredient.id,
+              name: ingredient.name,
+              uom: ingredient.uom,
+              isActive: ingredient.isActive,
+            }
+          : null,
+      };
     });
+
+    return {
+      data: enrichedStocks,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
 
   // ======================================================
@@ -119,10 +191,37 @@ export class WarehouseStockService {
     });
 
     if (!stock) {
-      throw new BadRequestException('Warehouse stock not found');
+      throw new NotFoundException(
+        'Warehouse stock not found for this ingredient',
+      );
     }
 
-    return stock;
+    // ------------------------------------------------
+    // Fetch ingredient information from Catalog
+    // ------------------------------------------------
+
+    const ingredients = await this.catalogGatewayService.getBulkIngredients([
+      ingredientId,
+    ]);
+
+    const ingredient = ingredients.find((item) => item.id === ingredientId);
+
+    // ------------------------------------------------
+    // Return stock + ingredient information
+    // ------------------------------------------------
+
+    return {
+      ...stock,
+
+      ingredient: ingredient
+        ? {
+            id: ingredient.id,
+            name: ingredient.name,
+            uom: ingredient.uom,
+            isActive: ingredient.isActive,
+          }
+        : null,
+    };
   }
 
   // ======================================================
@@ -254,5 +353,110 @@ export class WarehouseStockService {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
+  }
+  // ======================================================
+  // BULK RECEIVE WAREHOUSE STOCK
+  //
+  //
+  // Bulk receive is used when multiple ingredients are received at once, for example from a supplier/purchase.
+  //
+  // WarehouseStock + quantity
+  // ======================================================
+  async bulkReceiveStock(dto: BulkReceiveWarehouseStockDto) {
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.items.length === 0) {
+        throw new BadRequestException('At least one ingredient is required');
+      }
+
+      // ------------------------------------------------
+      // Prevent duplicate ingredients in the same request
+      // ------------------------------------------------
+
+      const ingredientIds = dto.items.map((item) => item.ingredientId);
+
+      const uniqueIngredientIds = new Set(ingredientIds);
+
+      if (uniqueIngredientIds.size !== ingredientIds.length) {
+        throw new BadRequestException(
+          'Duplicate ingredients are not allowed in one bulk receive request',
+        );
+      }
+
+      // ------------------------------------------------
+      // Validate quantities before changing anything
+      // ------------------------------------------------
+
+      for (const item of dto.items) {
+        const quantity = new Prisma.Decimal(item.quantity);
+
+        if (quantity.lte(0)) {
+          throw new BadRequestException(
+            `Quantity must be greater than zero for ingredient ${item.ingredientId}`,
+          );
+        }
+      }
+
+      const results = [];
+
+      // ------------------------------------------------
+      // Receive every ingredient
+      // ------------------------------------------------
+
+      for (const item of dto.items) {
+        const quantity = new Prisma.Decimal(item.quantity);
+
+        // ----------------------------------------------
+        // Update warehouse stock
+        // ----------------------------------------------
+
+        const stock = await tx.warehouseStock.upsert({
+          where: {
+            warehouseId_ingredientId: {
+              warehouseId: dto.warehouseId,
+              ingredientId: item.ingredientId,
+            },
+          },
+
+          create: {
+            warehouseId: dto.warehouseId,
+            ingredientId: item.ingredientId,
+            quantityOnHand: quantity,
+          },
+
+          update: {
+            quantityOnHand: {
+              increment: quantity,
+            },
+          },
+        });
+
+        // ----------------------------------------------
+        // Audit movement
+        // ----------------------------------------------
+
+        const movement = await tx.stockMovement.create({
+          data: {
+            locationType: 'WAREHOUSE',
+
+            locationId: dto.warehouseId,
+
+            ingredientId: item.ingredientId,
+
+            movementType: 'PURCHASE',
+
+            quantityChange: quantity,
+
+            referenceId: item.referenceId ?? null,
+          },
+        });
+
+        results.push({
+          stock,
+          stockMovement: movement,
+        });
+      }
+
+      return results;
+    });
   }
 }

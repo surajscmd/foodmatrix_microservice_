@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post , Query } from '@nestjs/common';
 
 import { WasteLogService } from './waste-log.service.js';
 
@@ -31,8 +31,16 @@ export class WasteLogController {
   // ======================================================
 
   @Get('restaurant/:restaurantId')
-  async findByRestaurant(@Param('restaurantId') restaurantId: string) {
-    const data = await this.wasteLogService.findByRestaurant(restaurantId);
+  async findByRestaurant(
+    @Param('restaurantId') restaurantId: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    const data = await this.wasteLogService.findByRestaurant(
+      restaurantId,
+      Number(page),
+      Number(limit),
+    );
 
     return {
       message: 'Restaurant waste logs fetched successfully',
