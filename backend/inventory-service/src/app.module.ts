@@ -11,12 +11,15 @@ import { OrderInventoryModule } from './modules/order-inventory/order-inventory.
 import { RestaurantStockModule } from './modules/restaurant-stock/restaurant-stock.module.js';
 import { WasteLogModule } from './modules/waste-log/waste-log.module.js';
 import { StockMovementModule } from './modules/stock-movement/stock-movement.module.js';
+import { ScheduleModule } from '@nestjs/schedule';
+import { SchedulerModule } from './modules/schedule/scheduler.module.js';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     KafkaModule,
     StockRequestModule,
@@ -26,6 +29,7 @@ import { StockMovementModule } from './modules/stock-movement/stock-movement.mod
     RestaurantStockModule,
     WasteLogModule,
     StockMovementModule,
+    SchedulerModule
   ],
   controllers: [AppController],
   providers: [AppService],

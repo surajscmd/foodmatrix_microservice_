@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import * as express from 'express';
+
+import type { Response } from 'express';
+
 import PDFDocument from 'pdfkit';
+
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 @Injectable()
@@ -8,9 +11,15 @@ export class PayslipService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ============================================================
-  // GET ALL PAYSLIPS
+  // FIND ALL
   // ============================================================
 
+  /**
+   * Get payslips with optional filters.
+   *
+   * restaurantId is filtered through PayrollRun because
+   * Payslip does not directly contain restaurantId.
+   */
   async findAll(
     restaurantId?: string,
     staffId?: string,
@@ -18,22 +27,39 @@ export class PayslipService {
   ) {
     const payslips = await this.prisma.payslip.findMany({
       where: {
-        ...(staffId && {
-          staffId,
-        }),
+        ...(staffId
+          ? {
+              staffId,
+            }
+          : {}),
 
-        ...(payrollRunId && {
-          payrollRunId,
-        }),
+        ...(payrollRunId
+          ? {
+              payrollRunId,
+            }
+          : {}),
 
-        ...(restaurantId && {
-          payrollRun: {
-            restaurantId,
-          },
-        }),
+        ...(restaurantId
+          ? {
+              payrollRun: {
+                restaurantId,
+              },
+            }
+          : {}),
       },
 
       include: {
+        staff: {
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            restaurantId: true,
+          },
+        },
+
         payrollRun: true,
       },
 
@@ -49,9 +75,12 @@ export class PayslipService {
   }
 
   // ============================================================
-  // GET SINGLE PAYSLIP
+  // FIND ONE
   // ============================================================
 
+  /**
+   * Get a single payslip.
+   */
   async findOne(id: string) {
     const payslip = await this.prisma.payslip.findUnique({
       where: {
@@ -59,6 +88,17 @@ export class PayslipService {
       },
 
       include: {
+        staff: {
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            restaurantId: true,
+          },
+        },
+
         payrollRun: true,
       },
     });
@@ -74,9 +114,12 @@ export class PayslipService {
   }
 
   // ============================================================
-  // GET STAFF PAYSLIPS
+  // FIND STAFF PAYSLIPS
   // ============================================================
 
+  /**
+   * Get all payslips belonging to a staff member.
+   */
   async findByStaff(staffId: string) {
     const payslips = await this.prisma.payslip.findMany({
       where: {
@@ -84,6 +127,17 @@ export class PayslipService {
       },
 
       include: {
+        staff: {
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+            restaurantId: true,
+          },
+        },
+
         payrollRun: true,
       },
 
@@ -97,20 +151,53 @@ export class PayslipService {
       data: payslips,
     };
   }
-  async download(id: string, res: express.Response) {
+
+  // ============================================================
+  // DOWNLOAD PDF
+  // ============================================================
+
+  /**
+   * Generate a PDF payslip and stream it to the client.
+   */
+  async download(id: string, res: Response): Promise<void> {
+    // ----------------------------------------------------------
+    // Get payslip
+    // ----------------------------------------------------------
+
     const payslip = await this.prisma.payslip.findUnique({
       where: {
         id,
       },
+
       include: {
-        staff: true,
-        payrollRun: true,
+        staff: {
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+
+        payrollRun: {
+          select: {
+            id: true,
+            restaurantId: true,
+            periodStartDate: true,
+            periodEndDate: true,
+          },
+        },
       },
     });
 
     if (!payslip) {
       throw new NotFoundException('Payslip not found');
     }
+
+    // ----------------------------------------------------------
+    // Create PDF
+    // ----------------------------------------------------------
 
     const document = new PDFDocument({
       size: 'A4',
@@ -119,13 +206,21 @@ export class PayslipService {
 
     const filename = `payslip-${payslip.id}.pdf`;
 
+    // ----------------------------------------------------------
+    // Configure HTTP response
+    // ----------------------------------------------------------
+
     res.setHeader('Content-Type', 'application/pdf');
 
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
+    // Stream generated PDF directly to response.
     document.pipe(res);
 
-    // Header
+    // ==========================================================
+    // HEADER
+    // ==========================================================
+
     document.fontSize(24).font('Helvetica-Bold').text('PAYSLIP', {
       align: 'center',
     });
@@ -138,7 +233,10 @@ export class PayslipService {
 
     document.moveDown(2);
 
-    // Employee
+    // ==========================================================
+    // EMPLOYEE INFORMATION
+    // ==========================================================
+
     document.fontSize(15).font('Helvetica-Bold').text('Employee Information');
 
     document.moveDown(0.5);
@@ -154,7 +252,10 @@ export class PayslipService {
 
     document.moveDown();
 
-    // Payroll period
+    // ==========================================================
+    // PAYROLL PERIOD
+    // ==========================================================
+
     document.fontSize(15).font('Helvetica-Bold').text('Payroll Period');
 
     document.moveDown(0.5);
@@ -168,12 +269,18 @@ export class PayslipService {
 
     document.moveDown();
 
-    // Hours
+    // ==========================================================
+    // WORKING HOURS
+    // ==========================================================
+
     document.fontSize(15).font('Helvetica-Bold').text('Working Hours');
 
     document.moveDown(0.5);
 
-    document.text(`Regular Hours: ${formatDecimal(payslip.regularHours)}`);
+    document
+      .fontSize(11)
+      .font('Helvetica')
+      .text(`Regular Hours: ${formatDecimal(payslip.regularHours)}`);
 
     document.text(`Overtime Hours: ${formatDecimal(payslip.overtimeHours)}`);
 
@@ -181,7 +288,10 @@ export class PayslipService {
 
     document.moveDown();
 
-    // Earnings
+    // ==========================================================
+    // EARNINGS
+    // ==========================================================
+
     document.fontSize(15).font('Helvetica-Bold').text('Earnings');
 
     document.moveDown(0.5);
@@ -197,7 +307,10 @@ export class PayslipService {
 
     document.moveDown();
 
-    // Deductions
+    // ==========================================================
+    // DEDUCTIONS
+    // ==========================================================
+
     document.fontSize(15).font('Helvetica-Bold').text('Deductions');
 
     document.moveDown(0.5);
@@ -213,7 +326,10 @@ export class PayslipService {
 
     document.moveDown();
 
-    // Net pay
+    // ==========================================================
+    // NET PAY
+    // ==========================================================
+
     document
       .fontSize(18)
       .font('Helvetica-Bold')
@@ -230,13 +346,29 @@ export class PayslipService {
 
     document.moveDown(3);
 
-    document.fontSize(9).text('This is a system-generated payslip.', {
-      align: 'center',
-    });
+    // ==========================================================
+    // FOOTER
+    // ==========================================================
 
+    document
+      .fontSize(9)
+      .font('Helvetica')
+      .text('This is a system-generated payslip.', {
+        align: 'center',
+      });
+
+    // Finish the PDF stream.
     document.end();
   }
 }
+
+// ============================================================
+// PDF FORMAT HELPERS
+// ============================================================
+
+/**
+ * Format a date for the payslip.
+ */
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
@@ -245,10 +377,16 @@ function formatDate(date: Date): string {
   }).format(date);
 }
 
+/**
+ * Format decimal values to two decimal places.
+ */
 function formatDecimal(value: unknown): string {
   return Number(value).toFixed(2);
 }
 
+/**
+ * Format monetary values to two decimal places.
+ */
 function formatMoney(value: unknown): string {
   return Number(value).toFixed(2);
 }

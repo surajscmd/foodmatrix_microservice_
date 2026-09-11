@@ -14,12 +14,14 @@ import { ShipTransferDto } from './dto/ship-transfer.dto.js';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto.js';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
+import type { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 
 @Injectable()
 export class StockTransferService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogGatewayService: CatalogGatewayService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   // ======================================================
@@ -745,7 +747,7 @@ export class StockTransferService {
   // ------------------------------------------------------
 
   async markInTransit(transferId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const transfer = await this.prisma.$transaction(async (tx) => {
       const transfer = await tx.stockTransfer.findUnique({
         where: {
           id: transferId,
@@ -788,6 +790,28 @@ export class StockTransferService {
         },
       });
     });
+
+    // ------------------------------------------------
+    // PUBLISH STOCK IN-TRANSIT EVENT
+    // ------------------------------------------------
+
+    if (!transfer) {
+      throw new NotFoundException('Stock transfer not found');
+    }
+
+    await this.kafkaProducer.publish('inventory.stock-in-transit', {
+      stockTransferId: transfer.id,
+      stockRequestId: transfer.stockRequestId,
+      restaurantId: transfer.toRestaurantId,
+      warehouseId: transfer.fromWarehouseId,
+
+      items: transfer.items.map((item) => ({
+        ingredientId: item.ingredientId,
+        shippedQty: item.shippedQty,
+      })),
+    });
+
+    return transfer;
   }
 
   // ======================================================
@@ -815,7 +839,7 @@ export class StockTransferService {
     dto: ReceiveTransferDto,
     receivedBy: string,
   ) {
-    return this.prisma.$transaction(
+    const completedTransfer = await this.prisma.$transaction(
       async (tx) => {
         const transfer = await tx.stockTransfer.findUnique({
           where: {
@@ -886,8 +910,6 @@ export class StockTransferService {
 
           const receivedQty = new Prisma.Decimal(inputItem.receivedQty);
 
-          // Zero is allowed because an item can be
-          // completely missing.
           if (receivedQty.lt(0)) {
             throw new BadRequestException(
               `Received quantity cannot be negative for ingredient ${transferItem.ingredientId}`,
@@ -918,9 +940,6 @@ export class StockTransferService {
 
           // ------------------------------------------------
           // RESTAURANT STOCK
-          //
-          // Don't create meaningless zero-stock
-          // records for completely missing items.
           // ------------------------------------------------
 
           if (receivedQty.gt(0)) {
@@ -928,16 +947,13 @@ export class StockTransferService {
               where: {
                 restaurantId_ingredientId: {
                   restaurantId: transfer.toRestaurantId,
-
                   ingredientId: transferItem.ingredientId,
                 },
               },
 
               create: {
                 restaurantId: transfer.toRestaurantId,
-
                 ingredientId: transferItem.ingredientId,
-
                 quantityOnHand: receivedQty,
               },
 
@@ -955,15 +971,10 @@ export class StockTransferService {
             await tx.stockMovement.create({
               data: {
                 locationType: 'RESTAURANT',
-
                 locationId: transfer.toRestaurantId,
-
                 ingredientId: transferItem.ingredientId,
-
                 movementType: 'TRANSFER_IN',
-
                 quantityChange: receivedQty,
-
                 referenceId: transfer.id,
               },
             });
@@ -971,18 +982,13 @@ export class StockTransferService {
 
           // ------------------------------------------------
           // TRANSIT INVENTORY
-          //
-          // Only the physically received quantity leaves
-          // transit.
           // ------------------------------------------------
 
           if (receivedQty.gt(0)) {
             const transitUpdated = await tx.inventoryTransit.updateMany({
               where: {
                 transferId: transfer.id,
-
                 ingredientId: transferItem.ingredientId,
-
                 quantity: {
                   gte: receivedQty,
                 },
@@ -1026,19 +1032,13 @@ export class StockTransferService {
             await tx.transferDiscrepancy.create({
               data: {
                 transferId: transfer.id,
-
                 transferItemId: transferItem.id,
-
                 type: 'SHORT_RECEIPT',
-
                 expectedQty: shippedQty,
-
                 actualQty: receivedQty,
-
                 reason:
                   inputItem.reason ??
                   `Short receipt: shipped ${shippedQty.toString()}, received ${receivedQty.toString()}`,
-
                 reportedBy: receivedBy,
               },
             });
@@ -1082,11 +1082,8 @@ export class StockTransferService {
 
           data: {
             status: finalStatus,
-
             receivedBy,
-
             receivedAt: now,
-
             completedAt: hasDiscrepancy ? null : now,
           },
 
@@ -1119,6 +1116,25 @@ export class StockTransferService {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
+
+    // ==================================================
+    // PUBLISH STOCK RECEIVED EVENT
+    // AFTER TRANSACTION SUCCESS
+    // ==================================================
+
+    await this.kafkaProducer.publish('inventory.stock-received', {
+      stockTransferId: completedTransfer.id,
+      stockRequestId: completedTransfer.stockRequestId,
+      restaurantId: completedTransfer.toRestaurantId,
+      warehouseId: completedTransfer.fromWarehouseId,
+
+      items: completedTransfer.items.map((item) => ({
+        ingredientId: item.ingredientId,
+        receivedQty: item.receivedQty,
+      })),
+    });
+
+    return completedTransfer;
   }
 
   // ======================================================

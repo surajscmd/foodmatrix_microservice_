@@ -1,0 +1,76 @@
+import { Injectable, Logger } from '@nestjs/common';
+
+import type { LowStockEvent } from '../types/inventory-events.js';
+
+import { PrismaService } from '../../lib/prisma/prisma.service.js';
+
+import { NotificationGateway } from '../../socket/notification.gateway.js';
+
+@Injectable()
+export class InventoryLowStockHandler {
+  private readonly logger = new Logger(InventoryLowStockHandler.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly notificationGateway: NotificationGateway,
+  ) {}
+
+  async handle(event: LowStockEvent): Promise<void> {
+    if (!event.restaurantId) {
+      this.logger.warn('Low-stock event missing restaurantId');
+      return;
+    }
+
+    if (!event.items || event.items.length === 0) {
+      this.logger.warn(
+        `Low-stock event has no items for restaurant ${event.restaurantId}`,
+      );
+      return;
+    }
+
+    const ingredientNames = event.items
+      .map((item) => item.ingredient?.name)
+      .filter((name): name is string => Boolean(name));
+
+    const message =
+      ingredientNames.length === 1
+        ? `${ingredientNames[0]} is below the reorder level.`
+        : `${ingredientNames.length} ingredients are below the reorder level: ${ingredientNames.join(', ')}.`;
+
+    // ============================================================
+    // 1. CREATE NOTIFICATION IN DATABASE
+    // ============================================================
+
+    const notification = await this.prisma.notification.create({
+      data: {
+        scope: 'RESTAURANT',
+
+        restaurantId: event.restaurantId,
+
+        warehouseId: event.warehouseId ?? null,
+
+        type: 'LOW_STOCK',
+
+        priority: 'HIGH',
+
+        title: 'Low Stock Alert',
+
+        message,
+
+        referenceId: event.restaurantId,
+
+        referenceType: 'RestaurantStock',
+      },
+    });
+
+    // ============================================================
+    // 2. EMIT REAL-TIME NOTIFICATION
+    // ============================================================
+
+    this.notificationGateway.emitToRestaurant(event.restaurantId, notification);
+
+    this.logger.log(
+      `Low-stock notification created and emitted for restaurant ${event.restaurantId}`,
+    );
+  }
+}

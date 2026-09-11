@@ -4,31 +4,35 @@ import {
   IsNumber,
   IsOptional,
   IsUUID,
+  Max,
   Min,
 } from 'class-validator';
 
 import { PayType } from '@prisma/client';
 
 export class CreateWageDto {
-  @IsUUID()
+  @IsUUID('4')
   staffId!: string;
 
   @IsEnum(PayType)
   payType!: PayType;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999.99)
   hourlyWage?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999.99)
   overtimeRate?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9999999999.99)
   salaryAmount?: number;
 
   @IsDateString()
@@ -39,6 +43,6 @@ export class CreateWageDto {
   effectiveEndDate?: string;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   approvedById?: string;
 }

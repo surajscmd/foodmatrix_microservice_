@@ -11,96 +11,110 @@ import {
 } from '@nestjs/common';
 
 import { StaffService } from './staff.service.js';
+
 import { CreateStaffDto } from './dto/create-staff.dto.js';
 import { UpdateStaffDto } from './dto/update-staff.dto.js';
 import { UpdateStaffStatusDto } from './dto/update-staff-status.dto.js';
-import { CreateWageHistoryDto } from './dto/create-wage-history.dto.js';
 
 @Controller('staff')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
+  // ======================================================
+  // CREATE
+  // ======================================================
+
   @Post()
-  async create(@Body() createStaffDto: CreateStaffDto) {
-    const staffAdditon = await this.staffService.create(createStaffDto);
+  async create(@Body() dto: CreateStaffDto) {
+    const data = await this.staffService.create(dto);
+
     return {
-      message: 'Staff added successfully',
-      data: staffAdditon,
+      message: 'Staff created successfully',
+      data,
     };
   }
+
+  // ======================================================
+  // GET ALL
+  // ======================================================
 
   @Get()
-  async findAll(@Query('restaurantId') restaurantId?: string) {
-    const staff = await this.staffService.findAll(restaurantId);
+  async findAll(
+    @Query('restaurantId') restaurantId?: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
+    const data = await this.staffService.findAll(
+      restaurantId,
+      Number(page),
+      Number(limit),
+    );
+
     return {
-      message: 'Staffs fetched successfully',
-      data: staff,
+      message: 'Staff fetched successfully',
+      data,
     };
   }
 
+  // ======================================================
+  // GET ONE
+  // ======================================================
+
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const staff = await this.staffService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.staffService.findOne(id);
+
     return {
-      message: 'Staff  fetched By Id successfully',
-      data: staff,
+      message: 'Staff fetched successfully',
+      data,
     };
   }
+
+  // ======================================================
+  // UPDATE
+  // ======================================================
 
   @Patch(':id')
   async update(
-    @Param('id') id: string,
-    @Body() updateStaffDto: UpdateStaffDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStaffDto,
   ) {
-    const staff = await this.staffService.update(id, updateStaffDto);
+    const data = await this.staffService.update(id, dto);
+
     return {
       message: 'Staff updated successfully',
-      data: staff,
+      data,
     };
   }
+
+  // ======================================================
+  // UPDATE STATUS
+  // ======================================================
 
   @Patch(':id/status')
   async updateStatus(
-    @Param('id') id: string,
-    @Body() updateStaffStatusDto: UpdateStaffStatusDto,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStaffStatusDto,
   ) {
-    const staff = await this.staffService.updateStatus(
-      id,
-      updateStaffStatusDto.status,
-    );
+    const data = await this.staffService.updateStatus(id, dto.status);
+
     return {
       message: 'Staff status updated successfully',
-      data: staff,
+      data,
     };
   }
+
+  // ======================================================
+  // SOFT DELETE
+  // ======================================================
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const staff = await this.staffService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.staffService.remove(id);
+
     return {
       message: 'Staff removed successfully',
-      data: staff,
-    };
-  }
-  // --- WAGE HISTORY MANAGEMENT ---
-  @Post(':id/wage')
-  async updateWage(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: CreateWageHistoryDto,
-  ) {
-    const wageHistory = await this.staffService.updateWage(id, dto);
-    return {
-      message: 'Wage history updated successfully',
-      data: wageHistory,
-    };
-  }
-
-  @Get(':id/wage')
-  async getWageHistory(@Param('id', ParseUUIDPipe) id: string) {
-    const wageHistory = await this.staffService.getWageHistory(id);
-    return {
-      message: 'Wage history fetched successfully',
-      data: wageHistory,
+      data,
     };
   }
 }

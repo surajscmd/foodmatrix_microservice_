@@ -1,32 +1,33 @@
 import {
   IsBoolean,
   IsEnum,
+  IsInt,
   IsNotEmpty,
   IsString,
+  IsUUID,
   Matches,
-  ValidateNested,
-  IsInt,
   Min,
-  ArrayMinSize,
+  ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ShiftType } from '@prisma/client';
 
-export class ShiftTemplateSegmentDto {
+import { ShiftTemplateStatus, ShiftType } from '@prisma/client';
+
+class ShiftTemplateSegmentDto {
   @IsInt()
   @Min(1)
   sequence!: number;
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+  @Matches(/^(?:[01]\d|2[0-3]):[0-5]\d$/, {
     message: 'startTime must be in HH:mm format',
   })
   startTime!: string;
 
   @IsString()
   @IsNotEmpty()
-  @Matches(/^([01]\d|2[0-3]):([0-5]\d)$/, {
+  @Matches(/^(?:[01]\d|2[0-3]):[0-5]\d$/, {
     message: 'endTime must be in HH:mm format',
   })
   endTime!: string;
@@ -36,8 +37,7 @@ export class ShiftTemplateSegmentDto {
 }
 
 export class CreateShiftTemplateDto {
-  @IsString()
-  @IsNotEmpty()
+  @IsUUID()
   restaurantId!: string;
 
   @IsString()
@@ -47,7 +47,9 @@ export class CreateShiftTemplateDto {
   @IsEnum(ShiftType)
   type!: ShiftType;
 
-  @ArrayMinSize(1)
+  @IsEnum(ShiftTemplateStatus)
+  status?: ShiftTemplateStatus;
+
   @ValidateNested({ each: true })
   @Type(() => ShiftTemplateSegmentDto)
   segments!: ShiftTemplateSegmentDto[];

@@ -1,20 +1,28 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
 import { EmployeeStatus, PayType, Prisma } from '@prisma/client';
+
 import { hash } from 'bcrypt';
+
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+
 import { CreateStaffDto } from './dto/create-staff.dto.js';
 import { UpdateStaffDto } from './dto/update-staff.dto.js';
-import { CreateWageHistoryDto } from './dto/create-wage-history.dto.js';
 
 @Injectable()
 export class StaffService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Centralized select object to prevent pinHash leakage
+  // ======================================================
+  // SAFE STAFF SELECT
+  // Never expose pinHash
+  // ======================================================
+
   private readonly safeStaffSelect: Prisma.StaffSelect = {
     id: true,
     restaurantId: true,
@@ -26,15 +34,24 @@ export class StaffService {
     createdAt: true,
     updatedAt: true,
     deletedAt: true,
+
     wageHistories: {
       where: {
         effectiveEndDate: null,
+      },
+      orderBy: {
+        effectiveStartDate: 'desc',
       },
       take: 1,
     },
   };
 
-  async create(createStaffDto: CreateStaffDto) {
+  // ======================================================
+  // CREATE STAFF
+  // Creates initial wage record
+  // ======================================================
+
+  async create(dto: CreateStaffDto) {
     const {
       restaurantId,
       employeeCode,
@@ -42,12 +59,22 @@ export class StaffService {
       lastName,
       role,
       pin,
-      payType,
+      payType = PayType.HOURLY,
       hourlyWage,
       overtimeRate,
       salaryAmount,
       approvedById,
-    } = createStaffDto;
+    } = dto;
+
+    // ----------------------------------------------------
+    // VALIDATE PAY TYPE
+    // ----------------------------------------------------
+
+    this.validatePayType(payType, hourlyWage, salaryAmount);
+
+    // ----------------------------------------------------
+    // DUPLICATE EMPLOYEE CODE
+    // ----------------------------------------------------
 
     const existingStaff = await this.prisma.staff.findUnique({
       where: {
@@ -64,8 +91,17 @@ export class StaffService {
       );
     }
 
-    // Explicitly typed to satisfy strict ESLint rules
-    const pinHash: string = await hash(pin, 10);
+    // ----------------------------------------------------
+    // HASH PIN
+    // ----------------------------------------------------
+
+    const pinHash = await hash(pin, 10);
+
+    // ----------------------------------------------------
+    // CREATE STAFF + INITIAL WAGE
+    //
+    // Nested Prisma create is atomic.
+    // ----------------------------------------------------
 
     const staff = await this.prisma.staff.create({
       data: {
@@ -75,40 +111,84 @@ export class StaffService {
         lastName,
         role,
         pinHash,
+
         wageHistories: {
           create: {
-            payType: payType || PayType.HOURLY,
-            hourlyWage,
-            overtimeRate,
-            salaryAmount,
+            payType,
+            hourlyWage:
+              hourlyWage !== undefined ? new Prisma.Decimal(hourlyWage) : null,
+
+            overtimeRate:
+              overtimeRate !== undefined
+                ? new Prisma.Decimal(overtimeRate)
+                : null,
+
+            salaryAmount:
+              salaryAmount !== undefined
+                ? new Prisma.Decimal(salaryAmount)
+                : null,
+
             effectiveStartDate: new Date(),
             approvedById,
           },
         },
       },
-      select: this.safeStaffSelect,
-    });
 
-    return {
-      message: 'Staff created successfully',
-      data: staff,
-    };
-  }
-
-  async findAll(restaurantId?: string) {
-    const staff = await this.prisma.staff.findMany({
-      where: {
-        ...(restaurantId && { restaurantId }),
-        deletedAt: null,
-      },
-      orderBy: {
-        createdAt: 'desc',
-      },
       select: this.safeStaffSelect,
     });
 
     return staff;
   }
+
+  // ======================================================
+  // GET ALL STAFF
+  // ======================================================
+
+  async findAll(restaurantId?: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.StaffWhereInput = {
+      deletedAt: null,
+    };
+
+    if (restaurantId) {
+      where.restaurantId = restaurantId;
+    }
+
+    const [staff, total] = await this.prisma.$transaction([
+      this.prisma.staff.findMany({
+        where,
+
+        orderBy: {
+          createdAt: 'desc',
+        },
+
+        skip,
+        take: limit,
+
+        select: this.safeStaffSelect,
+      }),
+
+      this.prisma.staff.count({
+        where,
+      }),
+    ]);
+
+    return {
+      data: staff,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  // ======================================================
+  // GET ONE
+  // ======================================================
 
   async findOne(id: string) {
     const staff = await this.prisma.staff.findFirst({
@@ -116,6 +196,7 @@ export class StaffService {
         id,
         deletedAt: null,
       },
+
       select: this.safeStaffSelect,
     });
 
@@ -123,24 +204,32 @@ export class StaffService {
       throw new NotFoundException('Staff not found');
     }
 
-    return {
-      data: staff,
-    };
+    return staff;
   }
 
-  async update(id: string, updateStaffDto: UpdateStaffDto) {
-    // 1. Fetch current record
-    const { data: currentStaff } = await this.findOne(id);
+  // ======================================================
+  // UPDATE STAFF
+  // Does NOT modify wage
+  // ======================================================
 
-    const { pin, ...data } = updateStaffDto;
+  async update(id: string, dto: UpdateStaffDto) {
+    const currentStaff = await this.findOne(id);
 
-    // 2. Safely check for unique constraint collisions
-    if (data.employeeCode || data.restaurantId) {
-      // Removed the optional chaining (?.) and the (as string) assertions
-      const targetRestaurantId: string =
-        data.restaurantId ?? currentStaff.restaurantId;
-      const targetEmployeeCode: string =
-        data.employeeCode ?? currentStaff.employeeCode;
+    const { pin, ...staffData } = dto;
+
+    // ----------------------------------------------------
+    // UNIQUE EMPLOYEE CODE CHECK
+    // ----------------------------------------------------
+
+    if (
+      staffData.employeeCode !== undefined ||
+      staffData.restaurantId !== undefined
+    ) {
+      const targetRestaurantId =
+        staffData.restaurantId ?? currentStaff.restaurantId;
+
+      const targetEmployeeCode =
+        staffData.employeeCode ?? currentStaff.employeeCode;
 
       const existingStaff = await this.prisma.staff.findUnique({
         where: {
@@ -158,114 +247,111 @@ export class StaffService {
       }
     }
 
-    // 3. Prepare update payload
+    // ----------------------------------------------------
+    // UPDATE DATA
+    // ----------------------------------------------------
+
     const updateData: Prisma.StaffUpdateInput = {
-      ...data,
+      ...staffData,
     };
 
-    if (pin) {
-      const newPinHash: string = await hash(pin, 10);
-      updateData.pinHash = newPinHash;
+    if (pin !== undefined) {
+      updateData.pinHash = await hash(pin, 10);
     }
 
-    // 4. Execute update
-    const staff = await this.prisma.staff.update({
-      where: { id },
+    // ----------------------------------------------------
+    // UPDATE
+    // ----------------------------------------------------
+
+    return this.prisma.staff.update({
+      where: {
+        id,
+      },
+
       data: updateData,
+
       select: this.safeStaffSelect,
     });
-
-    return {
-      staff,
-    };
   }
+
+  // ======================================================
+  // UPDATE STATUS
+  // ======================================================
 
   async updateStatus(id: string, status: EmployeeStatus) {
     await this.findOne(id);
 
-    const staff = await this.prisma.staff.update({
-      where: { id },
+    return this.prisma.staff.update({
+      where: {
+        id,
+      },
+
       data: {
         status,
       },
+
       select: this.safeStaffSelect,
     });
-
-    return {
-      message: 'Staff status updated successfully',
-      data: staff,
-    };
   }
+
+  // ======================================================
+  // SOFT DELETE
+  // ======================================================
 
   async remove(id: string) {
     await this.findOne(id);
 
-    await this.prisma.staff.update({
-      where: { id },
+    return this.prisma.staff.update({
+      where: {
+        id,
+      },
+
       data: {
         deletedAt: new Date(),
         status: EmployeeStatus.TERMINATED,
       },
+
+      select: this.safeStaffSelect,
     });
-
-    return {
-      message: 'Staff deleted successfully',
-    };
   }
-  // --- WAGE HISTORY MANAGEMENT ---
 
-  async updateWage(id: string, dto: CreateWageHistoryDto) {
-    // 1. Verify the employee exists using your existing method
-    await this.findOne(id);
+  // ======================================================
+  // PAY TYPE VALIDATION
+  // ======================================================
 
-    // 2. Execute the transaction
-    const result = await this.prisma.$transaction(async (tx) => {
-      const currentWage = await tx.wageHistory.findFirst({
-        where: {
-          staffId: id,
-          effectiveEndDate: null,
-        },
-      });
-
-      if (currentWage) {
-        await tx.wageHistory.update({
-          where: { id: currentWage.id },
-          data: { effectiveEndDate: new Date() },
-        });
+  private validatePayType(
+    payType: PayType,
+    hourlyWage?: number,
+    salaryAmount?: number,
+  ): void {
+    if (payType === PayType.HOURLY) {
+      if (hourlyWage === undefined) {
+        throw new BadRequestException(
+          'hourlyWage is required for HOURLY pay type',
+        );
       }
 
-      const newWage = await tx.wageHistory.create({
-        data: {
-          staffId: id,
-          payType: dto.payType,
-          hourlyWage: dto.hourlyWage,
-          overtimeRate: dto.overtimeRate,
-          salaryAmount: dto.salaryAmount,
-          effectiveStartDate: new Date(),
-          approvedById: dto.approvedById,
-        },
-      });
+      if (salaryAmount !== undefined) {
+        throw new BadRequestException(
+          'salaryAmount must not be provided for HOURLY pay type',
+        );
+      }
 
-      return newWage;
-    });
+      return;
+    }
 
-    return {
-      result,
-    };
-  }
+    if (payType === PayType.SALARY) {
+      if (salaryAmount === undefined) {
+        throw new BadRequestException(
+          'salaryAmount is required for SALARY pay type',
+        );
+      }
 
-  async getWageHistory(id: string) {
-    // Verify employee exists
-    await this.findOne(id);
-
-    const history = await this.prisma.wageHistory.findMany({
-      where: { staffId: id },
-      orderBy: { effectiveStartDate: 'desc' },
-    });
-
-    return {
-      message: 'Wage history fetched successfully',
-      data: history,
-    };
+      if (hourlyWage !== undefined) {
+        throw new BadRequestException(
+          'hourlyWage must not be provided for SALARY pay type',
+        );
+      }
+    }
   }
 }

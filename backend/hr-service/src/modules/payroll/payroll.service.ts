@@ -5,7 +5,10 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { EmployeeStatus, PayrollStatus } from '@prisma/client';
+
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+
 import { CreatePayrollRunDto } from './dto/create-payroll-run.dto.js';
 import { PayrollCalculationService } from './payroll-calculation.service.js';
 
@@ -20,15 +23,22 @@ export class PayrollService {
   // CREATE PAYROLL RUN
   // ============================================================
 
+  /**
+   * Create a payroll run for a restaurant.
+   *
+   * A payroll run is initially created in DRAFT status.
+   * The actual payroll calculations happen during processing.
+   */
   async create(dto: CreatePayrollRunDto) {
     const { restaurantId, periodStartDate, periodEndDate, processedById } = dto;
 
-    const startDate = new Date(periodStartDate);
-    const endDate = new Date(periodEndDate);
+    // ----------------------------------------------------------
+    // Validate payroll period
+    // ----------------------------------------------------------
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      throw new BadRequestException('Invalid payroll period dates');
-    }
+    const startDate = this.parseDate(periodStartDate, 'periodStartDate');
+
+    const endDate = this.parseDate(periodEndDate, 'periodEndDate');
 
     if (startDate > endDate) {
       throw new BadRequestException(
@@ -36,17 +46,29 @@ export class PayrollService {
       );
     }
 
+    // ----------------------------------------------------------
+    // Prevent duplicate payroll run
+    // ----------------------------------------------------------
+
     const existing = await this.prisma.payrollRun.findFirst({
       where: {
         restaurantId,
         periodStartDate: startDate,
         periodEndDate: endDate,
       },
+
+      select: {
+        id: true,
+      },
     });
 
     if (existing) {
       throw new ConflictException('Payroll run already exists for this period');
     }
+
+    // ----------------------------------------------------------
+    // Create payroll run
+    // ----------------------------------------------------------
 
     const payrollRun = await this.prisma.payrollRun.create({
       data: {
@@ -55,7 +77,7 @@ export class PayrollService {
         periodEndDate: endDate,
         processedById,
 
-        status: 'DRAFT',
+        status: PayrollStatus.DRAFT,
 
         totalGrossPay: 0,
         totalTaxes: 0,
@@ -70,9 +92,15 @@ export class PayrollService {
   }
 
   // ============================================================
-  // GET ALL PAYROLL RUNS
+  // FIND ALL PAYROLL RUNS
   // ============================================================
 
+  /**
+   * Get payroll runs.
+   *
+   * Optional filter:
+   * - restaurantId
+   */
   async findAll(restaurantId?: string) {
     const payrollRuns = await this.prisma.payrollRun.findMany({
       where: restaurantId
@@ -101,9 +129,12 @@ export class PayrollService {
   }
 
   // ============================================================
-  // GET SINGLE PAYROLL RUN
+  // FIND ONE PAYROLL RUN
   // ============================================================
 
+  /**
+   * Get one payroll run with its payslips.
+   */
   async findOne(id: string) {
     const payrollRun = await this.prisma.payrollRun.findUnique({
       where: {
@@ -132,7 +163,13 @@ export class PayrollService {
   // ============================================================
   // PROCESS PAYROLL RUN
   // ============================================================
-
+  /**
+   * Calculate payroll for all active staff in the restaurant.
+   *
+   * Each completed, unprocessed attendance shift is included
+   * only once and marked as processed after its payslip has
+   * been successfully created.
+   */
   async process(id: string) {
     const payrollRun = await this.prisma.payrollRun.findUnique({
       where: {
@@ -144,11 +181,15 @@ export class PayrollService {
       throw new NotFoundException('Payroll run not found');
     }
 
-    if (payrollRun.status !== 'DRAFT') {
+    // Only DRAFT payroll runs can be processed.
+    if (payrollRun.status !== PayrollStatus.DRAFT) {
       throw new ConflictException('Only DRAFT payroll runs can be processed');
     }
 
-    // Prevent processing twice
+    // ----------------------------------------------------------
+    // Prevent duplicate processing
+    // ----------------------------------------------------------
+
     const existingPayslips = await this.prisma.payslip.count({
       where: {
         payrollRunId: id,
@@ -159,12 +200,21 @@ export class PayrollService {
       throw new ConflictException('Payroll has already been processed');
     }
 
+    // ----------------------------------------------------------
+    // Get active staff
+    // ----------------------------------------------------------
+
     const staffList = await this.prisma.staff.findMany({
       where: {
         restaurantId: payrollRun.restaurantId,
-        status: {
-          not: 'TERMINATED',
-        },
+
+        status: EmployeeStatus.ACTIVE,
+
+        deletedAt: null,
+      },
+
+      select: {
+        id: true,
       },
     });
 
@@ -173,6 +223,10 @@ export class PayrollService {
         'No active staff found for this restaurant',
       );
     }
+
+    // ----------------------------------------------------------
+    // Process payroll atomically
+    // ----------------------------------------------------------
 
     const result = await this.prisma.$transaction(async (tx) => {
       let totalGrossPay = 0;
@@ -189,33 +243,73 @@ export class PayrollService {
           });
 
         totalGrossPay += calculation.grossPay;
+
         totalTaxes += calculation.taxDeductions;
+
         totalNetPay += calculation.netPay;
+
+        // ------------------------------------------------
+        // Create payslip
+        // ------------------------------------------------
 
         await tx.payslip.create({
           data: {
             payrollRunId: payrollRun.id,
+
             staffId: staff.id,
 
             regularHours: calculation.regularHours,
+
             overtimeHours: calculation.overtimeHours,
+
             paidLeaveHours: calculation.paidLeaveHours,
 
             regularPay: calculation.regularPay,
+
             overtimePay: calculation.overtimePay,
 
             grossPay: calculation.grossPay,
 
             taxDeductions: calculation.taxDeductions,
+
             otherDeductions: calculation.otherDeductions,
 
             netPay: calculation.netPay,
 
             paymentMethod: 'DIRECT_DEPOSIT',
-            status: 'DRAFT',
+
+            status: PayrollStatus.DRAFT,
           },
         });
+
+        // ------------------------------------------------
+        // Mark the exact shifts used by this calculation
+        // ------------------------------------------------
+
+        if (calculation.shiftIds.length > 0) {
+          await tx.shift.updateMany({
+            where: {
+              id: {
+                in: calculation.shiftIds,
+              },
+
+              /*
+               * Keep this condition so a shift cannot
+               * accidentally be marked twice.
+               */
+              isProcessedForPay: false,
+            },
+
+            data: {
+              isProcessedForPay: true,
+            },
+          });
+        }
       }
+
+      // ------------------------------------------------
+      // Update payroll totals
+      // ------------------------------------------------
 
       return tx.payrollRun.update({
         where: {
@@ -248,6 +342,11 @@ export class PayrollService {
   // APPROVE PAYROLL RUN
   // ============================================================
 
+  /**
+   * Approve a processed payroll run.
+   *
+   * Both the payroll run and its payslips move to APPROVED.
+   */
   async approve(id: string) {
     const payrollRun = await this.prisma.payrollRun.findUnique({
       where: {
@@ -259,9 +358,14 @@ export class PayrollService {
       throw new NotFoundException('Payroll run not found');
     }
 
-    if (payrollRun.status !== 'DRAFT') {
+    // Only DRAFT payroll runs can move to APPROVED.
+    if (payrollRun.status !== PayrollStatus.DRAFT) {
       throw new ConflictException('Only DRAFT payroll runs can be approved');
     }
+
+    // ----------------------------------------------------------
+    // Verify payslips exist
+    // ----------------------------------------------------------
 
     const payslipCount = await this.prisma.payslip.count({
       where: {
@@ -275,6 +379,10 @@ export class PayrollService {
       );
     }
 
+    // ----------------------------------------------------------
+    // Approve payroll atomically
+    // ----------------------------------------------------------
+
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.payslip.updateMany({
         where: {
@@ -282,7 +390,7 @@ export class PayrollService {
         },
 
         data: {
-          status: 'APPROVED',
+          status: PayrollStatus.APPROVED,
         },
       });
 
@@ -292,7 +400,7 @@ export class PayrollService {
         },
 
         data: {
-          status: 'APPROVED',
+          status: PayrollStatus.APPROVED,
         },
 
         include: {
@@ -312,9 +420,14 @@ export class PayrollService {
   }
 
   // ============================================================
-  // PAY PAYROLL
+  // PAY PAYROLL RUN
   // ============================================================
 
+  /**
+   * Mark an approved payroll run as paid.
+   *
+   * Only approved payslips are moved to PAID.
+   */
   async pay(id: string) {
     const payrollRun = await this.prisma.payrollRun.findUnique({
       where: {
@@ -326,14 +439,19 @@ export class PayrollService {
       throw new NotFoundException('Payroll run not found');
     }
 
-    if (payrollRun.status !== 'APPROVED') {
+    // Only approved payroll runs can be paid.
+    if (payrollRun.status !== PayrollStatus.APPROVED) {
       throw new ConflictException('Only APPROVED payroll runs can be paid');
     }
+
+    // ----------------------------------------------------------
+    // Verify approved payslips
+    // ----------------------------------------------------------
 
     const payslipCount = await this.prisma.payslip.count({
       where: {
         payrollRunId: id,
-        status: 'APPROVED',
+        status: PayrollStatus.APPROVED,
       },
     });
 
@@ -343,15 +461,19 @@ export class PayrollService {
       );
     }
 
+    // ----------------------------------------------------------
+    // Mark payroll as paid atomically
+    // ----------------------------------------------------------
+
     const result = await this.prisma.$transaction(async (tx) => {
       await tx.payslip.updateMany({
         where: {
           payrollRunId: id,
-          status: 'APPROVED',
+          status: PayrollStatus.APPROVED,
         },
 
         data: {
-          status: 'PAID',
+          status: PayrollStatus.PAID,
         },
       });
 
@@ -361,7 +483,7 @@ export class PayrollService {
         },
 
         data: {
-          status: 'PAID',
+          status: PayrollStatus.PAID,
         },
 
         include: {
@@ -378,5 +500,22 @@ export class PayrollService {
       message: 'Payroll run paid successfully',
       data: result,
     };
+  }
+
+  // ============================================================
+  // HELPERS
+  // ============================================================
+
+  /**
+   * Convert and validate an incoming date string.
+   */
+  private parseDate(value: string, fieldName: string): Date {
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      throw new BadRequestException(`Invalid ${fieldName}`);
+    }
+
+    return date;
   }
 }

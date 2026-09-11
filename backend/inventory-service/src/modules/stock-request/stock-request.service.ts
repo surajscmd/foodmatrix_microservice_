@@ -13,12 +13,14 @@ import { RejectStockRequestDto } from './dto/reject-stock-request.dto.js';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { UpdateStockRequestDto } from './dto/update-stock-request.dto.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
+import { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 
 @Injectable()
 export class StockRequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogGatewayService: CatalogGatewayService,
+    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   // ======================================================
@@ -53,9 +55,6 @@ export class StockRequestService {
 
     // ----------------------------------------------------
     // Prevent duplicate ACTIVE requests
-    //
-    // REQUESTED / APPROVED = active
-    // REJECTED / CANCELLED / FULFILLED = inactive
     // ----------------------------------------------------
 
     const existingActiveItems = await this.prisma.stockRequestItem.findMany({
@@ -99,22 +98,17 @@ export class StockRequestService {
     // CREATE REQUEST
     // ----------------------------------------------------
 
-    return this.prisma.stockRequest.create({
+    const stockRequest = await this.prisma.stockRequest.create({
       data: {
         restaurantId: dto.restaurantId,
-
         warehouseId: dto.warehouseId,
-
         requestedBy,
-
         reason: dto.reason,
-
         status: StockRequestStatus.REQUESTED,
 
         items: {
           create: dto.items.map((item) => ({
             ingredientId: item.ingredientId,
-
             requestedQty: new Prisma.Decimal(item.requestedQty),
           })),
         },
@@ -124,6 +118,20 @@ export class StockRequestService {
         items: true,
       },
     });
+
+    // ----------------------------------------------------
+    // PUBLISH KAFKA EVENT
+    // ----------------------------------------------------
+
+    await this.kafkaProducer.publish('inventory.stock-request-created', {
+      stockRequestId: stockRequest.id,
+      restaurantId: stockRequest.restaurantId,
+      warehouseId: stockRequest.warehouseId,
+      requestedBy: stockRequest.requestedBy,
+      itemCount: stockRequest.items.length,
+    });
+
+    return stockRequest;
   }
   // ======================================================
   // UPDATE STOCK REQUEST
@@ -673,7 +681,7 @@ export class StockRequestService {
     approvedBy: string,
     warehouseId: string,
   ) {
-    return this.prisma.$transaction(async (tx) => {
+    const transfer = await this.prisma.$transaction(async (tx) => {
       // ------------------------------------------------
       // Fetch request
       // ------------------------------------------------
@@ -735,14 +743,12 @@ export class StockRequestService {
       const approvalMap = new Map<string, Prisma.Decimal>();
 
       for (const item of dto.items) {
-        // Duplicate ingredient
         if (approvalMap.has(item.ingredientId)) {
           throw new BadRequestException(
             `Duplicate ingredient ${item.ingredientId}`,
           );
         }
 
-        // Ingredient must exist in original request
         const requestedItem = requestedMap.get(item.ingredientId);
 
         if (!requestedItem) {
@@ -753,14 +759,12 @@ export class StockRequestService {
 
         const approvedQty = new Prisma.Decimal(item.approvedQty);
 
-        // Must be positive
         if (approvedQty.lte(0)) {
           throw new BadRequestException(
             `Approved quantity must be greater than zero for ingredient ${item.ingredientId}`,
           );
         }
 
-        // Cannot approve more than requested
         if (approvedQty.gt(requestedItem.requestedQty)) {
           throw new BadRequestException(
             `Approved quantity for ingredient ${item.ingredientId} cannot exceed requested quantity`,
@@ -780,12 +784,6 @@ export class StockRequestService {
 
       // ------------------------------------------------
       // Check warehouse stock
-      //
-      // IMPORTANT:
-      // This is only an availability check.
-      //
-      // We do NOT deduct stock here.
-      // Shipment performs the final atomic deduction.
       // ------------------------------------------------
 
       for (const [ingredientId, approvedQty] of approvalMap) {
@@ -815,8 +813,6 @@ export class StockRequestService {
 
       // ------------------------------------------------
       // Update request items
-      //
-      // Items not approved receive 0.
       // ------------------------------------------------
 
       for (const requestItem of request.items) {
@@ -836,8 +832,6 @@ export class StockRequestService {
 
       // ------------------------------------------------
       // Create transfer
-      //
-      // Only approved quantities are transferred.
       // ------------------------------------------------
 
       const transferItems = request.items
@@ -851,9 +845,7 @@ export class StockRequestService {
 
           return {
             ingredientId: item.ingredientId,
-
             requestedQty: item.requestedQty,
-
             approvedQty,
           };
         });
@@ -863,12 +855,6 @@ export class StockRequestService {
           'No approved items available for transfer',
         );
       }
-
-      // ------------------------------------------------
-      // Create Stock Transfer
-      //
-      // APPROVED
-      // ------------------------------------------------
 
       const transfer = await tx.stockTransfer.create({
         data: {
@@ -918,6 +904,24 @@ export class StockRequestService {
 
       return transfer;
     });
+
+    // ==================================================
+    // PUBLISH NOTIFICATION EVENT
+    // AFTER TRANSACTION SUCCESS
+    // ==================================================
+
+    await this.kafkaProducer.publish('inventory.stock-request-approved', {
+      stockRequestId: requestId,
+      restaurantId: transfer.toRestaurantId,
+      warehouseId: transfer.fromWarehouseId,
+
+      items: transfer.items.map((item) => ({
+        ingredientId: item.ingredientId,
+        approvedQty: item.approvedQty,
+      })),
+    });
+
+    return transfer;
   }
 
   // ======================================================

@@ -11,6 +11,7 @@ import { LeaveModule } from './modules/leave/leave.module';
 import { WageModule } from './modules/wage/wage.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
 import { PayslipModule } from './modules/payslip/payslip.module';
+import { KafkaModule } from './modules/kafka/kafka.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { PayslipModule } from './modules/payslip/payslip.module';
     WageModule,
     PayrollModule,
     PayslipModule,
+    KafkaModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -4,6 +4,6 @@ import { ShiftScheduleService } from './shift-schedule.service';
 
 @Module({
   controllers: [ShiftScheduleController],
-  providers: [ShiftScheduleService]
+  providers: [ShiftScheduleService],
 })
 export class ShiftScheduleModule {}

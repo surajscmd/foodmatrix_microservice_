@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -15,29 +16,28 @@ import { UpdateWageDto } from './dto/update-wage.dto.js';
 export class WageService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // =========================================================
-  // CREATE
-  // =========================================================
+  // ======================================================
+  // STAFF SELECT
+  // ======================================================
+
+  private readonly staffSelect: Prisma.StaffSelect = {
+    id: true,
+    employeeCode: true,
+    firstName: true,
+    lastName: true,
+    role: true,
+    restaurantId: true,
+  };
+
+  // ======================================================
+  // CREATE WAGE
+  // ======================================================
 
   async create(dto: CreateWageDto) {
-    const {
-      staffId,
-      payType,
-      hourlyWage,
-      overtimeRate,
-      salaryAmount,
-      effectiveStartDate,
-      effectiveEndDate,
-      approvedById,
-    } = dto;
-
-    // -------------------------------------------------------
-    // Check staff
-    // -------------------------------------------------------
-
-    const staff = await this.prisma.staff.findUnique({
+    const staff = await this.prisma.staff.findFirst({
       where: {
-        id: staffId,
+        id: dto.staffId,
+        deletedAt: null,
       },
     });
 
@@ -45,33 +45,19 @@ export class WageService {
       throw new NotFoundException('Staff not found');
     }
 
-    // -------------------------------------------------------
-    // Validate pay type
-    // -------------------------------------------------------
+    this.validatePayType(dto.payType, dto.hourlyWage, dto.salaryAmount);
 
-    this.validatePayType(payType, hourlyWage, salaryAmount);
+    const startDate = new Date(dto.effectiveStartDate);
 
-    // -------------------------------------------------------
-    // Dates
-    // -------------------------------------------------------
+    const endDate = dto.effectiveEndDate
+      ? new Date(dto.effectiveEndDate)
+      : null;
 
-    const startDate = new Date(effectiveStartDate);
-
-    const endDate = effectiveEndDate ? new Date(effectiveEndDate) : null;
-
-    if (endDate && startDate > endDate) {
-      throw new ConflictException(
-        'Effective start date cannot be after effective end date',
-      );
-    }
-
-    // -------------------------------------------------------
-    // Find overlapping wage
-    // -------------------------------------------------------
+    this.validateDates(startDate, endDate);
 
     const overlapping = await this.prisma.wageHistory.findFirst({
       where: {
-        staffId,
+        staffId: dto.staffId,
 
         effectiveStartDate: {
           lte: endDate ?? new Date('9999-12-31'),
@@ -96,88 +82,92 @@ export class WageService {
       );
     }
 
-    // -------------------------------------------------------
-    // Create
-    // -------------------------------------------------------
-
-    const wage = await this.prisma.wageHistory.create({
+    return this.prisma.wageHistory.create({
       data: {
-        staffId,
-        payType,
+        staffId: dto.staffId,
+
+        payType: dto.payType,
 
         hourlyWage:
-          hourlyWage !== undefined ? new Prisma.Decimal(hourlyWage) : null,
+          dto.hourlyWage !== undefined
+            ? new Prisma.Decimal(dto.hourlyWage)
+            : null,
 
         overtimeRate:
-          overtimeRate !== undefined ? new Prisma.Decimal(overtimeRate) : null,
+          dto.overtimeRate !== undefined
+            ? new Prisma.Decimal(dto.overtimeRate)
+            : null,
 
         salaryAmount:
-          salaryAmount !== undefined ? new Prisma.Decimal(salaryAmount) : null,
+          dto.salaryAmount !== undefined
+            ? new Prisma.Decimal(dto.salaryAmount)
+            : null,
 
         effectiveStartDate: startDate,
         effectiveEndDate: endDate,
-        approvedById,
+
+        approvedById: dto.approvedById,
       },
 
       include: {
         staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
-          },
+          select: this.staffSelect,
         },
       },
     });
-
-    return {
-      message: 'Wage history created successfully',
-      data: wage,
-    };
   }
 
-  // =========================================================
+  // ======================================================
   // FIND ALL
-  // =========================================================
+  // ======================================================
 
-  async findAll(staffId?: string) {
-    const wages = await this.prisma.wageHistory.findMany({
-      where: staffId
-        ? {
-            staffId,
-          }
-        : undefined,
+  async findAll(staffId?: string, page = 1, limit = 10) {
+    const skip = (page - 1) * limit;
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
+    const where: Prisma.WageHistoryWhereInput = {};
+
+    if (staffId) {
+      where.staffId = staffId;
+    }
+
+    const [wages, total] = await this.prisma.$transaction([
+      this.prisma.wageHistory.findMany({
+        where,
+
+        include: {
+          staff: {
+            select: this.staffSelect,
           },
         },
-      },
 
-      orderBy: {
-        effectiveStartDate: 'desc',
-      },
-    });
+        orderBy: {
+          effectiveStartDate: 'desc',
+        },
+
+        skip,
+        take: limit,
+      }),
+
+      this.prisma.wageHistory.count({
+        where,
+      }),
+    ]);
 
     return {
-      message: 'Wage histories fetched successfully',
       data: wages,
+
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 
-  // =========================================================
+  // ======================================================
   // FIND ONE
-  // =========================================================
+  // ======================================================
 
   async findOne(id: string) {
     const wage = await this.prisma.wageHistory.findUnique({
@@ -187,14 +177,7 @@ export class WageService {
 
       include: {
         staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
-          },
+          select: this.staffSelect,
         },
       },
     });
@@ -203,20 +186,18 @@ export class WageService {
       throw new NotFoundException('Wage history not found');
     }
 
-    return {
-      message: 'Wage history fetched successfully',
-      data: wage,
-    };
+    return wage;
   }
 
-  // =========================================================
+  // ======================================================
   // CURRENT WAGE
-  // =========================================================
+  // ======================================================
 
   async getCurrentWage(staffId: string) {
-    const staff = await this.prisma.staff.findUnique({
+    const staff = await this.prisma.staff.findFirst({
       where: {
         id: staffId,
+        deletedAt: null,
       },
     });
 
@@ -255,15 +236,12 @@ export class WageService {
       throw new NotFoundException('No active wage found for this staff member');
     }
 
-    return {
-      message: 'Current wage fetched successfully',
-      data: wage,
-    };
+    return wage;
   }
 
-  // =========================================================
-  // UPDATE
-  // =========================================================
+  // ======================================================
+  // UPDATE WAGE
+  // ======================================================
 
   async update(id: string, dto: UpdateWageDto) {
     const existing = await this.prisma.wageHistory.findUnique({
@@ -276,21 +254,41 @@ export class WageService {
       throw new NotFoundException('Wage history not found');
     }
 
+    const staffId = dto.staffId ?? existing.staffId;
+
+    const staff = await this.prisma.staff.findFirst({
+      where: {
+        id: staffId,
+        deletedAt: null,
+      },
+    });
+
+    if (!staff) {
+      throw new NotFoundException('Staff not found');
+    }
+
     const payType = dto.payType ?? existing.payType;
 
     const hourlyWage =
-      dto.hourlyWage ??
-      (existing.hourlyWage ? Number(existing.hourlyWage) : undefined);
+      dto.hourlyWage !== undefined
+        ? dto.hourlyWage
+        : existing.hourlyWage !== null
+          ? Number(existing.hourlyWage)
+          : undefined;
 
     const salaryAmount =
-      dto.salaryAmount ??
-      (existing.salaryAmount ? Number(existing.salaryAmount) : undefined);
+      dto.salaryAmount !== undefined
+        ? dto.salaryAmount
+        : existing.salaryAmount !== null
+          ? Number(existing.salaryAmount)
+          : undefined;
 
     this.validatePayType(payType, hourlyWage, salaryAmount);
 
-    const startDate = dto.effectiveStartDate
-      ? new Date(dto.effectiveStartDate)
-      : existing.effectiveStartDate;
+    const startDate =
+      dto.effectiveStartDate !== undefined
+        ? new Date(dto.effectiveStartDate)
+        : existing.effectiveStartDate;
 
     const endDate =
       dto.effectiveEndDate !== undefined
@@ -299,15 +297,7 @@ export class WageService {
           : null
         : existing.effectiveEndDate;
 
-    if (endDate && startDate > endDate) {
-      throw new ConflictException(
-        'Effective start date cannot be after effective end date',
-      );
-    }
-
-    // -------------------------------------------------------
-    // Check overlap with other records
-    // -------------------------------------------------------
+    this.validateDates(startDate, endDate);
 
     const overlapping = await this.prisma.wageHistory.findFirst({
       where: {
@@ -315,7 +305,7 @@ export class WageService {
           not: id,
         },
 
-        staffId: dto.staffId ?? existing.staffId,
+        staffId,
 
         effectiveStartDate: {
           lte: endDate ?? new Date('9999-12-31'),
@@ -340,39 +330,33 @@ export class WageService {
       );
     }
 
-    const wage = await this.prisma.wageHistory.update({
+    return this.prisma.wageHistory.update({
       where: {
         id,
       },
 
       data: {
-        ...(dto.staffId !== undefined && {
-          staffId: dto.staffId,
-        }),
+        staffId,
 
-        ...(dto.payType !== undefined && {
-          payType: dto.payType,
-        }),
+        payType,
 
-        ...(dto.hourlyWage !== undefined && {
-          hourlyWage: new Prisma.Decimal(dto.hourlyWage),
-        }),
+        hourlyWage:
+          dto.hourlyWage !== undefined
+            ? new Prisma.Decimal(dto.hourlyWage)
+            : existing.hourlyWage,
 
-        ...(dto.overtimeRate !== undefined && {
-          overtimeRate: new Prisma.Decimal(dto.overtimeRate),
-        }),
+        overtimeRate:
+          dto.overtimeRate !== undefined
+            ? new Prisma.Decimal(dto.overtimeRate)
+            : existing.overtimeRate,
 
-        ...(dto.salaryAmount !== undefined && {
-          salaryAmount: new Prisma.Decimal(dto.salaryAmount),
-        }),
+        salaryAmount:
+          dto.salaryAmount !== undefined
+            ? new Prisma.Decimal(dto.salaryAmount)
+            : existing.salaryAmount,
 
-        ...(dto.effectiveStartDate !== undefined && {
-          effectiveStartDate: startDate,
-        }),
-
-        ...(dto.effectiveEndDate !== undefined && {
-          effectiveEndDate: endDate,
-        }),
+        effectiveStartDate: startDate,
+        effectiveEndDate: endDate,
 
         ...(dto.approvedById !== undefined && {
           approvedById: dto.approvedById,
@@ -381,27 +365,15 @@ export class WageService {
 
       include: {
         staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
-          },
+          select: this.staffSelect,
         },
       },
     });
-
-    return {
-      message: 'Wage history updated successfully',
-      data: wage,
-    };
   }
 
-  // =========================================================
+  // ======================================================
   // DELETE
-  // =========================================================
+  // ======================================================
 
   async remove(id: string) {
     const wage = await this.prisma.wageHistory.findUnique({
@@ -420,36 +392,66 @@ export class WageService {
       },
     });
 
-    return {
-      message: 'Wage history deleted successfully',
-    };
+    return wage;
   }
 
-  // =========================================================
-  // VALIDATION
-  // =========================================================
+  // ======================================================
+  // DATE VALIDATION
+  // ======================================================
+
+  private validateDates(startDate: Date, endDate: Date | null): void {
+    if (Number.isNaN(startDate.getTime())) {
+      throw new BadRequestException('Invalid effective start date');
+    }
+
+    if (endDate && Number.isNaN(endDate.getTime())) {
+      throw new BadRequestException('Invalid effective end date');
+    }
+
+    if (endDate && startDate > endDate) {
+      throw new ConflictException(
+        'Effective start date cannot be after effective end date',
+      );
+    }
+  }
+
+  // ======================================================
+  // PAY TYPE VALIDATION
+  // ======================================================
 
   private validatePayType(
     payType: PayType,
     hourlyWage?: number,
     salaryAmount?: number,
-  ) {
-    if (
-      payType === PayType.HOURLY &&
-      (hourlyWage === undefined || hourlyWage === null)
-    ) {
-      throw new ConflictException(
-        'Hourly wage is required for HOURLY pay type',
-      );
+  ): void {
+    if (payType === PayType.HOURLY) {
+      if (hourlyWage === undefined) {
+        throw new BadRequestException(
+          'Hourly wage is required for HOURLY pay type',
+        );
+      }
+
+      if (salaryAmount !== undefined) {
+        throw new BadRequestException(
+          'Salary amount must not be provided for HOURLY pay type',
+        );
+      }
+
+      return;
     }
 
-    if (
-      payType === PayType.SALARY &&
-      (salaryAmount === undefined || salaryAmount === null)
-    ) {
-      throw new ConflictException(
-        'Salary amount is required for SALARY pay type',
-      );
+    if (payType === PayType.SALARY) {
+      if (salaryAmount === undefined) {
+        throw new BadRequestException(
+          'Salary amount is required for SALARY pay type',
+        );
+      }
+
+      if (hourlyWage !== undefined) {
+        throw new BadRequestException(
+          'Hourly wage must not be provided for SALARY pay type',
+        );
+      }
     }
   }
 }

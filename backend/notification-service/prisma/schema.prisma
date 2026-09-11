@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ======================================================
+// ENUMS
+// ======================================================
+
+enum NotificationType {
+  SYSTEM
+
+  LOW_STOCK
+  STOCK_REQUEST_CREATED
+  STOCK_REQUEST_APPROVED
+  STOCK_SHIPPED
+  STOCK_RECEIVED
+
+  ORDER
+
+  EMPLOYEE_SIGNED_IN
+  EMPLOYEE_LATE
+  EMPLOYEE_CLOCKED_OUT_EARLY
+  LEAVE_APPLIED
+
+  ALERT
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+enum NotificationScope {
+  RESTAURANT
+  WAREHOUSE
+}
+
+// ======================================================
+// NOTIFICATION
+// In-app notification shown to a user
+// ======================================================
+model Notification {
+  id String @id @default(uuid())
+
+
+  // What kind of scope this notification belongs to
+  scope NotificationScope
+
+  // Scope ID
+  restaurantId String?
+  warehouseId  String?
+
+  type     NotificationType
+  priority NotificationPriority @default(NORMAL)
+
+  title   String
+  message String
+
+  referenceId   String?
+  referenceType String?
+
+  isRead Boolean   @default(false)
+  readAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([restaurantId])
+  @@index([warehouseId])
+  @@index([scope])
+  @@index([type])
+  @@index([isRead])
+  @@index([createdAt])
+}

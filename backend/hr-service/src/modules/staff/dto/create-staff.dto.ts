@@ -6,14 +6,14 @@ import {
   IsString,
   IsUUID,
   Length,
+  Matches,
+  Max,
   Min,
 } from 'class-validator';
-
 import { PayType } from '@prisma/client';
 
 export class CreateStaffDto {
-  @IsUUID()
-  @IsNotEmpty()
+  @IsUUID('4')
   restaurantId!: string;
 
   @IsString()
@@ -37,30 +37,34 @@ export class CreateStaffDto {
   role!: string;
 
   @IsString()
-  @IsNotEmpty()
-  @Length(4, 20)
+  @Matches(/^\d{4,6}$/, {
+    message: 'PIN must be 4 to 6 digits',
+  })
   pin!: string;
 
+  @IsOptional()
   @IsEnum(PayType)
-  @IsNotEmpty()
-  payType!: PayType;
+  payType?: PayType;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999.99)
   hourlyWage?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(999999.99)
   overtimeRate?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(9999999999.99)
   salaryAmount?: number;
 
   @IsOptional()
-  @IsUUID()
+  @IsUUID('4')
   approvedById?: string;
 }
