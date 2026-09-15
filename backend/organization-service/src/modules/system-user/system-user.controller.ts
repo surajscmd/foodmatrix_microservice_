@@ -1,101 +1,125 @@
 import {
-  Body,
   Controller,
-  Delete,
+  ForbiddenException,
   Get,
   Param,
-  Patch,
-  Post,
+  ParseUUIDPipe,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
-import { CreateSystemUserDto } from './dto/create-system-user.dto.js';
-import { UpdateSystemUserDto } from './dto/update-system-user.dto.js';
-import { UpdateSystemUserStatusDto } from './dto/update-system-user-status.dto.js';
+import { SystemUserRole, type SystemUser } from '@prisma/client';
+
+import {
+  AuthGuard,
+  AuthenticatedRequest,
+  Roles,
+} from '../../auth/auth.guard.js';
 
 import { SystemUserService } from './system-user.service.js';
 
-@Controller({ path: 'system-users', version: '1' })
+type SystemUserResponse = {
+  message: string;
+  data: SystemUser;
+};
+
+@Controller('system-users')
+@UseGuards(AuthGuard)
+@Roles(
+  SystemUserRole.SUPER_ADMIN,
+  SystemUserRole.FRANCHISE_ADMIN,
+  SystemUserRole.RESTAURANT_ADMIN,
+)
 export class SystemUserController {
   constructor(private readonly systemUserService: SystemUserService) {}
 
-  // ==========================================================
-  // CREATE
-  // ==========================================================
+  /**
+   * Get SystemUser by Better Auth user ID.
+   */
+  @Get('auth/:authUserId')
+  async findByAuthUserId(
+    @Req() req: AuthenticatedRequest,
+    @Param('authUserId') authUserId: string,
+  ): Promise<SystemUserResponse> {
+    const currentUser = req.user!;
 
-  @Post()
-  async create(@Body() CreateSystemUser: CreateSystemUserDto) {
-    const systemUser = await this.systemUserService.create(CreateSystemUser);
+    const data = await this.systemUserService.findByAuthUserId(authUserId);
+
+    this.checkScope(currentUser, data);
+
     return {
-      message: 'Franchise created successfully',
-      data: systemUser,
+      message: 'System user fetched successfully',
+      data,
     };
   }
 
-  // ==========================================================
-  // GET ALL
-  // ==========================================================
-
-  @Get()
-  async findAll() {
-    const systemUsers = await this.systemUserService.findAll();
-    return {
-      message: 'System users retrieved successfully',
-      data: systemUsers,
-    };
-  }
-
-  // ==========================================================
-  // GET ONE
-  // ==========================================================
-
+  /**
+   * Get SystemUser by FoodMatrix UUID.
+   */
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const systemUser = await this.systemUserService.findOne(id);
+  async findOne(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<SystemUserResponse> {
+    const currentUser = req.user!;
+
+    const data = await this.systemUserService.findOne(id);
+
+    this.checkScope(currentUser, data);
+
     return {
-      message: 'System user retrieved successfully',
-      data: systemUser,
+      message: 'System user fetched successfully',
+      data,
     };
   }
 
-  // ==========================================================
-  // UPDATE
-  // ==========================================================
+  /**
+   * Check whether the authenticated user
+   * can access the target SystemUser.
+   */
+  private checkScope(
+    currentUser: AuthenticatedRequest['user'],
+    targetUser: SystemUser,
+  ): void {
+    if (!currentUser) {
+      throw new ForbiddenException('Authenticated user not found');
+    }
 
-  @Patch(':id')
-  async update(@Param('id') id: string, @Body() payload: UpdateSystemUserDto) {
-    const systemUser = await this.systemUserService.update(id, payload);
-    return {
-      message: 'System user updated successfully',
-      data: systemUser,
-    };
-  }
+    // SUPER_ADMIN can access every SystemUser.
+    if (currentUser.role === SystemUserRole.SUPER_ADMIN) {
+      return;
+    }
 
-  // ==========================================================
-  // UPDATE STATUS
-  // ==========================================================
+    // FRANCHISE_ADMIN can access users
+    // belonging to the same franchise.
+    if (currentUser.role === SystemUserRole.FRANCHISE_ADMIN) {
+      if (
+        !currentUser.franchiseId ||
+        targetUser.franchiseId !== currentUser.franchiseId
+      ) {
+        throw new ForbiddenException(
+          'You do not have access to this system user',
+        );
+      }
 
-  @Patch(':id/status')
-  async updateStatus(
-    @Param('id') id: string,
-    @Body() payload: UpdateSystemUserStatusDto,
-  ) {
-    const systemUser = await this.systemUserService.updateStatus(id, payload);
-    return {
-      message: 'System user status updated successfully',
-      data: systemUser,
-    };
-  }
+      return;
+    }
 
-  // ==========================================================
-  // DELETE
-  // ==========================================================
+    // RESTAURANT_ADMIN can access users
+    // belonging to the same managed restaurant.
+    if (currentUser.role === SystemUserRole.RESTAURANT_ADMIN) {
+      if (
+        !currentUser.managedRestaurantId ||
+        targetUser.managedRestaurantId !== currentUser.managedRestaurantId
+      ) {
+        throw new ForbiddenException(
+          'You do not have access to this system user',
+        );
+      }
 
-  @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const systemUser = await this.systemUserService.remove(id);
-    return {
-      message: 'System user deleted successfully',
-      data: systemUser,
-    };
+      return;
+    }
+
+    throw new ForbiddenException('You do not have access to this system user');
   }
 }

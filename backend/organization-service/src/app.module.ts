@@ -4,11 +4,11 @@ import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaModule } from './lib/prisma/prisma.module.js';
-import { FranchiseModule } from './modules/franchise/franchies.module.js';
-import { RegionsModule } from './modules/region/regions.module.js';
-import { RestaurantsModule } from './modules/restaurant/restaurants.module.js';
+
+import { AuthModule } from './auth/authservice/auth.module.js';
 import { SystemUserModule } from './modules/system-user/system-user.module.js';
-import { TerminalsModule } from './modules/terminal/terminal.module.js';
+import { FranchiseModule } from './modules/franchise/franchise.module.js';
+import { RestaurantModule } from './modules/restaurant/restaurant.module.js';
 
 @Module({
   imports: [
@@ -16,11 +16,10 @@ import { TerminalsModule } from './modules/terminal/terminal.module.js';
       isGlobal: true,
     }),
     PrismaModule,
-    FranchiseModule,
-    RegionsModule,
-    RestaurantsModule,
+    AuthModule,
     SystemUserModule,
-    TerminalsModule,
+    FranchiseModule,
+    RestaurantModule,
   ],
   controllers: [AppController],
   providers: [AppService],

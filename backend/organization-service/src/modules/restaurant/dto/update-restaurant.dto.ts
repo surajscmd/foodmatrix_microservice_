@@ -1,4 +1,38 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateRestaurantDto } from './create-restaurant.dto.js';
+import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
 
-export class UpdateRestaurantDto extends PartialType(CreateRestaurantDto) {}
+import { RestaurantStatus } from '@prisma/client';
+
+export class UpdateRestaurantDto {
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 255)
+  address?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  city?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  state?: string;
+
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  country?: string;
+
+  @IsOptional()
+  @IsString()
+  timezone?: string;
+
+  @IsOptional()
+  @IsEnum(RestaurantStatus)
+  status?: RestaurantStatus;
+}

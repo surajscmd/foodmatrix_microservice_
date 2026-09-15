@@ -12,6 +12,7 @@ import { WageModule } from './modules/wage/wage.module';
 import { PayrollModule } from './modules/payroll/payroll.module';
 import { PayslipModule } from './modules/payslip/payslip.module';
 import { KafkaModule } from './modules/kafka/kafka.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { KafkaModule } from './modules/kafka/kafka.module';
     PayrollModule,
     PayslipModule,
     KafkaModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],

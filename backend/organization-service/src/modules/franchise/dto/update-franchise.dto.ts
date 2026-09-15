@@ -1,4 +1,16 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateFranchiseDto } from './create-franchise.dto.js';
+import { IsOptional, IsString, Length } from 'class-validator';
 
-export class UpdateFranchiseDto extends PartialType(CreateFranchiseDto) {}
+export class UpdateFranchiseDto {
+  @IsOptional()
+  @IsString()
+  @Length(2, 100)
+  name?: string;
+
+  @IsOptional()
+  @IsString()
+  taxId?: string;
+
+  @IsOptional()
+  @IsString()
+  defaultCurrency?: string;
+}

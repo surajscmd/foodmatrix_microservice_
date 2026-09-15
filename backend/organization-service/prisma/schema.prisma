@@ -6,36 +6,26 @@ datasource db {
   provider = "postgresql"
 }
 
+// ============================================================
+// FRANCHISE / ORGANIZATION
+// ============================================================
+
 model Franchise {
   id              String  @id @default(uuid())
   name            String  @unique
   taxId           String?
   defaultCurrency String  @default("INR")
 
-  regions     Region[]
-  systemUsers SystemUser[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Region {
-  id   String @id @default(uuid())
-  name String
-
-  franchiseId String
-  franchise   Franchise @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
-
   restaurants Restaurant[]
-
   systemUsers SystemUser[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  @@unique([franchiseId, name])
-  @@index([franchiseId])
 }
+
+// ============================================================
+// RESTAURANT
+// ============================================================
 
 enum RestaurantStatus {
   ACTIVE
@@ -53,41 +43,35 @@ model Restaurant {
   timezone String           @default("UTC")
   status   RestaurantStatus @default(ACTIVE)
 
-  regionId String
-  region   Region @relation(fields: [regionId], references: [id])
+  franchiseId String
+  franchise   Franchise @relation(fields: [franchiseId], references: [id], onDelete: Cascade)
 
   systemUsers SystemUser[]
-  terminals   Terminal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([regionId, name])
-  @@index([regionId])
+  @@unique([franchiseId, name])
+  @@index([franchiseId])
 }
+
+// ============================================================
+// SYSTEM USER
+// Administrative / application users
+// ============================================================
 
 enum SystemUserRole {
   SUPER_ADMIN
   FRANCHISE_ADMIN
-  REGIONAL_ADMIN
   RESTAURANT_ADMIN
+  STAFF
+  OPERATIONS
 }
-
-enum TerminalType {
-  ORDER
-  KITCHEN
-  ATTENDANCE
-}
-
-// ==========================================
-// SYSTEM USER
-// Administrative users only
-// ==========================================
 
 model SystemUser {
   id String @id @default(uuid())
 
-  // Better Auth user ID - Soft Reference
+  // Better Auth user ID - soft reference
   authUserId String @unique
 
   firstName String
@@ -96,12 +80,9 @@ model SystemUser {
 
   role SystemUserRole
 
-  // Organizational scope
+  // Organization scope
   franchiseId String?
   franchise   Franchise? @relation(fields: [franchiseId], references: [id])
-
-  managedRegionId String?
-  region          Region? @relation(fields: [managedRegionId], references: [id])
 
   managedRestaurantId String?
   restaurant          Restaurant? @relation(fields: [managedRestaurantId], references: [id])
@@ -113,39 +94,128 @@ model SystemUser {
   updatedAt DateTime @updatedAt
 
   @@index([franchiseId])
-  @@index([managedRegionId])
   @@index([managedRestaurantId])
 }
 
-// ==========================================
-// TERMINAL
-// Restaurant operational devices
-// ==========================================
+model User {
+  id            String       @id
+  name          String
+  email         String
+  emailVerified Boolean      @default(false)
+  image         String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  members       Member[]
+  invitations   Invitation[]
 
-model Terminal {
-  id String @id @default(uuid())
+  @@unique([email])
+  @@map("user")
+}
 
-  name String
-  type TerminalType
+model Session {
+  id                   String   @id
+  expiresAt            DateTime
+  token                String
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  ipAddress            String?
+  userAgent            String?
+  userId               String
+  user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activeOrganizationId String?
 
-  restaurantId String
-  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
 
-  // Device pairing
-  pairingCode String? @unique
-  isPaired    Boolean @default(false)
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
-  // Device information
-  deviceModel String?
-  lastPingAt  DateTime?
+  @@index([userId])
+  @@map("account")
+}
 
-  // Soft activation/deactivation
-  isActive Boolean @default(true)
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  @@index([identifier])
+  @@map("verification")
+}
 
-  @@unique([restaurantId, name])
-  @@index([restaurantId])
-  @@index([restaurantId, type])
+model Organization {
+  id          String       @id
+  name        String
+  slug        String
+  logo        String?
+  createdAt   DateTime
+  metadata    String?
+  members     Member[]
+  invitations Invitation[]
+
+  @@unique([slug])
+  @@map("organization")
+}
+
+model Member {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String       @default("member")
+  createdAt      DateTime
+
+  @@index([organizationId])
+  @@index([userId])
+  @@map("member")
+}
+
+model Invitation {
+  id             String       @id
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String
+  role           String?
+  status         String       @default("pending")
+  expiresAt      DateTime
+  createdAt      DateTime     @default(now())
+  inviterId      String
+  user           User         @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([email])
+  @@map("invitation")
+}
+
+model Jwks {
+  id         String    @id
+  publicKey  String
+  privateKey String
+  createdAt  DateTime
+  expiresAt  DateTime?
+  alg        String?
+  crv        String?
+
+  @@map("jwks")
 }

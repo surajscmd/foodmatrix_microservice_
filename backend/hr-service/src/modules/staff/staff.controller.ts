@@ -8,6 +8,8 @@ import {
   Patch,
   Post,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 
 import { StaffService } from './staff.service.js';
@@ -15,7 +17,17 @@ import { StaffService } from './staff.service.js';
 import { CreateStaffDto } from './dto/create-staff.dto.js';
 import { UpdateStaffDto } from './dto/update-staff.dto.js';
 import { UpdateStaffStatusDto } from './dto/update-staff-status.dto.js';
-
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: string;
+    name: string;
+    email: string;
+    role?: string;
+    franchiseId?: string | null;
+    managedRestaurantId?: string | null;
+  };
+}
 @Controller('staff')
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
@@ -39,11 +51,21 @@ export class StaffController {
   // ======================================================
 
   @Get()
+  @UseGuards(JwtAuthGuard)
   async findAll(
-    @Query('restaurantId') restaurantId?: string,
+    @Req() req: AuthenticatedRequest,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
+    const user = req.user!;
+
+    const restaurantId =
+      user.role === 'RESTAURANT_ADMIN' ||
+      user.role === 'STAFF' ||
+      user.role === 'OPERATIONS'
+        ? (user.managedRestaurantId ?? undefined)
+        : undefined;
+
     const data = await this.staffService.findAll(
       restaurantId,
       Number(page),
