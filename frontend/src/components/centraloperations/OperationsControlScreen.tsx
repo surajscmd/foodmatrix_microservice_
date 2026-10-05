@@ -3,22 +3,25 @@
 import {
   BarChart3,
   Bell,
-  Building2,
   DollarSign,
   ShoppingBag,
   Store,
   TrendingUp,
   Users,
 } from "lucide-react";
-import MetricCard from "@/elements/operations/dashboardinfo/MetricCard";
-import QuickActionCard from "@/elements/operations/dashboardinfo/QuickActionCard";
-import RegionPerformanceCard from "@/elements/operations/dashboardinfo/RegionPerformanceCard"; // Added missing import
+import MetricCard from "@/elements/operations/MetricCard";
+import QuickActionCard from "@/elements/operations/QuickActionCard";
+import RegionPerformanceCard from "@/elements/operations/RegionPerformanceCard";
 import {
   corporateMetrics,
   initialEmployees,
   initialOrders,
   initialRestaurants,
 } from "@/utils/mockData";
+
+import FranchiseOverview from "@/elements/operations/FranchiseOverview";
+import CreateSystemUser from "@/elements/operations/CreateSystemUser";
+
 
 export default function OperationsControlScreen() {
   const activeRestaurants = initialRestaurants.filter(
@@ -40,49 +43,8 @@ export default function OperationsControlScreen() {
     <div className="space-y-8 animate-fade-in">
       {/* Hero */}
 
-      <section className="relative overflow-hidden rounded-3xl border border-zinc-800 bg-gradient-to-br from-zinc-900 via-[#0d111c] to-[#081014] p-8">
-        <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
-
-        <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center lg:justify-between">
-          <div className="max-w-3xl">
-            <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-400">
-              Regional Operations
-            </span>
-
-            <h1 className="mt-5 text-4xl font-bold tracking-tight text-white">
-              Enterprise Operations Control Center
-            </h1>
-
-            <p className="mt-4 max-w-2xl text-sm leading-7 text-zinc-400">
-              Monitor franchise performance, operational health, workforce,
-              inventory, and supply chain from one centralized command center.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-2 gap-5">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-              <p className="text-xs uppercase tracking-wider text-zinc-500">
-                Active Restaurants
-              </p>
-
-              <h2 className="mt-2 text-4xl font-bold text-white">
-                {activeRestaurants}
-              </h2>
-            </div>
-
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
-              <p className="text-xs uppercase tracking-wider text-zinc-500">
-                Employees
-              </p>
-
-              <h2 className="mt-2 text-4xl font-bold text-white">
-                {totalEmployees}
-              </h2>
-            </div>
-          </div>
-        </div>
-      </section>
-
+      <FranchiseOverview />
+      <CreateSystemUser/>
       {/* KPI */}
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">

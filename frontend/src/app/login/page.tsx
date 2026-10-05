@@ -1,7 +1,5 @@
 import LoginForm from "@/elements/authscr/Loginform";
-import { Buttomstats } from "@/elements/authscr/Buttomstats";
 import Loginleftcol from "@/elements/authscr/Loginleftcol";
-import Link from "next/link";
 
 export default function LoginScreen() {
   return (
@@ -74,18 +72,6 @@ export default function LoginScreen() {
                 SECURE GATEWAY • ENCRYPTED CONNECTION
               </span>
             </div>
-            <Link
-              href="/restaurant/edge-dashboard"
-              className="flex items-center gap-3 my-10 rounded-xl bg-green-500/10 px-3 py-2.5 text-sm font-semibold text-green-400 ring-1 ring-green-500/20"
-            >
-              <span className="mx-auto">Resturent dashboard</span>
-            </Link>
-             <Link
-              href="/operations/info"
-              className="flex items-center gap-3 my-10 rounded-xl bg-green-500/10 px-3 py-2.5 text-sm font-semibold text-green-400 ring-1 ring-green-500/20"
-            >
-              <span className="mx-auto">Central Operations</span>
-            </Link>
           </div>
           {/* Bottom Status */}
           {/* <Buttomstats /> */}

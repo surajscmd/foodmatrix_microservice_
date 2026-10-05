@@ -37,7 +37,6 @@ export default function DashboardShell({
         navigation={regionalNavigation}
         sidebarOpen={sidebarOpen}
         onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        onLogout={() => console.log("logout")}
         portal="edge"
       />
 

@@ -9,8 +9,8 @@ import { SystemUserRole, type SystemUser } from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { auth } from '../auths.js';
-import { RegisterDto } from './dto/register.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { RegisterDto } from './dto/register.dto.js';
 
 type RegisteredAuthUser = {
   id: string;
@@ -34,7 +34,63 @@ type RegisterResponse = {
 export class AuthService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async register(dto: RegisterDto): Promise<RegisterResponse> {
+  // ============================================================
+  // REGISTER
+  // ============================================================
+
+  async register(
+    dto: RegisterDto,
+    creatorAuthUserId: string,
+  ): Promise<RegisterResponse> {
+    // ----------------------------------------------------------
+    // NORMALIZE INPUT
+    // ----------------------------------------------------------
+
+    const name = dto.name.trim();
+    const email = dto.email.trim().toLowerCase();
+
+    if (!name) {
+      throw new BadRequestException('Name is required');
+    }
+
+    // ----------------------------------------------------------
+    // FIND CREATOR
+    // ----------------------------------------------------------
+
+    const creator = await this.prisma.systemUser.findUnique({
+      where: {
+        authUserId: creatorAuthUserId,
+      },
+    });
+
+    if (!creator) {
+      throw new NotFoundException('Creator FoodMatrix user not found');
+    }
+
+    if (!creator.isActive) {
+      throw new BadRequestException('Your account is inactive');
+    }
+
+    // ----------------------------------------------------------
+    // CREATOR PERMISSION
+    // ONLY CENTRAL ADMINS CAN CREATE USERS
+    // ----------------------------------------------------------
+
+    const allowedCreators: SystemUserRole[] = [
+      SystemUserRole.SUPER_ADMIN,
+      SystemUserRole.FRANCHISE_ADMIN,
+    ];
+
+    if (!allowedCreators.includes(creator.role)) {
+      throw new BadRequestException(
+        'Only Super Admin or Franchise Admin can create user accounts',
+      );
+    }
+
+    // ----------------------------------------------------------
+    // ROLE GROUPS
+    // ----------------------------------------------------------
+
     const restaurantRoles: SystemUserRole[] = [
       SystemUserRole.RESTAURANT_ADMIN,
       SystemUserRole.STAFF,
@@ -46,13 +102,53 @@ export class AuthService {
       SystemUserRole.FRANCHISE_ADMIN,
     ];
 
-    // ------------------------------------------------------------
-    // ROLE SCOPE VALIDATION
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
+    // TARGET ROLE VALIDATION
+    // ----------------------------------------------------------
 
-    // Restaurant-level users must belong to both:
-    // - a franchise
-    // - a specific restaurant
+    if (
+      !restaurantRoles.includes(dto.role) &&
+      !franchiseRoles.includes(dto.role)
+    ) {
+      throw new BadRequestException('Invalid system user role');
+    }
+
+    // ----------------------------------------------------------
+    // FRANCHISE ADMIN RESTRICTIONS
+    // ----------------------------------------------------------
+
+    if (creator.role === SystemUserRole.FRANCHISE_ADMIN) {
+      const allowedRolesForFranchiseAdmin: SystemUserRole[] = [
+        SystemUserRole.RESTAURANT_ADMIN,
+        SystemUserRole.STAFF,
+        SystemUserRole.OPERATIONS,
+      ];
+
+      if (!allowedRolesForFranchiseAdmin.includes(dto.role)) {
+        throw new BadRequestException(
+          'Franchise Admin cannot create this role',
+        );
+      }
+
+      if (!creator.franchiseId) {
+        throw new BadRequestException('Creator is not assigned to a franchise');
+      }
+
+      if (dto.franchiseId !== creator.franchiseId) {
+        throw new BadRequestException(
+          'You can only create users inside your own franchise',
+        );
+      }
+    }
+
+    // ----------------------------------------------------------
+    // ROLE SCOPE VALIDATION
+    // ----------------------------------------------------------
+
+    // Restaurant-level users require:
+    // - franchiseId
+    // - managedRestaurantId
+
     if (restaurantRoles.includes(dto.role)) {
       if (!dto.franchiseId) {
         throw new BadRequestException(`${dto.role} requires franchiseId`);
@@ -65,8 +161,10 @@ export class AuthService {
       }
     }
 
-    // Franchise-level users must belong to the franchise
-    // and must not be assigned to a specific restaurant.
+    // Franchise-level users require:
+    // - franchiseId
+    // - no managedRestaurantId
+
     if (franchiseRoles.includes(dto.role)) {
       if (!dto.franchiseId) {
         throw new BadRequestException(`${dto.role} requires franchiseId`);
@@ -79,9 +177,9 @@ export class AuthService {
       }
     }
 
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
     // VALIDATE RESTAURANT
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (dto.managedRestaurantId) {
       const restaurant = await this.prisma.restaurant.findUnique({
@@ -107,9 +205,9 @@ export class AuthService {
       }
     }
 
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
     // VALIDATE FRANCHISE
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
 
     if (dto.franchiseId) {
       const franchise = await this.prisma.franchise.findUnique({
@@ -123,75 +221,130 @@ export class AuthService {
       }
     }
 
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
     // CHECK EXISTING SYSTEM USER
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
 
     const existingSystemUser = await this.prisma.systemUser.findUnique({
       where: {
-        email: dto.email,
+        email,
       },
     });
 
     if (existingSystemUser) {
-      throw new ConflictException('System user already exists with this email');
+      throw new ConflictException(
+        'FoodMatrix user already exists with this email',
+      );
     }
 
-    // ------------------------------------------------------------
-    // CREATE BETTER AUTH USER
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
+    // CHECK EXISTING BETTER AUTH USER
+    // ----------------------------------------------------------
 
-    const result = await auth.api.signUpEmail({
-      body: {
-        name: dto.name,
-        email: dto.email,
-        password: dto.password,
+    const existingAuthUser = await this.prisma.user.findUnique({
+      where: {
+        email,
       },
     });
 
-    const authUser: RegisteredAuthUser = {
-      id: result.user.id,
-      name: result.user.name,
-      email: result.user.email,
-      emailVerified: result.user.emailVerified,
-      image: result.user.image ?? null,
-      createdAt: result.user.createdAt,
-      updatedAt: result.user.updatedAt,
-    };
+    if (existingAuthUser) {
+      throw new ConflictException(
+        'Authentication account already exists with this email',
+      );
+    }
 
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
+    // CREATE BETTER AUTH USER
+    // ----------------------------------------------------------
+
+    let authUser: RegisteredAuthUser;
+
+    try {
+      const result = await auth.api.signUpEmail({
+        body: {
+          name,
+          email,
+          password: dto.password,
+        },
+      });
+
+      authUser = {
+        id: result.user.id,
+        name: result.user.name,
+        email: result.user.email,
+        emailVerified: result.user.emailVerified,
+        image: result.user.image ?? null,
+        createdAt: result.user.createdAt,
+        updatedAt: result.user.updatedAt,
+      };
+    } catch (error) {
+      console.error('Better Auth registration failed:', error);
+
+      throw new BadRequestException('Unable to create authentication account');
+    }
+
+    // ----------------------------------------------------------
     // CREATE FOODMATRIX SYSTEM USER
-    // ------------------------------------------------------------
+    // ----------------------------------------------------------
 
-    const nameParts = dto.name.trim().split(/\s+/);
+    const nameParts = name.split(/\s+/);
 
-    const firstName = nameParts[0] ?? dto.name;
+    const firstName = nameParts[0] ?? name;
+
     const lastName = nameParts.slice(1).join(' ');
 
-    const systemUser = await this.prisma.systemUser.create({
-      data: {
-        authUserId: authUser.id,
-        firstName,
-        lastName,
-        email: authUser.email,
-        role: dto.role,
-        franchiseId: dto.franchiseId ?? null,
-        managedRestaurantId: dto.managedRestaurantId ?? null,
-      },
-    });
+    try {
+      const systemUser = await this.prisma.systemUser.create({
+        data: {
+          authUserId: authUser.id,
+          firstName,
+          lastName,
+          email: authUser.email,
+          role: dto.role,
+          franchiseId: dto.franchiseId ?? null,
+          managedRestaurantId: dto.managedRestaurantId ?? null,
+        },
+      });
 
-    // ------------------------------------------------------------
-    // RESPONSE
-    // ------------------------------------------------------------
+      // --------------------------------------------------------
+      // SUCCESS
+      // --------------------------------------------------------
 
-    return {
-      message: 'Registration successful',
-      data: {
-        user: authUser,
-        systemUser,
-      },
-    };
+      return {
+        message: 'Registration successful',
+        data: {
+          user: authUser,
+          systemUser,
+        },
+      };
+    } catch (error) {
+      console.error('SystemUser creation failed:', error);
+
+      // --------------------------------------------------------
+      // CLEANUP AUTH USER
+      // --------------------------------------------------------
+
+      try {
+        await this.prisma.user.delete({
+          where: {
+            id: authUser.id,
+          },
+        });
+
+        console.log(`Cleaned up Auth user: ${authUser.email}`);
+      } catch (cleanupError) {
+        console.error('Failed to cleanup Auth user:', cleanupError);
+      }
+
+      throw new BadRequestException(
+        'Registration failed while creating FoodMatrix user',
+      );
+    }
   }
+
+  // ============================================================
+  // CURRENT USER
+  // ============================================================
 
   async getCurrentUser(authUserId: string): Promise<SystemUser> {
     const systemUser = await this.prisma.systemUser.findUnique({
@@ -206,6 +359,10 @@ export class AuthService {
 
     return systemUser;
   }
+
+  // ============================================================
+  // CHANGE PASSWORD
+  // ============================================================
 
   async changePassword(
     request: Request,

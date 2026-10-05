@@ -1,0 +1,209 @@
+_format_version: "3.0"
+
+services:
+  # ============================================================
+  # ORGANIZATION SERVICE
+  # ============================================================
+
+  - name: organization-service
+    url: http://host.docker.internal:3001
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: organization-route
+        paths:
+          - /api/organization
+        strip_path: true
+
+  # ============================================================
+  # AUTH SERVICE
+  # ============================================================
+
+  - name: auth-service
+    url: http://host.docker.internal:3001
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: auth-route
+        paths:
+          - /api/auth
+        strip_path: false
+
+  # ============================================================
+  # HR SERVICE
+  # ============================================================
+
+  - name: hr-service
+    url: http://host.docker.internal:3002
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: hr-route
+        paths:
+          - /api/hr
+        strip_path: true
+
+  # ============================================================
+  # CATALOG SERVICE
+  # ============================================================
+
+  - name: catalog-service
+    url: http://host.docker.internal:3004
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: catalog-route
+        paths:
+          - /api/catalog
+        strip_path: true
+
+  # ============================================================
+  # ORDER SERVICE
+  # ============================================================
+
+  - name: order-service
+    url: http://host.docker.internal:3005
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: order-route
+        paths:
+          - /api/order
+        strip_path: true
+
+  # ============================================================
+  # INVENTORY SERVICE
+  # ============================================================
+
+  - name: inventory-service
+    url: http://host.docker.internal:3006
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: inventory-route
+        paths:
+          - /api/inventory
+        strip_path: true
+
+  # ============================================================
+  # NOTIFICATION SERVICE
+  # ============================================================
+
+  - name: notification-service
+    url: http://host.docker.internal:3007
+
+    connect_timeout: 5000
+    read_timeout: 30000
+    write_timeout: 30000
+    retries: 1
+
+    routes:
+      - name: notification-route
+        paths:
+          - /api/notification
+        strip_path: true
+
+# ==============================================================
+# GLOBAL PLUGINS
+# ==============================================================
+
+plugins:
+  # ------------------------------------------------------------
+  # CORS
+  # ------------------------------------------------------------
+
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3000
+
+      methods:
+        - GET
+        - HEAD
+        - PUT
+        - PATCH
+        - POST
+        - DELETE
+        - OPTIONS
+
+      headers:
+        - Accept
+        - Accept-Version
+        - Content-Length
+        - Content-MD5
+        - Content-Type
+        - Date
+        - Authorization
+        - X-Requested-With
+
+      exposed_headers:
+        - Kong-Request-ID
+
+      credentials: true
+      max_age: 3600
+      preflight_continue: false
+
+  # ------------------------------------------------------------
+  # CORRELATION ID
+  # ------------------------------------------------------------
+
+  - name: correlation-id
+    config:
+      header_name: Kong-Request-ID
+      generator: uuid
+      echo_downstream: true
+
+  # ------------------------------------------------------------
+  # RATE LIMITING
+  # ------------------------------------------------------------
+
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+      limit_by: ip
+      fault_tolerant: true
+
+  # ------------------------------------------------------------
+  # REQUEST SIZE LIMIT
+  # ------------------------------------------------------------
+
+  - name: request-size-limiting
+    config:
+      allowed_payload_size: 10
+      size_unit: megabytes
+
+  # ------------------------------------------------------------
+  # PROMETHEUS METRICS
+  # ------------------------------------------------------------
+
+  - name: prometheus
+    config:
+      status_code_metrics: true
+      latency_metrics: true
+      bandwidth_metrics: true
+      upstream_health_metrics: true

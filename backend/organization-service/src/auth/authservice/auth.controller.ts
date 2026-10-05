@@ -1,20 +1,30 @@
-import { Controller, Get, Post, Body, UseGuards, Req } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 
 import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 
-import { RegisterDto } from './dto/register.dto.js';
 import { AuthService } from './auth.service.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
+import { RegisterDto } from './dto/register.dto.js';
 import { AuthGuard } from '../auth.guard.js';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // ------------------------------------------------------------
+  // REGISTER
+  // Only authenticated FoodMatrix admins can create users.
+  // ------------------------------------------------------------
+
   @Post('register')
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  @UseGuards(AuthGuard)
+  register(@Session() session: UserSession, @Body() dto: RegisterDto) {
+    return this.authService.register(dto, session.user.id);
   }
+
+  // ------------------------------------------------------------
+  // CHANGE PASSWORD
+  // ------------------------------------------------------------
 
   @Post('change-password')
   @UseGuards(AuthGuard)
@@ -22,11 +32,12 @@ export class AuthController {
     return this.authService.changePassword(req, dto);
   }
 
-  /**
-   * Get authenticated Better Auth user
-   * together with FoodMatrix application data.
-   */
+  // ------------------------------------------------------------
+  // CURRENT USER
+  // ------------------------------------------------------------
+
   @Get('me')
+  @UseGuards(AuthGuard)
   async me(@Session() session: UserSession) {
     const systemUser = await this.authService.getCurrentUser(session.user.id);
 

@@ -1,67 +1,90 @@
 "use client";
 
-import { Plus } from 'lucide-react';
+import { Filter, RotateCcw } from "lucide-react";
 
-// Replace the old interface with this:
+import type { Restaurant } from "@/utils/types/organization";
+
 interface FilterBarProps {
-  regionFilter: 'All' | 'East' | 'West' | 'Midwest' | 'South';
-  setRegionFilter: (region: 'All' | 'East' | 'West' | 'Midwest' | 'South') => void;
-  statusFilter: 'All' | 'Operational' | 'Maintenance' | 'Opening Soon';
-  setStatusFilter: (status: 'All' | 'Operational' | 'Maintenance' | 'Opening Soon') => void;
-  onOpenDrawer: () => void;
-}
-export default function FilterBar({ 
-  regionFilter, 
-  setRegionFilter, 
-  statusFilter, 
-  setStatusFilter, 
-  onOpenDrawer 
-}: FilterBarProps) {
-  return (
-    <div className="flex flex-wrap gap-4 items-center justify-between bg-zinc-900/30 p-4 rounded-xl border border-zinc-800">
-      <div className="flex flex-wrap items-center gap-6">
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-zinc-400">Region:</span>
-          <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-            {(['All', 'East', 'West', 'Midwest', 'South'] as const).map((r) => (
-              <button
-                key={r}
-                onClick={() => setRegionFilter(r)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold cursor-pointer ${
-                  regionFilter === r ? 'bg-emerald-500/10 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {r}
-              </button>
-            ))}
-          </div>
-        </div>
+  status: "ALL" | Restaurant["status"];
 
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-mono text-zinc-400">Status:</span>
-          <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-            {(['All', 'Operational', 'Maintenance', 'Opening Soon'] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-semibold cursor-pointer ${
-                  statusFilter === s ? 'bg-emerald-500/10 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
-                }`}
-              >
-                {s}
-              </button>
-            ))}
-          </div>
+  onStatusChange: (status: "ALL" | Restaurant["status"]) => void;
+
+  resultCount: number;
+  totalCount: number;
+}
+
+export default function FilterBar({
+  status,
+  onStatusChange,
+  resultCount,
+  totalCount,
+}: FilterBarProps) {
+  const hasFilter = status !== "ALL";
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 bg-zinc-900/30 border border-zinc-800 rounded-xl px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <Filter className="w-3.5 h-3.5 text-zinc-600" />
+
+        <span className="text-[10px] font-mono uppercase text-zinc-500">
+          Node Filter
+        </span>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onStatusChange("ALL")}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase transition-all ${
+              status === "ALL"
+                ? "bg-zinc-800 text-white border border-zinc-700"
+                : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+            }`}
+          >
+            All
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onStatusChange("ACTIVE")}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase transition-all ${
+              status === "ACTIVE"
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+            }`}
+          >
+            Active
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onStatusChange("INACTIVE")}
+            className={`px-2.5 py-1 rounded-lg text-[10px] font-mono uppercase transition-all ${
+              status === "INACTIVE"
+                ? "bg-zinc-800 text-zinc-300 border border-zinc-700"
+                : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+            }`}
+          >
+            Inactive
+          </button>
         </div>
       </div>
 
-      <button
-        onClick={onOpenDrawer}
-        className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 active:bg-emerald-600 text-zinc-950 text-xs font-semibold rounded-xl transition-all shadow-[0_4px_12px_rgba(16,185,129,0.15)] cursor-pointer"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        <span>Launch Franchise Site</span>
-      </button>
+      <div className="flex items-center gap-3">
+        <span className="text-[10px] font-mono text-zinc-600">
+          {resultCount} / {totalCount} nodes
+        </span>
+
+        {hasFilter && (
+          <button
+            type="button"
+            onClick={() => onStatusChange("ALL")}
+            className="flex items-center gap-1 text-[10px] font-mono text-zinc-500 hover:text-white transition-colors"
+          >
+            <RotateCcw className="w-3 h-3" />
+            Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -154,15 +154,15 @@ export const regionalNavigation: SidebarNavSection[] = [
           subtitle: "Corporate Command",
         },
       },
-      {
-        title: "Matrix Analytics",
-        href: "/operations/analytics",
-        icon: Building2,
-        header: {
-          title: "Matrix Analytics",
-          subtitle: "Enterprise Performance Intelligence",
-        },
-      },
+      // {
+      //   title: "Matrix Analytics",
+      //   href: "/operations/analytics",
+      //   icon: Building2,
+      //   header: {
+      //     title: "Matrix Analytics",
+      //     subtitle: "Enterprise Performance Intelligence",
+      //   },
+      // },
     ],
   },
 
