@@ -8,12 +8,14 @@ import {
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import { ShiftScheduleService } from './shift-schedule.service.js';
 
 import { CreateShiftScheduleDto } from './dto/create-shift-schedule.dto.js';
 import { UpdateShiftScheduleDto } from './dto/update-shift-schedule.dto.js';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
 
 @Controller('shift-schedules')
 export class ShiftScheduleController {
@@ -35,11 +37,19 @@ export class ShiftScheduleController {
    * - staffId
    */
   @Get()
+  @UseGuards(JwtAuthGuard)
   async findAll(
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.shiftScheduleService.findAll(restaurantId, staffId);
+    return this.shiftScheduleService.findAll(
+      restaurantId,
+      staffId,
+      startDate,
+      endDate,
+    );
   }
 
   /**

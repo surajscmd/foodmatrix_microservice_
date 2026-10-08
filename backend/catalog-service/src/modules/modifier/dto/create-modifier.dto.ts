@@ -2,30 +2,38 @@ import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsInt,
+  IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
-  IsUUID,
+  MaxLength,
   Min,
-  MinLength,
 } from 'class-validator';
 
 export class CreateModifierDto {
-  @IsUUID()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(100)
   groupId!: string;
 
   @IsString()
-  @MinLength(1)
+  @IsNotEmpty()
+  @MaxLength(150)
   name!: string;
 
+  @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(0)
-  sortOrder: number = 0;
+  sortOrder?: number;
 
+  @IsOptional()
   @Type(() => Number)
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsNumber()
   @Min(0)
-  extraPrice: number = 0;
+  extraPrice?: number;
 
+  @IsOptional()
   @IsBoolean()
-  isActive: boolean = true;
+  isActive?: boolean;
 }

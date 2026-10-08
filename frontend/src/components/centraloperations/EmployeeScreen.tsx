@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 
-import { getAllStaff, getStaffByRestaurant } from "@/lib/hr-api";
+import {
+  getAllStaff,
+  getStaffByRestaurant,
+  updateStaffStatus,
+  type EmployeeStatus,
+} from "@/lib/hr-api";
 
 import { useOrganizationStore } from "@/store/organization-store";
 
@@ -13,12 +18,7 @@ import WorkforceFilters from "@/elements/workforcecomand/WorkforceFilters";
 import StaffDirectory from "@/elements/workforcecomand/StaffDirectory";
 import StaffInformationView from "@/elements/workforcecomand/StaffInformationView";
 
-export type WorkforceStatus =
-  | "ALL"
-  | "ACTIVE"
-  | "ON_LEAVE"
-  | "SUSPENDED"
-  | "TERMINATED";
+export type WorkforceStatus = "ALL" | "ACTIVE" | "ON_LEAVE" | "TERMINATED";
 
 export interface WorkforceStaff {
   id: string;
@@ -70,7 +70,52 @@ export default function EmployeeScreen() {
       restaurants.map((restaurant) => [restaurant.id, restaurant]),
     );
   }, [restaurants]);
+  const handleStatusChange = async (employee: WorkforceStaff) => {
+    // ACTIVE <-> TERMINATED
+    //
+    // ON_LEAVE cannot be toggled directly.
+    // A genuinely terminated employee should not be
+    // reactivated accidentally from this button.
 
+    if (employee.status !== "ACTIVE" && employee.status !== "TERMINATED") {
+      return;
+    }
+
+    const nextStatus: EmployeeStatus =
+      employee.status === "ACTIVE" ? "TERMINATED" : "ACTIVE";
+
+    try {
+      // Optimistic UI update
+      setStaff((currentStaff) =>
+        currentStaff.map((item) =>
+          item.id === employee.id
+            ? {
+                ...item,
+                status: nextStatus,
+              }
+            : item,
+        ),
+      );
+
+      await updateStaffStatus(employee.id, nextStatus);
+
+      setLastUpdated(new Date());
+    } catch (error) {
+      console.error("Failed to update employee status:", error);
+
+      // Roll back if API fails
+      setStaff((currentStaff) =>
+        currentStaff.map((item) =>
+          item.id === employee.id
+            ? {
+                ...item,
+                status: employee.status,
+              }
+            : item,
+        ),
+      );
+    }
+  };
   /*
    * ---------------------------------------------------------
    * LOAD STAFF
@@ -199,15 +244,15 @@ export default function EmployeeScreen() {
       (employee) => employee.status === "ON_LEAVE",
     ).length;
 
-    const suspended = staff.filter(
-      (employee) => employee.status === "SUSPENDED",
+    const terminated = staff.filter(
+      (employee) => employee.status === "TERMINATED",
     ).length;
 
     return {
       total: staff.length,
       active,
       onLeave,
-      suspended,
+      terminated,
     };
   }, [staff]);
 
@@ -263,7 +308,7 @@ export default function EmployeeScreen() {
             total={metrics.total}
             active={metrics.active}
             onLeave={metrics.onLeave}
-            suspended={metrics.suspended}
+            terminated={metrics.terminated}
           />
         </section>
 
@@ -308,6 +353,7 @@ export default function EmployeeScreen() {
             restaurantMap={restaurantMap}
             isLoading={isLoading}
             selectedRestaurantId={selectedRestaurantId}
+            onStatusChange={handleStatusChange}
             onViewStaff={(employee) => setSelectedStaffId(employee.id)}
           />
         </section>

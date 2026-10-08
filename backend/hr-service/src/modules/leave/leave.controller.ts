@@ -40,8 +40,16 @@ export class LeaveController {
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
     @Query('status') status?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.leaveService.findAll(restaurantId, staffId, status);
+    return this.leaveService.findAll(
+      restaurantId,
+      staffId,
+      status,
+      startDate,
+      endDate,
+    );
   }
 
   /**

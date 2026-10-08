@@ -187,19 +187,57 @@ export class LeaveService {
   /**
    * Get leave requests with optional filters.
    */
-  async findAll(restaurantId?: string, staffId?: string, status?: string) {
+  async findAll(
+    restaurantId?: string,
+    staffId?: string,
+    status?: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const parsedStatus = this.parseLeaveStatus(status);
 
     const where: Prisma.LeaveWhereInput = {
       ...(staffId ? { staffId } : {}),
 
-      ...(parsedStatus ? { status: parsedStatus } : {}),
+      ...(parsedStatus
+        ? {
+            status: parsedStatus,
+          }
+        : {}),
 
       ...(restaurantId
         ? {
             staff: {
               restaurantId,
             },
+          }
+        : {}),
+
+      /*
+       * Return leave records that overlap the requested period.
+       *
+       * Leave:
+       *   startDate <= requestedEnd
+       *   AND
+       *   endDate >= requestedStart
+       */
+      ...(startDate || endDate
+        ? {
+            ...(endDate
+              ? {
+                  startDate: {
+                    lte: this.parseDate(endDate),
+                  },
+                }
+              : {}),
+
+            ...(startDate
+              ? {
+                  endDate: {
+                    gte: this.parseDate(startDate),
+                  },
+                }
+              : {}),
           }
         : {}),
     };

@@ -172,12 +172,42 @@ export class ShiftScheduleService {
    * - restaurantId
    * - staffId
    */
-  async findAll(restaurantId?: string, staffId?: string) {
+  async findAll(
+    restaurantId?: string,
+    staffId?: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const schedules = await this.prisma.shiftSchedule.findMany({
       where: {
         ...(restaurantId ? { restaurantId } : {}),
-
         ...(staffId ? { staffId } : {}),
+
+        ...(startDate || endDate
+          ? {
+              AND: [
+                ...(startDate
+                  ? [
+                      {
+                        scheduledEnd: {
+                          gte: new Date(startDate),
+                        },
+                      },
+                    ]
+                  : []),
+
+                ...(endDate
+                  ? [
+                      {
+                        scheduledStart: {
+                          lte: new Date(endDate),
+                        },
+                      },
+                    ]
+                  : []),
+              ],
+            }
+          : {}),
       },
 
       include: {

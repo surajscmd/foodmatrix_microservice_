@@ -29,10 +29,15 @@ export class IngredientController {
   }
 
   @Get()
-  async findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
+  async findAll(
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('search') search?: string,
+  ) {
     const result = await this.ingredientService.findAll(
       Number(page),
       Number(limit),
+      search,
     );
 
     return {

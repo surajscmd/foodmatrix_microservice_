@@ -345,14 +345,18 @@ export interface ClockInPayload {
 export async function getAttendance(params?: {
   restaurantId?: string;
   staffId?: string;
+  startDate?: string;
+  endDate?: string;
 }): Promise<AttendanceListResponse> {
-  const response = await hrApi.get<AttendanceListResponse>("/attendance", {
-    params,
-  });
+  const response = await hrApi.get<AttendanceListResponse>(
+    "/attendance",
+    {
+      params,
+    },
+  );
 
   return response.data;
 }
-
 export async function getAttendanceById(
   shiftId: string,
 ): Promise<AttendanceResponse> {
@@ -451,6 +455,8 @@ export interface UpdateShiftSchedulePayload {
 export async function getShiftSchedules(params?: {
   restaurantId?: string;
   staffId?: string;
+  startDate?: string;
+  endDate?: string;
 }): Promise<ShiftScheduleListResponse> {
   const response = await hrApi.get<ShiftScheduleListResponse>(
     "/shift-schedules",
@@ -461,7 +467,6 @@ export async function getShiftSchedules(params?: {
 
   return response.data;
 }
-
 export async function getShiftScheduleById(
   scheduleId: string,
 ): Promise<ShiftScheduleResponse> {
@@ -499,16 +504,13 @@ export async function getStaffByRestaurant(
   page = 1,
   limit = 20,
 ): Promise<StaffListResponse> {
-  const response = await hrApi.get<StaffListResponse>(
-    "/staff",
-    {
-      params: {
-        restaurantId,
-        page,
-        limit,
-      },
+  const response = await hrApi.get<StaffListResponse>("/staff", {
+    params: {
+      restaurantId,
+      page,
+      limit,
     },
-  );
+  });
 
   return response.data;
 }
@@ -517,15 +519,12 @@ export async function getAllStaff(
   page = 1,
   limit = 20,
 ): Promise<StaffListResponse> {
-  const response = await hrApi.get<StaffListResponse>(
-    "/staff",
-    {
-      params: {
-        page,
-        limit,
-      },
+  const response = await hrApi.get<StaffListResponse>("/staff", {
+    params: {
+      page,
+      limit,
     },
-  );
+  });
 
   return response.data;
 }
@@ -565,6 +564,8 @@ export async function getLeaves(params?: {
   restaurantId?: string;
   staffId?: string;
   status?: string;
+  startDate?: string;
+  endDate?: string;
 }): Promise<LeaveListResponse> {
   const response = await hrApi.get<LeaveListResponse>(
     "/leaves",
@@ -575,7 +576,6 @@ export async function getLeaves(params?: {
 
   return response.data;
 }
-
 
 /* =========================================================
    PAYSLIPS
@@ -622,12 +622,9 @@ export async function getPayslips(params?: {
   payrollRunId?: string;
   restaurantId?: string;
 }): Promise<PayslipListResponse> {
-  const response = await hrApi.get<PayslipListResponse>(
-    "/payslips",
-    {
-      params,
-    },
-  );
+  const response = await hrApi.get<PayslipListResponse>("/payslips", {
+    params,
+  });
 
   return response.data;
 }
@@ -635,10 +632,9 @@ export async function getPayslips(params?: {
 export async function getPayslipsByStaff(
   staffId: string,
 ): Promise<PayslipListResponse> {
-  const response =
-    await hrApi.get<PayslipListResponse>(
-      `/payslips/staff/${staffId}`,
-    );
+  const response = await hrApi.get<PayslipListResponse>(
+    `/payslips/staff/${staffId}`,
+  );
 
   return response.data;
 }
@@ -646,14 +642,10 @@ export async function getPayslipsByStaff(
 export async function getPayslipById(
   payslipId: string,
 ): Promise<PayslipResponse> {
-  const response =
-    await hrApi.get<PayslipResponse>(
-      `/payslips/${payslipId}`,
-    );
+  const response = await hrApi.get<PayslipResponse>(`/payslips/${payslipId}`);
 
   return response.data;
 }
-
 
 /* =========================================================
    PAYROLL RUNS
@@ -690,18 +682,17 @@ export interface PayrollRunListResponse {
   data: PayrollRun[];
 }
 
-export async function getPayrollRuns(
-  restaurantId?: string,
-): Promise<PayrollRunListResponse> {
-  const response =
-    await hrApi.get<PayrollRunListResponse>(
-      "/payroll-runs",
-      {
-        params: restaurantId
-          ? { restaurantId }
-          : undefined,
-      },
-    );
+export async function getPayrollRuns(params?: {
+  restaurantId?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<PayrollRunListResponse> {
+  const response = await hrApi.get<PayrollRunListResponse>(
+    "/payroll-runs",
+    {
+      params,
+    },
+  );
 
   return response.data;
 }
@@ -709,10 +700,9 @@ export async function getPayrollRuns(
 export async function getPayrollRunById(
   payrollRunId: string,
 ): Promise<PayrollRunResponse> {
-  const response =
-    await hrApi.get<PayrollRunResponse>(
-      `/payroll-runs/${payrollRunId}`,
-    );
+  const response = await hrApi.get<PayrollRunResponse>(
+    `/payroll-runs/${payrollRunId}`,
+  );
 
   return response.data;
 }

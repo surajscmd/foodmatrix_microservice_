@@ -24,17 +24,6 @@ export class RestaurantMenuItemService {
       throw new NotFoundException('Menu item not found');
     }
 
-    // If restaurant price is the same as global price,
-    // no restaurant-specific record is required.
-    if (
-      dto.price !== undefined &&
-      new Prisma.Decimal(dto.price).equals(menuItem.basePrice)
-    ) {
-      throw new ConflictException(
-        'Restaurant price is the same as the default price. No override is required.',
-      );
-    }
-
     const existing = await this.prisma.restaurantMenuItem.findUnique({
       where: {
         restaurantId_menuItemId: {
@@ -54,9 +43,15 @@ export class RestaurantMenuItemService {
       data: {
         restaurantId: dto.restaurantId,
         menuItemId: dto.menuItemId,
-        price: dto.price,
+
+        // If no restaurant price is supplied,
+        // use the global base price.
+        price: dto.price ?? menuItem.basePrice,
+
+        // Restaurant controls its own availability.
         isAvailable: dto.isAvailable ?? true,
       },
+
       include: {
         menuItem: {
           include: {
@@ -386,55 +381,17 @@ export class RestaurantMenuItemService {
       throw new NotFoundException('Restaurant menu item not found');
     }
 
-    // If restaurant or menu item changes,
-    // validate that the combination is unique.
-    if (dto.restaurantId !== undefined || dto.menuItemId !== undefined) {
-      const restaurantId = dto.restaurantId ?? existing.restaurantId;
-
-      const menuItemId = dto.menuItemId ?? existing.menuItemId;
-
-      const duplicate = await this.prisma.restaurantMenuItem.findUnique({
-        where: {
-          restaurantId_menuItemId: {
-            restaurantId,
-            menuItemId,
-          },
-        },
-      });
-
-      if (duplicate && duplicate.id !== id) {
-        throw new ConflictException(
-          'This menu item is already configured for this restaurant',
-        );
-      }
-    }
-
-    // Validate new menu item if changed.
-    if (dto.menuItemId !== undefined) {
-      const menuItem = await this.prisma.menuItem.findUnique({
-        where: {
-          id: dto.menuItemId,
-        },
-      });
-
-      if (!menuItem) {
-        throw new NotFoundException('Menu item not found');
-      }
-    }
+    // Restaurant-level configuration is intentionally limited to:
+    // 1. price
+    // 2. isAvailable
+    //
+    // restaurantId and menuItemId MUST NOT be changed.
 
     return this.prisma.restaurantMenuItem.update({
       where: {
         id,
       },
       data: {
-        ...(dto.restaurantId !== undefined && {
-          restaurantId: dto.restaurantId,
-        }),
-
-        ...(dto.menuItemId !== undefined && {
-          menuItemId: dto.menuItemId,
-        }),
-
         ...(dto.price !== undefined && {
           price: dto.price,
         }),
@@ -443,6 +400,7 @@ export class RestaurantMenuItemService {
           isAvailable: dto.isAvailable,
         }),
       },
+
       include: {
         menuItem: {
           include: {
@@ -452,7 +410,6 @@ export class RestaurantMenuItemService {
       },
     });
   }
-
   // ============================================================
   // DELETE
   // ============================================================

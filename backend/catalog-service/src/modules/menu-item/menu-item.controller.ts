@@ -43,6 +43,15 @@ export class MenuItemController {
       ...result,
     };
   }
+  @Get(':menuItemId/restaurants')
+  async findRestaurantPrices(@Param('menuItemId') menuItemId: string) {
+    const result = await this.menuItemService.findRestaurantPrices(menuItemId);
+
+    return {
+      message: 'Menu item restaurant pricing retrieved successfully',
+      data: result,
+    };
+  }
 
   @Get(':id')
   async findOne(@Param('id') id: string) {

@@ -183,3 +183,54 @@ export interface OrganizationApiError {
   statusCode?: number;
   error?: string;
 }
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+export interface MenuItem {
+  id: string;
+  name: string;
+  sku: string;
+  description: string | null;
+  basePrice: number;
+  isAvailable: boolean;
+
+  category: MenuCategory;
+}
+
+export interface RestaurantMenuItem {
+  restaurantMenuItemId: string;
+  restaurantId: string;
+  price: number;
+  priceDifference: number;
+  isAvailable: boolean;
+  updatedAt: string;
+}
+
+export interface MenuItemRestaurantPricing {
+  menuItem: {
+    id: string;
+    name: string;
+    sku: string;
+    description: string | null;
+    basePrice: number;
+    isAvailable: boolean;
+    category: {
+      id: string;
+      name: string;
+      sortOrder: number;
+    };
+  };
+
+  restaurants: RestaurantMenuItem[];
+}
+
+export interface Restaurant {
+  id: string;
+  name: string;
+  // Keep/add other fields returned by Organization Service
+}

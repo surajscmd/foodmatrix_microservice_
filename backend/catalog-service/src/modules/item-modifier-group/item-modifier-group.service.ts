@@ -1,14 +1,10 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 import {
   BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+
 import { Prisma } from '@prisma/client';
 
 import { CreateItemModifierGroupDto } from './dto/create-item-modifier-group.dto';
@@ -28,6 +24,10 @@ type ItemModifierGroupWithRelations = Prisma.ItemModifierGroupGetPayload<{
 @Injectable()
 export class ItemModifierGroupService {
   constructor(private readonly prisma: PrismaService) {}
+
+  // ============================================================
+  // CREATE
+  // ============================================================
 
   async create(
     createDto: CreateItemModifierGroupDto,
@@ -76,42 +76,73 @@ export class ItemModifierGroupService {
         menuItemId: createDto.menuItemId,
         groupId: createDto.groupId,
       },
-      include: {
-        menuItem: true,
-        group: {
-          include: {
-            modifiers: true,
-          },
-        },
-      },
-    });
-  }
 
-  async findAll(
-    menuItemId?: string,
-  ): Promise<ItemModifierGroupWithRelations[]> {
-    return this.prisma.itemModifierGroup.findMany({
-      where:
-        menuItemId !== undefined
-          ? {
-              menuItemId,
-            }
-          : undefined,
       include: {
         menuItem: true,
+
         group: {
           include: {
             modifiers: {
               where: {
                 isActive: true,
               },
-              orderBy: {
-                sortOrder: 'asc',
-              },
+
+              orderBy: [
+                {
+                  sortOrder: 'asc',
+                },
+                {
+                  name: 'asc',
+                },
+              ],
             },
           },
         },
       },
+    });
+  }
+
+  // ============================================================
+  // FIND ALL
+  // ============================================================
+
+  async findAll(
+    menuItemId?: string,
+  ): Promise<ItemModifierGroupWithRelations[]> {
+    return this.prisma.itemModifierGroup.findMany({
+      where: {
+        ...(menuItemId !== undefined && {
+          menuItemId,
+        }),
+
+        group: {
+          isActive: true,
+        },
+      },
+
+      include: {
+        menuItem: true,
+
+        group: {
+          include: {
+            modifiers: {
+              where: {
+                isActive: true,
+              },
+
+              orderBy: [
+                {
+                  sortOrder: 'asc',
+                },
+                {
+                  name: 'asc',
+                },
+              ],
+            },
+          },
+        },
+      },
+
       orderBy: {
         group: {
           sortOrder: 'asc',
@@ -120,28 +151,42 @@ export class ItemModifierGroupService {
     });
   }
 
+  // ============================================================
+  // FIND ONE
+  // ============================================================
+
   async findOne(
     menuItemId: string,
     groupId: string,
   ): Promise<ItemModifierGroupWithRelations> {
-    const relation = await this.prisma.itemModifierGroup.findUnique({
+    const relation = await this.prisma.itemModifierGroup.findFirst({
       where: {
-        menuItemId_groupId: {
-          menuItemId,
-          groupId,
+        menuItemId,
+        groupId,
+
+        group: {
+          isActive: true,
         },
       },
+
       include: {
         menuItem: true,
+
         group: {
           include: {
             modifiers: {
               where: {
                 isActive: true,
               },
-              orderBy: {
-                sortOrder: 'asc',
-              },
+
+              orderBy: [
+                {
+                  sortOrder: 'asc',
+                },
+                {
+                  name: 'asc',
+                },
+              ],
             },
           },
         },
@@ -154,6 +199,10 @@ export class ItemModifierGroupService {
 
     return relation;
   }
+
+  // ============================================================
+  // REMOVE
+  // ============================================================
 
   async remove(
     menuItemId: string,

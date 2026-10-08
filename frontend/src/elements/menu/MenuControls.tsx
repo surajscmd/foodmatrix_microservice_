@@ -1,51 +1,103 @@
 "use client";
-import React from 'react';
-import { Plus } from 'lucide-react';
-import { MenuItem } from '@/utils/types';
 
-// 1. Create a specific type that includes 'All' plus the valid categories
-type FilterCategory = 'All' | MenuItem['category'];
+import React, { useState } from "react";
+import {
+  Plus,
+  SlidersHorizontal,
+  Tags,
+  Wheat,
+} from "lucide-react";
+
+import CategoryManagerModal from "./CategoryManagerModal";
+import IngredientManagerModal from "./IngredientManagerModal";
+import ModifierManagerModal from "./ModifierManagerModal";
 
 interface MenuControlsProps {
-  selectedCategory: string;
-  onSelectCategory: (category: string) => void;
   onOpenDrawer: () => void;
+  onCategoriesChanged?: () => void;
+  onIngredientsChanged?: () => void;
+  onModifiersChanged?: () => void;
 }
 
-// 2. Use the new type here, removing the need for `as any`
-const CATEGORIES: FilterCategory[] = [
-  'All', 
-  'Starters', 
-  'Mains', 
-  'Desserts', 
-  'Beverages', 
-  'Sides'
-];
+export default function MenuControls({
+  onOpenDrawer,
+  onCategoriesChanged,
+  onIngredientsChanged,
+  onModifiersChanged,
+}: MenuControlsProps) {
+  const [isCategoryModalOpen, setIsCategoryModalOpen] =
+    useState(false);
 
-export default function MenuControls({ selectedCategory, onSelectCategory, onOpenDrawer }: MenuControlsProps) {
+  const [isIngredientModalOpen, setIsIngredientModalOpen] =
+    useState(false);
+
+  const [isModifierModalOpen, setIsModifierModalOpen] =
+    useState(false);
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-900/30 p-4 rounded-xl border border-zinc-800">
-      <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-800">
-        {CATEGORIES.map((cat) => (
-          <button
-            key={cat}
-            onClick={() => onSelectCategory(cat)}
-            className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider cursor-pointer transition-all ${
-              selectedCategory === cat ? 'bg-emerald-500/10 text-emerald-400' : 'text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
+    <>
+      <div className="flex items-center justify-end gap-2">
+        {/* Categories */}
+        <button
+          type="button"
+          onClick={() => setIsCategoryModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-200 transition hover:border-cyan-500/40 hover:bg-zinc-800 hover:text-cyan-400"
+        >
+          <Tags className="h-4 w-4" />
+          Categories
+        </button>
+
+        {/* Ingredients */}
+        <button
+          type="button"
+          onClick={() => setIsIngredientModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-200 transition hover:border-violet-500/40 hover:bg-zinc-800 hover:text-violet-400"
+        >
+          <Wheat className="h-4 w-4" />
+          Ingredients
+        </button>
+
+        {/* Modifiers */}
+        <button
+          type="button"
+          onClick={() => setIsModifierModalOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-4 py-2 text-xs font-bold text-zinc-200 transition hover:border-emerald-500/40 hover:bg-zinc-800 hover:text-emerald-400"
+        >
+          <SlidersHorizontal className="h-4 w-4" />
+          Modifiers
+        </button>
+
+        {/* New Menu Item */}
+        <button
+          type="button"
+          onClick={onOpenDrawer}
+          className="inline-flex items-center gap-2 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-bold text-black transition hover:bg-emerald-400"
+        >
+          <Plus className="h-4 w-4" />
+          New Menu Item
+        </button>
       </div>
 
-      <button
-        onClick={onOpenDrawer}
-        className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold rounded-xl cursor-pointer"
-      >
-        <Plus className="w-3.5 h-3.5" />
-        <span>Sync Recipe Node</span>
-      </button>
-    </div>
+      {/* Category Manager */}
+      <CategoryManagerModal
+        isOpen={isCategoryModalOpen}
+        onClose={() => setIsCategoryModalOpen(false)}
+        onCategoriesChanged={onCategoriesChanged}
+      />
+
+      {/* Ingredient Manager */}
+      <IngredientManagerModal
+        isOpen={isIngredientModalOpen}
+        onClose={() => setIsIngredientModalOpen(false)}
+        onIngredientsChanged={onIngredientsChanged}
+      />
+
+      {/* Modifier Manager */}
+      <ModifierManagerModal
+        isOpen={isModifierModalOpen}
+        onClose={() => setIsModifierModalOpen(false)}
+        onModifiersChanged={onModifiersChanged}
+      />
+    </>
   );
 }

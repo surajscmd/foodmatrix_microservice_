@@ -2,7 +2,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: 'Corporate Admin' | 'Regional Director' | 'Operations Executive' | 'Store Manager';
+  role:
+    | "Corporate Admin"
+    | "Regional Director"
+    | "Operations Executive"
+    | "Store Manager";
   avatar: string;
 }
 // new types for sidebar navigation
@@ -29,8 +33,8 @@ export interface SidebarNavSection {
 export interface Restaurant {
   id: string;
   name: string;
-  region: 'East' | 'West' | 'Midwest' | 'South';
-  status: 'Operational' | 'Maintenance' | 'Opening Soon' | 'Suspended';
+  region: "East" | "West" | "Midwest" | "South";
+  status: "Operational" | "Maintenance" | "Opening Soon" | "Suspended";
   manager: string;
   revenue24h: number;
   revenueMonth: number;
@@ -46,26 +50,32 @@ export interface Restaurant {
 export interface Employee {
   id: string;
   name: string;
-  role: 'Store Manager' | 'Head Chef' | 'Sous Chef' | 'Line Cook' | 'Cashier' | 'Server';
+  role:
+    | "Store Manager"
+    | "Head Chef"
+    | "Sous Chef"
+    | "Line Cook"
+    | "Cashier"
+    | "Server";
   restaurantId: string;
   restaurantName: string;
-  status: 'Active' | 'On Leave' | 'Suspended';
-  shift: 'Morning' | 'Evening' | 'Night';
+  status: "Active" | "On Leave" | "Suspended";
+  shift: "Morning" | "Evening" | "Night";
   email: string;
   phone: string;
   salary: number;
-  performance: 'Outstanding' | 'Satisfactory' | 'Needs Improvement';
+  performance: "Outstanding" | "Satisfactory" | "Needs Improvement";
 }
 
 export interface MenuItem {
   id: string;
   name: string;
-  category: 'Starters' | 'Mains' | 'Desserts' | 'Beverages' | 'Sides';
+  category: "Starters" | "Mains" | "Desserts" | "Beverages" | "Sides";
   price: number;
   cost: number;
-  status: 'Available' | 'Sold Out' | 'Seasonal' | 'Discontinued';
+  status: "Available" | "Sold Out" | "Seasonal" | "Discontinued";
   description: string;
-  popularity: 'High' | 'Medium' | 'Low';
+  popularity: "High" | "Medium" | "Low";
   sales30d: number;
   prepTime: number; // in minutes
 }
@@ -79,11 +89,11 @@ export interface InventoryItem {
   quantity: number;
   unit: string;
   minThreshold: number;
-  category: 'Produce' | 'Meat & Poultry' | 'Dairy' | 'Dry Goods' | 'Packaging';
+  category: "Produce" | "Meat & Poultry" | "Dairy" | "Dry Goods" | "Packaging";
   supplierId: string;
   supplierName: string;
   lastRestocked: string;
-  status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+  status: "In Stock" | "Low Stock" | "Out of Stock";
   unitCost: number;
 }
 
@@ -96,7 +106,7 @@ export interface Supplier {
   category: string;
   activeOrders: number;
   rating: number;
-  status: 'Active' | 'Under Review' | 'Inactive';
+  status: "Active" | "Under Review" | "Inactive";
 }
 
 export interface Order {
@@ -110,35 +120,32 @@ export interface Order {
     price: number;
   }[];
   total: number;
-  status: 'Pending' | 'Preparing' | 'Ready' | 'Completed' | 'Cancelled';
+  status: "Pending" | "Preparing" | "Ready" | "Completed" | "Cancelled";
   timestamp: string;
-  type: 'Dine-In' | 'Takeout' | 'Drive-Thru';
+  type: "Dine-In" | "Takeout" | "Drive-Thru";
   cashierName: string;
   customerName?: string;
   tableNumber?: string;
 }
 export interface KdsScreenProps {
   orders: Order[];
-  onProgressOrder: (
-    orderId: string,
-    nextStatus: Order["status"]
-  ) => void;
+  onProgressOrder: (orderId: string, nextStatus: Order["status"]) => void;
 }
 export interface Notification {
   id: string;
-  type: 'alert' | 'info' | 'success' | 'warning';
+  type: "alert" | "info" | "success" | "warning";
   title: string;
   message: string;
   time: string;
   read: boolean;
-  priority: 'high' | 'medium' | 'low';
+  priority: "high" | "medium" | "low";
 }
 
 export interface MetricCard {
   title: string;
   value: string;
   change: string;
-  trend: 'up' | 'down' | 'neutral';
+  trend: "up" | "down" | "neutral";
   timeframe: string;
 }
 
@@ -152,7 +159,7 @@ export interface Shift {
   date: string;
   startTime: string;
   endTime: string;
-  status: 'Scheduled' | 'Completed' | 'In Progress' | 'No Show';
+  status: "Scheduled" | "Completed" | "In Progress" | "No Show";
 }
 
 export interface AttendanceLog {
@@ -163,7 +170,7 @@ export interface AttendanceLog {
   restaurantName: string;
   checkIn: string;
   checkOut?: string | null;
-  status: 'On Time' | 'Late' | 'Overtime' | 'Active';
+  status: "On Time" | "Late" | "Overtime" | "Active";
 }
 
 export interface InventoryRequest {
@@ -173,8 +180,8 @@ export interface InventoryRequest {
   itemSelector: string;
   quantity: number;
   unit: string;
-  urgency: 'Standard' | 'Urgent' | 'Critical';
-  status: 'Pending' | 'Approved' | 'Rejected' | 'Fulfilled';
+  urgency: "Standard" | "Urgent" | "Critical";
+  status: "Pending" | "Approved" | "Rejected" | "Fulfilled";
   requestedAt: string;
   fulfilledAt?: string;
 }
@@ -187,7 +194,7 @@ export interface FranchiseInventory {
     name: string;
     quantity: number;
     unit: string;
-    status: 'In Stock' | 'Low Stock' | 'Out of Stock';
+    status: "In Stock" | "Low Stock" | "Out of Stock";
     minThreshold: number;
   }[];
 }
@@ -214,3 +221,16 @@ export interface CategorySale {
   color: string;
 }
 
+export interface MenuCategory {
+  id: string;
+  name: string;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+
+
+export interface Restaurant {
+  id: string;
+  name: string;
+}

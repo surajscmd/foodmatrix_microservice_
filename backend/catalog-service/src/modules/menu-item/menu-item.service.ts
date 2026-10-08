@@ -67,9 +67,19 @@ export class MenuItemService {
       this.prisma.menuItem.findMany({
         skip,
         take: limit,
+
         include: {
           category: true,
+
+          _count: {
+            select: {
+              restaurantMenus: true,
+              recipe: true,
+              modifierGroups: true,
+            },
+          },
         },
+
         orderBy: {
           createdAt: 'desc',
         },
@@ -78,8 +88,27 @@ export class MenuItemService {
       this.prisma.menuItem.count(),
     ]);
 
+    const data = menuItems.map((item) => ({
+      id: item.id,
+      categoryId: item.categoryId,
+      name: item.name,
+      sku: item.sku,
+      description: item.description,
+      basePrice: Number(item.basePrice),
+      isAvailable: item.isAvailable,
+
+      category: item.category,
+
+      configuredRestaurantCount: item._count.restaurantMenus,
+      recipeIngredientCount: item._count.recipe,
+      modifierGroupCount: item._count.modifierGroups,
+
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+
     return {
-      data: menuItems,
+      data,
       pagination: {
         page,
         limit,
@@ -88,7 +117,62 @@ export class MenuItemService {
       },
     };
   }
+  // ============================================================
+  // GET MENU ITEM PRICES ACROSS ALL RESTAURANTS
+  // GET /menu-items/:menuItemId/restaurants
+  //
+  // Returns the master menu item and all restaurant-specific
+  // price / availability configurations.
+  //
+  // restaurantId is a soft reference because Restaurant belongs
+  // to Organization Service.
+  // ============================================================
 
+  async findRestaurantPrices(menuItemId: string) {
+    const menuItem = await this.prisma.menuItem.findUnique({
+      where: {
+        id: menuItemId,
+      },
+      include: {
+        category: true,
+        restaurantMenus: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!menuItem) {
+      throw new NotFoundException('Menu item not found');
+    }
+
+    return {
+      menuItem: {
+        id: menuItem.id,
+        name: menuItem.name,
+        sku: menuItem.sku,
+        description: menuItem.description,
+        basePrice: Number(menuItem.basePrice),
+        isAvailable: menuItem.isAvailable,
+        category: {
+          id: menuItem.category.id,
+          name: menuItem.category.name,
+          sortOrder: menuItem.category.sortOrder,
+        },
+      },
+
+      restaurants: menuItem.restaurantMenus.map((restaurantMenu) => ({
+        restaurantMenuItemId: restaurantMenu.id,
+        restaurantId: restaurantMenu.restaurantId,
+        price: Number(restaurantMenu.price),
+        priceDifference:
+          Number(restaurantMenu.price) - Number(menuItem.basePrice),
+        isAvailable: restaurantMenu.isAvailable,
+        updatedAt: restaurantMenu.updatedAt,
+      })),
+    };
+  }
   // GET ONE
   async findOne(id: string) {
     const item = await this.prisma.menuItem.findUnique({
@@ -118,31 +202,51 @@ export class MenuItemService {
   }
   // GET MENU ITEMS BY CATEGORY
   async findByCategory(categoryId: string) {
-    const category = await this.prisma.menuCategory.findUnique({
-      where: {
-        id: categoryId,
-      },
-    });
-
-    if (!category) {
-      throw new NotFoundException('Menu category not found');
-    }
-
     const menuItems = await this.prisma.menuItem.findMany({
       where: {
         categoryId,
       },
+
+      include: {
+        category: true,
+
+        _count: {
+          select: {
+            restaurantMenus: true,
+            recipe: true,
+            modifierGroups: true,
+          },
+        },
+      },
+
       orderBy: {
         createdAt: 'desc',
       },
     });
 
+    const data = menuItems.map((item) => ({
+      id: item.id,
+      categoryId: item.categoryId,
+      name: item.name,
+      sku: item.sku,
+      description: item.description,
+      basePrice: Number(item.basePrice),
+      isAvailable: item.isAvailable,
+
+      category: item.category,
+
+      configuredRestaurantCount: item._count.restaurantMenus,
+      recipeIngredientCount: item._count.recipe,
+      modifierGroupCount: item._count.modifierGroups,
+
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
+
     return {
-      category,
-      data: menuItems,
+      data,
     };
   }
-
   // UPDATE
   async update(id: string, updateDto: UpdateMenuItemDto) {
     await this.findOne(id);

@@ -42,8 +42,12 @@ export class PayrollController {
    * - restaurantId
    */
   @Get()
-  async findAll(@Query('restaurantId') restaurantId?: string) {
-    return this.payrollService.findAll(restaurantId);
+  async findAll(
+    @Query('restaurantId') restaurantId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.payrollService.findAll(restaurantId, startDate, endDate);
   }
 
   // ============================================================

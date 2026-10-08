@@ -44,8 +44,15 @@ export class AttendanceController {
   async findAll(
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
   ) {
-    return this.attendanceService.findAll(restaurantId, staffId);
+    return this.attendanceService.findAll(
+      restaurantId,
+      staffId,
+      startDate,
+      endDate,
+    );
   }
 
   /**

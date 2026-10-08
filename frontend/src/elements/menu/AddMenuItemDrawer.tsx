@@ -1,133 +1,403 @@
 "use client";
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { ClipboardList, X } from 'lucide-react';
-import { MenuItem } from '@/utils/types';
-import { calculateMarginRate } from '@/utils/constants';
+
+import React, { useState } from "react";
+import { createPortal } from "react-dom";
+import { ClipboardList, X } from "lucide-react";
+
+import type { CreateMenuItemPayload, MenuCategory } from "@/lib/catalog-api";
+
+// ============================================================
+// PROPS
+// ============================================================
 
 interface AddMenuItemDrawerProps {
   isOpen: boolean;
+
+  categories: MenuCategory[];
+
   onClose: () => void;
-  onSubmit: (newItem: Partial<MenuItem>) => void;
+
+  onSubmit: (data: CreateMenuItemPayload) => Promise<void>;
 }
 
-export default function AddMenuItemDrawer({ isOpen, onClose, onSubmit }: AddMenuItemDrawerProps) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState<MenuItem['category']>('Mains');
-  const [price, setPrice] = useState(15.00);
-  const [cost, setCost] = useState(4.00);
-  const [description, setDescription] = useState('');
-  const [prepTime, setPrepTime] = useState(10);
-  
-  // 1. If it's not open, return null immediately.
-  if (!isOpen) return null;
+// ============================================================
+// COMPONENT
+// ============================================================
 
-  // 2. Safe check for Next.js SSR (Server-Side Rendering)
-  // This guarantees createPortal only runs on the browser without needing a useEffect!
-  if (typeof document === 'undefined') return null;
+export default function AddMenuItemDrawer({
+  isOpen,
+  categories,
+  onClose,
+  onSubmit,
+}: AddMenuItemDrawerProps) {
+  const [name, setName] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim()) return;
+  const [sku, setSku] = useState("");
 
-    onSubmit({
-      name: name.trim(),
-      category,
-      price: Number(price),
-      cost: Number(cost),
-      status: 'Available',
-      description: description.trim() || 'Artisanal culinary addition.',
-      popularity: 'Medium',
-      sales30d: 0,
-      prepTime: Number(prepTime)
-    });
+  const [categoryId, setCategoryId] = useState("");
 
-    // Reset local state for next open
-    setName('');
-    setDescription('');
-    setCategory('Mains');
-    setPrice(15.00);
-    setCost(4.00);
-    setPrepTime(10);
+  const [description, setDescription] = useState("");
+
+  const [basePrice, setBasePrice] = useState("");
+
+  const [isAvailable, setIsAvailable] = useState(true);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [error, setError] = useState<string | null>(null);
+
+  // ==========================================================
+  // EFFECTIVE CATEGORY
+  //
+  // We do NOT call setCategoryId inside an effect.
+  // ==========================================================
+
+  const effectiveCategoryId = categoryId || categories[0]?.id || "";
+
+  // ==========================================================
+  // RESET FORM
+  // ==========================================================
+
+  const resetForm = () => {
+    setName("");
+    setSku("");
+    setCategoryId("");
+    setDescription("");
+    setBasePrice("");
+    setIsAvailable(true);
+    setError(null);
+  };
+
+  // ==========================================================
+  // CLOSE
+  // ==========================================================
+
+  const handleClose = () => {
+    if (isSubmitting) {
+      return;
+    }
+
+    resetForm();
     onClose();
   };
 
+  // ==========================================================
+  // SUBMIT
+  // ==========================================================
+
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    // Clear previous validation/API error.
+    setError(null);
+
+    // --------------------------------------------------------
+    // NAME
+    // --------------------------------------------------------
+
+    const trimmedName = name.trim();
+
+    if (!trimmedName) {
+      setError("Menu item name is required.");
+      return;
+    }
+
+    // --------------------------------------------------------
+    // SKU
+    // --------------------------------------------------------
+
+    const trimmedSku = sku.trim();
+
+    if (!trimmedSku) {
+      setError("SKU is required.");
+      return;
+    }
+
+    // --------------------------------------------------------
+    // CATEGORY
+    // --------------------------------------------------------
+
+    if (!effectiveCategoryId) {
+      setError("Please select a category.");
+      return;
+    }
+
+    // --------------------------------------------------------
+    // PRICE
+    // --------------------------------------------------------
+
+    const parsedPrice = Number(basePrice);
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+      setError("Please enter a valid base price.");
+      return;
+    }
+
+    // --------------------------------------------------------
+    // API REQUEST
+    // --------------------------------------------------------
+
+    try {
+      setIsSubmitting(true);
+
+      await onSubmit({
+        name: trimmedName,
+        sku: trimmedSku,
+        categoryId: effectiveCategoryId,
+        description: description.trim() || undefined,
+        basePrice: parsedPrice,
+        isAvailable,
+      });
+
+      // Reset only after successful creation.
+      resetForm();
+
+      onClose();
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : "Unable to create menu item.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ==========================================================
+  // CLOSED
+  // ==========================================================
+
+  if (!isOpen) {
+    return null;
+  }
+
+  // ==========================================================
+  // RENDER
+  // ==========================================================
+
   return createPortal(
-    <div className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm flex justify-end z-[9999]">
-      <div className="flex-1 cursor-pointer" onClick={onClose} />
-      <div className="w-full max-w-md bg-[#09090b] border-l border-zinc-800 h-full p-6 flex flex-col shadow-2xl overflow-y-auto animate-slide-in-right">
-        
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-6">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-5 h-5 text-emerald-400" />
+    <div className="fixed inset-0 z-50">
+      {/* ====================================================
+          BACKDROP
+      ==================================================== */}
+
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        onClick={handleClose}
+      />
+
+      {/* ====================================================
+          DRAWER
+      ==================================================== */}
+
+      <aside className="absolute right-0 top-0 flex h-full w-full max-w-md flex-col border-l border-zinc-800 bg-[#09090b] shadow-2xl">
+        {/* ==================================================
+            HEADER
+        ================================================== */}
+
+        <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-emerald-500/10 p-2">
+              <ClipboardList className="h-4 w-4 text-emerald-400" />
+            </div>
+
             <div>
-              <h3 className="text-sm font-semibold text-white">Deploy Culinary Recipe</h3>
-              <p className="text-[10px] text-zinc-400 font-mono font-bold">HQ MENU SYNC REGISTRY</p>
+              <h2 className="text-sm font-bold text-white">Deploy Menu Item</h2>
+
+              <p className="mt-1 font-mono text-[10px] text-zinc-600">
+                MASTER CATALOG
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-white cursor-pointer">
-            <X className="w-4.5 h-4.5" />
+
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isSubmitting}
+            className="rounded-lg p-2 text-zinc-500 transition hover:bg-zinc-900 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 flex-1">
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Recipe/Dish Name</label>
-            <input type="text" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50" />
+        {/* ==================================================
+            FORM
+        ================================================== */}
+
+        <form
+          onSubmit={handleSubmit}
+          className="flex-1 space-y-5 overflow-y-auto p-6"
+        >
+          {/* =================================================
+              NAME
+          ================================================= */}
+
+          <Field
+            label="MENU ITEM NAME"
+            value={name}
+            onChange={setName}
+            placeholder="Chicken Biryani"
+          />
+
+          {/* =================================================
+              SKU
+          ================================================= */}
+
+          <Field
+            label="SKU"
+            value={sku}
+            onChange={setSku}
+            placeholder="BIRYANI-001"
+          />
+
+          {/* =================================================
+              CATEGORY
+          ================================================= */}
+
+          <div>
+            <label className="mb-2 block text-[10px] font-mono font-bold text-zinc-500">
+              CATEGORY
+            </label>
+
+            <select
+              value={effectiveCategoryId}
+              onChange={(event) => setCategoryId(event.target.value)}
+              disabled={categories.length === 0 || isSubmitting}
+              className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-xs text-white outline-none transition focus:border-emerald-500/50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="">
+                {categories.length === 0
+                  ? "No categories available"
+                  : "Select category"}
+              </option>
+
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Section Category</label>
-              <select value={category} onChange={(e) => setCategory(e.target.value as MenuItem['category'])} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50">
-                <option value="Starters">Starters</option>
-                <option value="Mains">Mains</option>
-                <option value="Desserts">Desserts</option>
-                <option value="Beverages">Beverages</option>
-                <option value="Sides">Sides</option>
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Avg Prep (Mins)</label>
-              <input type="number" min="1" value={prepTime} onChange={(e) => setPrepTime(Number(e.target.value))} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50" />
-            </div>
+          {/* =================================================
+              BASE PRICE
+          ================================================= */}
+
+          <Field
+            label="BASE PRICE"
+            value={basePrice}
+            onChange={setBasePrice}
+            placeholder="249.00"
+            type="number"
+          />
+
+          {/* =================================================
+              DESCRIPTION
+          ================================================= */}
+
+          <div>
+            <label className="mb-2 block text-[10px] font-mono font-bold text-zinc-500">
+              DESCRIPTION
+            </label>
+
+            <textarea
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              disabled={isSubmitting}
+              rows={4}
+              placeholder="Describe the menu item..."
+              className="w-full resize-none rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-xs text-white outline-none transition placeholder:text-zinc-700 focus:border-emerald-500/50 disabled:opacity-50"
+            />
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Description</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white h-20 focus:outline-none focus:border-emerald-500/50" />
+          {/* =================================================
+              MASTER AVAILABILITY
+          ================================================= */}
+
+          <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-900/50 p-4">
+            <div>
+              <p className="text-xs font-semibold text-white">Master Active</p>
+
+              <p className="mt-1 text-[10px] text-zinc-600">
+                Global catalog availability
+              </p>
+            </div>
+
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setIsAvailable((current) => !current)}
+              className={`relative h-6 w-11 rounded-full transition ${
+                isAvailable ? "bg-emerald-500" : "bg-zinc-700"
+              } disabled:opacity-50`}
+            >
+              <span
+                className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${
+                  isAvailable ? "left-6" : "left-1"
+                }`}
+              />
+            </button>
           </div>
 
-          <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-4 space-y-3">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-400 font-mono">Retail Price ($)</label>
-                <input type="number" step="0.1" min="0" value={price} onChange={(e) => setPrice(Number(e.target.value))} className="w-full bg-zinc-900/50 border border-zinc-800 rounded py-1 px-2 font-mono text-xs text-white focus:outline-none" />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-400 font-mono">Cost ($)</label>
-                <input type="number" step="0.1" min="0" value={cost} onChange={(e) => setCost(Number(e.target.value))} className="w-full bg-zinc-900/50 border border-zinc-800 rounded py-1 px-2 font-mono text-xs text-white focus:outline-none" />
-              </div>
-            </div>
-            <div className="pt-2.5 border-t border-zinc-800 flex justify-between items-center text-xs">
-              <div className="space-y-0.5">
-                <span className="text-zinc-500 text-[10px] block">Net Margin Profit</span>
-                <span className="font-mono font-bold text-white text-sm">${(price - cost).toFixed(2)}</span>
-              </div>
-              <div className="space-y-0.5 text-right">
-                <span className="text-zinc-500 text-[10px] block">Margin Percentage yield</span>
-                <span className="font-mono font-bold text-emerald-400 text-sm">{calculateMarginRate(price, cost).toFixed(1)}%</span>
-              </div>
-            </div>
-          </div>
+          {/* =================================================
+              ERROR
+          ================================================= */}
 
-          <div className="pt-6 border-t border-zinc-800 flex gap-3">
-            <button type="button" onClick={onClose} className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800/80 text-zinc-300 text-xs font-medium rounded-xl border border-zinc-800 cursor-pointer">Cancel</button>
-            <button type="submit" className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold rounded-xl shadow-lg cursor-pointer">Push Central Sync</button>
-          </div>
+          {error && (
+            <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3">
+              <p className="text-xs leading-relaxed text-rose-400">{error}</p>
+            </div>
+          )}
+
+          {/* =================================================
+              SUBMIT
+          ================================================= */}
+
+          <button
+            type="submit"
+            disabled={isSubmitting || categories.length === 0}
+            className="w-full rounded-xl bg-emerald-500 py-3 text-xs font-bold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isSubmitting ? "CREATING..." : "CREATE MENU ITEM"}
+          </button>
         </form>
-      </div>
+      </aside>
     </div>,
-    document.body 
+    document.body,
+  );
+}
+
+// ============================================================
+// FIELD
+// ============================================================
+
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-[10px] font-mono font-bold text-zinc-500">
+        {label}
+      </label>
+
+      <input
+        type={type}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        min={type === "number" ? "0" : undefined}
+        step={type === "number" ? "0.01" : undefined}
+        className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2.5 text-xs text-white outline-none transition placeholder:text-zinc-700 focus:border-emerald-500/50"
+      />
+    </div>
   );
 }

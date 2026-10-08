@@ -4,6 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+
 import {
   BadRequestException,
   Injectable,
@@ -18,6 +19,10 @@ import { PrismaService } from '../../lib/prisma/prisma.service';
 export class ModifierGroupService {
   constructor(private readonly prisma: PrismaService) {}
 
+  // ============================================================
+  // CREATE
+  // ============================================================
+
   async create(createDto: CreateModifierGroupDto) {
     this.validateSelections(createDto.minSelections, createDto.maxSelections);
 
@@ -29,14 +34,41 @@ export class ModifierGroupService {
         maxSelections: createDto.maxSelections ?? 1,
         isActive: createDto.isActive ?? true,
       },
+
+      include: {
+        modifiers: {
+          orderBy: [
+            {
+              sortOrder: 'asc',
+            },
+            {
+              name: 'asc',
+            },
+          ],
+        },
+      },
     });
   }
 
+  // ============================================================
+  // FIND ALL
+  // ============================================================
+
   async findAll() {
     return this.prisma.modifierGroup.findMany({
-      where: {
-        isActive: true,
+      include: {
+        modifiers: {
+          orderBy: [
+            {
+              sortOrder: 'asc',
+            },
+            {
+              name: 'asc',
+            },
+          ],
+        },
       },
+
       orderBy: [
         {
           sortOrder: 'asc',
@@ -47,14 +79,27 @@ export class ModifierGroupService {
       ],
     });
   }
+  // ============================================================
+  // FIND ONE
+  // ============================================================
 
   async findOne(id: string) {
     const modifierGroup = await this.prisma.modifierGroup.findUnique({
       where: {
         id,
       },
+
       include: {
-        modifiers: true,
+        modifiers: {
+          orderBy: [
+            {
+              sortOrder: 'asc',
+            },
+            {
+              name: 'asc',
+            },
+          ],
+        },
       },
     });
 
@@ -65,12 +110,18 @@ export class ModifierGroupService {
     return modifierGroup;
   }
 
+  // ============================================================
+  // UPDATE
+  // ============================================================
+
   async update(id: string, updateDto: UpdateModifierGroupDto) {
     const existing = await this.findOne(id);
-    if (!existing.isActive) {
-      throw new BadRequestException('Cannot update an inactive modifier group');
-    }
 
+    if (!existing.isActive && updateDto.isActive !== true) {
+      throw new BadRequestException(
+        'Inactive modifier groups can only be reactivated first',
+      );
+    }
     const minSelections = updateDto.minSelections ?? existing.minSelections;
 
     const maxSelections = updateDto.maxSelections ?? existing.maxSelections;
@@ -81,6 +132,7 @@ export class ModifierGroupService {
       where: {
         id,
       },
+
       data: {
         ...(updateDto.name !== undefined && {
           name: updateDto.name,
@@ -102,11 +154,32 @@ export class ModifierGroupService {
           isActive: updateDto.isActive,
         }),
       },
+
+      include: {
+        modifiers: {
+          orderBy: [
+            {
+              sortOrder: 'asc',
+            },
+            {
+              name: 'asc',
+            },
+          ],
+        },
+      },
     });
   }
 
+  // ============================================================
+  // DELETE / SOFT DELETE
+  // ============================================================
+
   async remove(id: string) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+
+    if (!existing.isActive) {
+      throw new BadRequestException('Modifier group is already inactive');
+    }
 
     await this.prisma.modifierGroup.update({
       where: {
@@ -122,10 +195,22 @@ export class ModifierGroupService {
     };
   }
 
+  // ============================================================
+  // VALIDATION
+  // ============================================================
+
   private validateSelections(
     minSelections: number,
     maxSelections: number,
   ): void {
+    if (minSelections < 0) {
+      throw new BadRequestException('minSelections cannot be negative');
+    }
+
+    if (maxSelections < 0) {
+      throw new BadRequestException('maxSelections cannot be negative');
+    }
+
     if (minSelections > maxSelections) {
       throw new BadRequestException(
         'minSelections cannot be greater than maxSelections',

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   Injectable,
@@ -6,6 +8,7 @@ import {
 
 import { CreateModifierDto } from './dto/create-modifier.dto';
 import { UpdateModifierDto } from './dto/update-modifier.dto';
+
 import { PrismaService } from '../../lib/prisma/prisma.service';
 
 @Injectable()
@@ -13,7 +16,7 @@ export class ModifierService {
   constructor(private readonly prisma: PrismaService) {}
 
   // ============================================================
-  // CREATE
+  // CREATE MODIFIER
   // ============================================================
 
   async create(createDto: CreateModifierDto) {
@@ -52,6 +55,7 @@ export class ModifierService {
         maxSelections: group.maxSelections,
         isActive: group.isActive,
       },
+
       modifier: {
         id: modifier.id,
         groupId: modifier.groupId,
@@ -66,20 +70,19 @@ export class ModifierService {
   }
 
   // ============================================================
-  // FIND ALL
+  // FIND ALL MODIFIERS
   // ============================================================
 
   async findAll(groupId?: string) {
     const modifiers = await this.prisma.modifier.findMany({
       where: {
-        isActive: true,
-        ...(groupId !== undefined && {
-          groupId,
-        }),
+        ...(groupId !== undefined ? { groupId } : {}),
       },
+
       include: {
         group: true,
       },
+
       orderBy: [
         {
           sortOrder: 'asc',
@@ -148,7 +151,7 @@ export class ModifierService {
   }
 
   // ============================================================
-  // FIND ONE
+  // FIND ONE MODIFIER
   // ============================================================
 
   async findOne(id: string) {
@@ -156,6 +159,7 @@ export class ModifierService {
       where: {
         id,
       },
+
       include: {
         group: true,
       },
@@ -174,6 +178,7 @@ export class ModifierService {
         maxSelections: modifier.group.maxSelections,
         isActive: modifier.group.isActive,
       },
+
       modifier: {
         id: modifier.id,
         groupId: modifier.groupId,
@@ -188,7 +193,7 @@ export class ModifierService {
   }
 
   // ============================================================
-  // UPDATE
+  // UPDATE MODIFIER
   // ============================================================
 
   async update(id: string, updateDto: UpdateModifierDto) {
@@ -198,12 +203,24 @@ export class ModifierService {
       },
     });
 
-    if (!existing) {
-      throw new NotFoundException('Modifier not found');
-    }
+    if (!existing?.isActive && updateDto.isActive === true) {
+      const groupId = updateDto.groupId ?? existing?.groupId;
 
-    if (!existing.isActive) {
-      throw new BadRequestException('Cannot update an inactive modifier');
+      const group = await this.prisma.modifierGroup.findUnique({
+        where: {
+          id: groupId,
+        },
+      });
+
+      if (!group) {
+        throw new NotFoundException('Modifier group not found');
+      }
+
+      if (!group.isActive) {
+        throw new BadRequestException(
+          'Cannot activate a modifier under an inactive modifier group',
+        );
+      }
     }
 
     if (updateDto.groupId !== undefined) {
@@ -228,23 +245,29 @@ export class ModifierService {
       where: {
         id,
       },
+
       data: {
         ...(updateDto.groupId !== undefined && {
           groupId: updateDto.groupId,
         }),
+
         ...(updateDto.name !== undefined && {
           name: updateDto.name,
         }),
+
         ...(updateDto.sortOrder !== undefined && {
           sortOrder: updateDto.sortOrder,
         }),
+
         ...(updateDto.extraPrice !== undefined && {
           extraPrice: updateDto.extraPrice,
         }),
+
         ...(updateDto.isActive !== undefined && {
           isActive: updateDto.isActive,
         }),
       },
+
       include: {
         group: true,
       },
@@ -259,6 +282,7 @@ export class ModifierService {
         maxSelections: modifier.group.maxSelections,
         isActive: modifier.group.isActive,
       },
+
       modifier: {
         id: modifier.id,
         groupId: modifier.groupId,
@@ -273,7 +297,7 @@ export class ModifierService {
   }
 
   // ============================================================
-  // REMOVE / SOFT DELETE
+  // REMOVE / DEACTIVATE MODIFIER
   // ============================================================
 
   async remove(id: string) {
@@ -295,6 +319,7 @@ export class ModifierService {
       where: {
         id,
       },
+
       data: {
         isActive: false,
       },

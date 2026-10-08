@@ -451,12 +451,46 @@ export class AttendanceService {
    * - restaurantId
    * - staffId
    */
-  async findAll(restaurantId?: string, staffId?: string) {
+  // ============================================================
+  // FIND ALL
+  // ============================================================
+
+  async findAll(
+    restaurantId?: string,
+    staffId?: string,
+    startDate?: string,
+    endDate?: string,
+  ) {
     const where: Prisma.ShiftWhereInput = {
       ...(restaurantId ? { restaurantId } : {}),
-
       ...(staffId ? { staffId } : {}),
     };
+
+    if (startDate || endDate) {
+      const clockInFilter: Prisma.DateTimeFilter = {};
+
+      if (startDate) {
+        const parsedStart = new Date(startDate);
+
+        if (Number.isNaN(parsedStart.getTime())) {
+          throw new BadRequestException('Invalid startDate');
+        }
+
+        clockInFilter.gte = parsedStart;
+      }
+
+      if (endDate) {
+        const parsedEnd = new Date(endDate);
+
+        if (Number.isNaN(parsedEnd.getTime())) {
+          throw new BadRequestException('Invalid endDate');
+        }
+
+        clockInFilter.lte = parsedEnd;
+      }
+
+      where.clockInAt = clockInFilter;
+    }
 
     const shifts = await this.prisma.shift.findMany({
       where,

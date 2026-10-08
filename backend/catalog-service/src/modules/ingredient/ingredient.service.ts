@@ -40,29 +40,41 @@ export class IngredientService {
   }
 
   // GET ALL
-  async findAll(page = 1, limit = 10) {
+  async findAll(page: number, limit: number, search?: string) {
     const skip = (page - 1) * limit;
 
-    const [ingredients, total] = await Promise.all([
+    const where = {
+      ...(search
+        ? {
+            name: {
+              contains: search,
+              mode: 'insensitive' as const,
+            },
+          }
+        : {}),
+    };
+
+    const [ingredients, total] = await this.prisma.$transaction([
       this.prisma.ingredient.findMany({
+        where,
         skip,
         take: limit,
         orderBy: {
-          createdAt: 'desc',
+          name: 'asc',
         },
       }),
 
-      this.prisma.ingredient.count(),
+      this.prisma.ingredient.count({
+        where,
+      }),
     ]);
 
     return {
       data: ingredients,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
     };
   }
 

@@ -98,21 +98,90 @@ export class PayrollService {
   /**
    * Get payroll runs.
    *
-   * Optional filter:
+   * Optional filters:
    * - restaurantId
+   * - startDate
+   * - endDate
+   *
+   * Date filtering uses payroll-period overlap:
+   *
+   * payroll.periodStartDate <= filterEndDate
+   * AND
+   * payroll.periodEndDate >= filterStartDate
    */
-  async findAll(restaurantId?: string) {
-    const payrollRuns = await this.prisma.payrollRun.findMany({
-      where: restaurantId
-        ? {
-            restaurantId,
-          }
-        : undefined,
+  async findAll(
+    restaurantId?: string,
+    startDateValue?: string,
+    endDateValue?: string,
+  ) {
+    let startDate: Date | undefined;
+    let endDate: Date | undefined;
 
+    // ----------------------------------------------------------
+    // Validate date filters
+    // ----------------------------------------------------------
+
+    if (startDateValue) {
+      startDate = this.parseDate(startDateValue, 'startDate');
+    }
+
+    if (endDateValue) {
+      endDate = this.parseDate(endDateValue, 'endDate');
+    }
+
+    if (startDate && endDate && startDate > endDate) {
+      throw new BadRequestException('startDate cannot be after endDate');
+    }
+
+    // ----------------------------------------------------------
+    // Build query
+    // ----------------------------------------------------------
+
+    const where: {
+      restaurantId?: string;
+      periodStartDate?: {
+        lte?: Date;
+      };
+      periodEndDate?: {
+        gte?: Date;
+      };
+    } = {};
+
+    if (restaurantId) {
+      where.restaurantId = restaurantId;
+    }
+
+    // ----------------------------------------------------------
+    // Date range filtering
+    // ----------------------------------------------------------
+
+    if (startDate && endDate) {
+      where.periodStartDate = {
+        lte: endDate,
+      };
+
+      where.periodEndDate = {
+        gte: startDate,
+      };
+    } else if (startDate) {
+      where.periodEndDate = {
+        gte: startDate,
+      };
+    } else if (endDate) {
+      where.periodStartDate = {
+        lte: endDate,
+      };
+    }
+
+    // ----------------------------------------------------------
+    // Fetch payroll runs
+    // ----------------------------------------------------------
+
+    const payrollRuns = await this.prisma.payrollRun.findMany({
+      where,
       orderBy: {
         periodStartDate: 'desc',
       },
-
       include: {
         payslips: {
           orderBy: {

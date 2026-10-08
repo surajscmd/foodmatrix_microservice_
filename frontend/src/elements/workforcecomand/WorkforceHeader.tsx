@@ -46,11 +46,12 @@ export default function WorkforceHeader({
           type="button"
           onClick={onRefresh}
           disabled={isRefreshing}
-          className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-2 text-zinc-500 transition-all hover:border-emerald-500/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          title="Refresh workforce"
           aria-label="Refresh workforce"
+          className="rounded-xl border border-zinc-800 bg-zinc-900/70 p-2 text-zinc-500 transition-all duration-200 hover:border-emerald-500/30 hover:bg-zinc-900 hover:text-emerald-400 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw
-            className={`h-4 w-4 ${
+            className={`h-4 w-4 transition-transform ${
               isRefreshing ? "animate-spin" : ""
             }`}
           />

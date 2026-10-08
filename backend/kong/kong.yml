@@ -183,7 +183,7 @@ plugins:
 
   - name: rate-limiting
     config:
-      minute: 60
+      minute: 1000
       policy: local
       limit_by: ip
       fault_tolerant: true
@@ -194,7 +194,7 @@ plugins:
 
   - name: request-size-limiting
     config:
-      allowed_payload_size: 10
+      allowed_payload_size: 20
       size_unit: megabytes
 
   # ------------------------------------------------------------
