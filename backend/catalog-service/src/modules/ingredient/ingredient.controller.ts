@@ -31,7 +31,7 @@ export class IngredientController {
   @Get()
   async findAll(
     @Query('page') page = '1',
-    @Query('limit') limit = '10',
+    @Query('limit') limit = '20',
     @Query('search') search?: string,
   ) {
     const result = await this.ingredientService.findAll(
@@ -42,7 +42,15 @@ export class IngredientController {
 
     return {
       message: 'Ingredients fetched successfully',
-      ...result,
+
+      data: result.data,
+
+      pagination: {
+        page: result.page,
+        limit: result.limit,
+        total: result.total,
+        totalPages: result.totalPages,
+      },
     };
   }
   @Get(':id')

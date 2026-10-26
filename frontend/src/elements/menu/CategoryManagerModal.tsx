@@ -628,12 +628,12 @@ export default function CategoryManagerModal({
 
                         {/* ACTIONS */}
 
-                        <div className="flex shrink-0 items-center gap-1">
+                        <div className="flex shrink-0 items-center gap-3">
                           <button
                             type="button"
                             onClick={() => void handleEdit(category.id)}
                             disabled={isSaving || loadingCategoryId !== null}
-                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-600 transition hover:border-cyan-500/20 hover:bg-cyan-500/10 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 shadow-sm transition hover:border-cyan-400/40 hover:bg-cyan-500/20 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-40"
                             title="Edit category"
                           >
                             {loadingCategoryId === category.id ? (
@@ -647,11 +647,11 @@ export default function CategoryManagerModal({
                             type="button"
                             onClick={() => void handleToggleStatus(category)}
                             disabled={isSaving || loadingCategoryId !== null}
-                            className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent transition ${
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-40 ${
                               category.isActive
-                                ? "text-zinc-600 hover:border-rose-500/20 hover:bg-rose-500/10 hover:text-rose-300"
-                                : "text-zinc-600 hover:border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-300"
-                            } disabled:cursor-not-allowed disabled:opacity-40`}
+                                ? "border-rose-500/20 bg-rose-500/10 text-rose-400 hover:border-rose-400/40 hover:bg-rose-500/20 hover:text-rose-300"
+                                : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-300"
+                            }`}
                             title={
                               category.isActive
                                 ? "Deactivate category"

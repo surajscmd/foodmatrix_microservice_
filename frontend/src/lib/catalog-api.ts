@@ -39,8 +39,10 @@ export interface MenuItem {
 
   category: MenuCategory;
 
+  
   // Catalog statistics
   configuredRestaurantCount?: number;
+  unavailableRestaurantIds?: string[];
   recipeIngredientCount?: number;
   modifierGroupCount?: number;
 
@@ -1014,6 +1016,28 @@ export async function getAllModifierRecipes(page = 1, limit = 20) {
   });
 
   return response.data;
+}
+
+export async function loadAllStockIngredients(): Promise<
+  Ingredient[]
+> {
+  const records = new Map<string, Ingredient>();
+
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await getIngredients(page, 50);
+
+    response.data.forEach((ingredient) => {
+      records.set(ingredient.id, ingredient);
+    });
+
+    totalPages = response.pagination.totalPages;
+    page += 1;
+  } while (page <= totalPages);
+
+  return [...records.values()];
 }
 
 // GET     /menu-items

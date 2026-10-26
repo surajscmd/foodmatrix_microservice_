@@ -14,7 +14,7 @@ import { ShipTransferDto } from './dto/ship-transfer.dto.js';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto.js';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
-import type { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
+import { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 
 @Injectable()
 export class StockTransferService {

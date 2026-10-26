@@ -1,180 +1,332 @@
 "use client";
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { Database, Plus, X } from 'lucide-react';
-import { InventoryItem, Supplier } from '@/utils/types';
 
-interface AddInventoryDrawerProps {
-  isOpen: boolean;
-  onClose: () => void;
-  suppliers: Supplier[];
-  onSubmit: (newItem: Partial<InventoryItem>) => void;
+import { useRef, useState, type FormEvent } from "react";
+
+import { Database, Loader2, Trash2, Wheat } from "lucide-react";
+
+import type { Ingredient } from "@/lib/catalog-api";
+import type { WarehouseStockView } from "@/utils/types/inventory";
+
+import {
+  bulkReceiveWarehouseStock,
+  receiveWarehouseStock,
+} from "@/lib/inventory-api";
+
+import {
+  InventoryDrawerShell,
+  InventoryIngredientSearch,
+  inventoryError,
+  inventoryInputClass,
+  inventoryLabelClass,
+  inventoryPrimaryClass,
+  validStockQuantity,
+} from "./InventoryShared";
+
+interface ReceiptLine {
+  ingredient: Ingredient;
+  quantity: string;
 }
 
-export default function AddInventoryDrawer({ isOpen, onClose, suppliers, onSubmit }: AddInventoryDrawerProps) {
-  const [newName, setNewName] = useState('');
-  const [newCategory, setNewCategory] = useState<InventoryItem['category']>('Produce');
-  const [newQuantity, setNewQuantity] = useState<number>(100);
-  const [newUnit, setNewUnit] = useState('pcs');
-  const [newMinThreshold, setNewMinThreshold] = useState<number>(20);
-  const [newUnitCost, setNewUnitCost] = useState<number>(1.50);
-  const [newSupplierId, setNewSupplierId] = useState(suppliers[0]?.id || '');
+interface AddInventoryDrawerProps {
+  warehouseId: string;
+  ingredients: Ingredient[];
+  ingredientsLoading: boolean;
+  ingredientsError: string;
+  onRetryIngredients: () => void;
+  onClose: () => void;
+  onSaved: (message: string) => void;
+  bulk?: boolean;
+  stock?: WarehouseStockView | null;
+}
 
-  if (!isOpen || typeof document === 'undefined') return null;
+export default function AddInventoryDrawer({
+  warehouseId,
+  ingredients,
+  ingredientsLoading,
+  ingredientsError,
+  onRetryIngredients,
+  onClose,
+  onSaved,
+  bulk = false,
+  stock = null,
+}: AddInventoryDrawerProps) {
+  const [lines, setLines] = useState<ReceiptLine[]>(() =>
+    stock
+      ? [
+          {
+            ingredient: stock.ingredient ?? {
+              id: stock.ingredientId,
+              name: stock.ingredientId,
+              uom: "",
+              isActive: true,
+            },
+            quantity: "",
+          },
+        ]
+      : [],
+  );
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newName.trim()) return;
+  const [referenceId, setReferenceId] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
-    onSubmit({
-      name: newName,
-      category: newCategory,
-      quantity: Number(newQuantity),
-      unit: newUnit,
-      minThreshold: Number(newMinThreshold),
-      unitCost: Number(newUnitCost),
-      supplierId: newSupplierId || (suppliers[0]?.id || 'SUP-001')
+  const submittingRef = useRef(false);
+
+  function addIngredient(ingredient: Ingredient): void {
+    setError("");
+
+    setLines((current) => {
+      const exists = current.some(
+        (line) => line.ingredient.id === ingredient.id,
+      );
+
+      if (exists) return current;
+
+      const line: ReceiptLine = {
+        ingredient,
+        quantity: "",
+      };
+
+      return bulk ? [...current, line] : [line];
     });
+  }
 
-    setNewName('');
-    setNewCategory('Produce');
-    setNewQuantity(100);
-    setNewUnit('pcs');
-    setNewMinThreshold(20);
-    setNewUnitCost(1.50);
-    setNewSupplierId(suppliers[0]?.id || '');
-    onClose();
-  };
+  async function handleSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ): Promise<void> {
+    event.preventDefault();
 
-  return createPortal(
-    <div className="fixed inset-0 bg-zinc-950/60 backdrop-blur-sm flex justify-end z-[9999]">
-      <div className="flex-1 cursor-pointer" onClick={onClose} />
-      <div className="w-full max-w-md bg-[#09090b] border-l border-zinc-800 h-full p-6 flex flex-col shadow-2xl overflow-y-auto animate-slide-in-right">
-        
-        <div className="flex items-center justify-between border-b border-zinc-800 pb-4 mb-6">
-          <div className="flex items-center gap-2">
-            <Database className="w-5 h-5 text-emerald-400" />
-            <div>
-              <h3 className="text-sm font-semibold text-white">Register New Stock Asset</h3>
-              <p className="text-[10px] text-zinc-400 font-mono font-bold">FRANCHISE LOGISTICS REGISTER</p>
-            </div>
+    if (submittingRef.current) return;
+
+    if (lines.length === 0) {
+      setError("Search and add at least one ingredient.");
+      return;
+    }
+
+    if (lines.some((line) => !validStockQuantity(line.quantity, true))) {
+      setError("Enter positive quantities with up to four decimal places.");
+      return;
+    }
+
+    submittingRef.current = true;
+    setSaving(true);
+    setError("");
+
+    try {
+      const receiptItems = lines.map((line) => ({
+        ingredientId: line.ingredient.id,
+        quantity: Number(line.quantity),
+        ...(referenceId.trim() ? { referenceId: referenceId.trim() } : {}),
+      }));
+
+      if (bulk) {
+        await bulkReceiveWarehouseStock({
+          warehouseId,
+          items: receiptItems,
+        });
+      } else {
+        await receiveWarehouseStock({
+          warehouseId,
+          ...receiptItems[0]!,
+        });
+      }
+
+      onSaved(
+        bulk
+          ? `${lines.length} ingredients received successfully.`
+          : "Warehouse stock received successfully.",
+      );
+    } catch (caught: unknown) {
+      setError(
+        `${inventoryError(caught)} If the request timed out, refresh stock and history before retrying.`,
+      );
+    } finally {
+      submittingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  return (
+    <InventoryDrawerShell
+      title={
+        stock
+          ? "Restock Item"
+          : bulk
+            ? "Add Multiple Stock Items"
+            : "Add Stock Item"
+      }
+      subtitle="WAREHOUSE STOCK REGISTRATION"
+      saving={saving}
+      error={error}
+      onClose={onClose}
+      wide={bulk}
+    >
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className="flex flex-1 flex-col gap-4"
+      >
+        {!stock && (bulk || lines.length === 0) && (
+          <InventoryIngredientSearch
+            ingredients={ingredients}
+            loading={ingredientsLoading}
+            error={ingredientsError}
+            onRetry={onRetryIngredients}
+            onChoose={addIngredient}
+            excludedIds={lines.map((line) => line.ingredient.id)}
+            disabled={saving}
+          />
+        )}
+
+        <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-950">
+          <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
+            <span className="font-mono text-[9px] uppercase tracking-wider text-violet-300">
+              Stock Items
+            </span>
+
+            <span className="rounded-full border border-violet-400/15 bg-violet-400/10 px-2 py-0.5 font-mono text-[8px] font-bold text-violet-300">
+              {lines.length}
+            </span>
           </div>
-          <button onClick={onClose} className="p-1.5 hover:bg-zinc-900 rounded-lg text-zinc-400 hover:text-white cursor-pointer">
-            <X className="w-4.5 h-4.5" />
-          </button>
+
+          {lines.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Wheat className="mx-auto h-5 w-5 text-violet-400/60" />
+
+              <p className="mt-3 text-xs font-semibold text-zinc-500">
+                No stock items added
+              </p>
+
+              <p className="mt-1 text-[10px] text-zinc-700">
+                Search above to add stock items.
+              </p>
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="mb-1 grid grid-cols-[minmax(0,1fr)_90px_32px] gap-2 px-2 pb-2 font-mono text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-700">
+                <span>Ingredient</span>
+                <span className="text-right">Quantity</span>
+                <span />
+              </div>
+
+              {lines.map((line, index) => (
+                <div
+                  key={line.ingredient.id}
+                  className="grid grid-cols-[minmax(0,1fr)_90px_32px] items-center gap-2 border-b border-zinc-900 px-2 py-3 last:border-b-0"
+                >
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="font-mono text-[8px] font-bold text-violet-400">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-zinc-200">
+                        {line.ingredient.name}
+                      </p>
+
+                      <p className="mt-0.5 font-mono text-[8px] text-zinc-600">
+                        {line.ingredient.uom}
+                      </p>
+                    </div>
+                  </div>
+
+                  <input
+                    aria-label={`Received quantity for ${line.ingredient.name}`}
+                    type="number"
+                    min="0.0001"
+                    max="99999999.9999"
+                    step="0.0001"
+                    required
+                    disabled={saving}
+                    value={line.quantity}
+                    onChange={(event) =>
+                      setLines((current) =>
+                        current.map((row) =>
+                          row.ingredient.id === line.ingredient.id
+                            ? {
+                                ...row,
+                                quantity: event.target.value,
+                              }
+                            : row,
+                        ),
+                      )
+                    }
+                    className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-2 text-right font-mono text-xs text-violet-200 outline-none focus:border-violet-400/30 disabled:opacity-40"
+                  />
+
+                  {!stock && (
+                    <button
+                      type="button"
+                      title="Remove ingredient"
+                      aria-label={`Remove ${line.ingredient.name}`}
+                      disabled={saving}
+                      onClick={() =>
+                        setLines((current) =>
+                          current.filter(
+                            (row) => row.ingredient.id !== line.ingredient.id,
+                          ),
+                        )
+                      }
+                      className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-700 transition hover:border-rose-400/20 hover:bg-rose-400/10 hover:text-rose-300 disabled:opacity-40"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 flex-1">
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Asset Name</label>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Organic Basil Leaves"
-              required
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-            />
-          </div>
+        <div className="space-y-1.5">
+          <label htmlFor="receipt-reference" className={inventoryLabelClass}>
+            Reference ID (optional)
+          </label>
 
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Sourcing Category</label>
-            <select
-              value={newCategory}
-              onChange={(e) => setNewCategory(e.target.value as InventoryItem['category'])}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-            >
-              <option value="Produce">Produce</option>
-              <option value="Meat & Poultry">Meat & Poultry</option>
-              <option value="Dairy">Dairy</option>
-              <option value="Dry Goods">Dry Goods</option>
-              <option value="Packaging">Packaging</option>
-            </select>
-          </div>
+          <input
+            id="receipt-reference"
+            value={referenceId}
+            onChange={(event) => setReferenceId(event.target.value)}
+            maxLength={100}
+            disabled={saving}
+            placeholder="Purchase or delivery reference"
+            className={inventoryInputClass}
+          />
+        </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Initial quantity</label>
-              <input
-                type="number"
-                value={newQuantity}
-                onChange={(e) => setNewQuantity(Number(e.target.value))}
-                required
-                min="0"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Unit of measure</label>
-              <input
-                type="text"
-                value={newUnit}
-                onChange={(e) => setNewUnit(e.target.value)}
-                placeholder="e.g. lbs, kg, pcs"
-                required
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/50"
-              />
-            </div>
-          </div>
+        <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-950 p-4 text-[11px] text-zinc-500">
+          <p className="flex items-center gap-2 font-semibold text-white">
+            <Database className="h-3.5 w-3.5 text-emerald-400" />
+            Records stock physically received
+          </p>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Min Goal Threshold</label>
-              <input
-                type="number"
-                value={newMinThreshold}
-                onChange={(e) => setNewMinThreshold(Number(e.target.value))}
-                required
-                min="0"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/50"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Unit Cost ($)</label>
-              <input
-                type="number"
-                step="0.01"
-                value={newUnitCost}
-                onChange={(e) => setNewUnitCost(Number(e.target.value))}
-                required
-                min="0"
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/50"
-              />
-            </div>
-          </div>
+          <p>
+            Quantities use Catalog units. Each receipt creates a PURCHASE
+            movement.
+            {bulk && " All receipt lines are saved in one transaction."}
+          </p>
+        </div>
 
-          <div className="space-y-1.5">
-            <label className="text-[11px] font-mono uppercase tracking-wider text-zinc-400 font-bold">Sourcing Partner</label>
-            <select
-              value={newSupplierId}
-              onChange={(e) => setNewSupplierId(e.target.value)}
-              className="w-full bg-zinc-950 border border-zinc-800 rounded-xl py-2 px-3 text-xs text-white focus:outline-none focus:border-emerald-500/50"
-            >
-              {suppliers.map(sup => (
-                <option key={sup.id} value={sup.id}>{sup.name} ({sup.category})</option>
-              ))}
-            </select>
-          </div>
+        <div className="mt-auto flex gap-3 border-t border-zinc-800 pt-6">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-2 text-xs text-zinc-300 disabled:opacity-40"
+          >
+            Cancel
+          </button>
 
-          <div className="pt-6 border-t border-zinc-800 flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 py-2 bg-zinc-900 hover:bg-zinc-800/80 text-zinc-300 text-xs font-medium rounded-xl border border-zinc-800 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="flex-1 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold rounded-xl shadow-lg flex items-center justify-center gap-1.5 cursor-pointer"
-            >
-              <Plus className="w-4 h-4 text-zinc-950" />
-              <span>Register stock item</span>
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>,
-    document.body
+          <button
+            type="submit"
+            disabled={saving || lines.length === 0}
+            className={`${inventoryPrimaryClass} flex-1`}
+          >
+            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+
+            {saving ? "Saving..." : bulk ? "Add All Stock" : "Add Stock"}
+          </button>
+        </div>
+      </form>
+    </InventoryDrawerShell>
   );
 }

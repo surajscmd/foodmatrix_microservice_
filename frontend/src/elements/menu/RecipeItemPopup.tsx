@@ -2,13 +2,7 @@
 
 import { useMemo } from "react";
 import { createPortal } from "react-dom";
-import {
-  Check,
-  ChefHat,
-  Loader2,
-  Search,
-  X,
-} from "lucide-react";
+import { Check, ChefHat, Loader2, Search, X } from "lucide-react";
 
 import type { Ingredient } from "@/lib/catalog-api";
 
@@ -46,8 +40,10 @@ export default function RecipeItemPopup({
   const filteredIngredients = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
 
+    // Do not show the ingredient list when
+    // the user has not entered a search term.
     if (!query) {
-      return ingredients;
+      return [];
     }
 
     return ingredients.filter((ingredient) =>
@@ -147,32 +143,33 @@ export default function RecipeItemPopup({
 
               <input
                 value={searchTerm}
-                onChange={(event) =>
-                  onSearchChange(event.target.value)
-                }
+                onChange={(event) => onSearchChange(event.target.value)}
                 placeholder="Search ingredients..."
                 disabled={isSubmitting}
                 className="h-10 w-full bg-transparent text-sm text-zinc-200 outline-none placeholder:text-zinc-600 disabled:opacity-50"
               />
             </div>
 
-            <div className="mt-2 max-h-48 overflow-y-auto rounded-xl border border-zinc-800">
-              {isLoadingIngredients ? (
+            <div className="mt-2 h-48 overflow-y-auto rounded-xl border border-zinc-800">
+              {!searchTerm.trim() ? (
+                <div className="flex h-full items-center justify-center px-4 text-center">
+                  <p className="text-xs text-zinc-600">
+                    Start typing to search ingredients.
+                  </p>
+                </div>
+              ) : isLoadingIngredients ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
                 </div>
               ) : filteredIngredients.length > 0 ? (
                 filteredIngredients.map((ingredient) => {
-                  const selected =
-                    selectedIngredientId === ingredient.id;
+                  const selected = selectedIngredientId === ingredient.id;
 
                   return (
                     <button
                       key={ingredient.id}
                       type="button"
-                      onClick={() =>
-                        onIngredientChange(ingredient.id)
-                      }
+                      onClick={() => onIngredientChange(ingredient.id)}
                       disabled={isSubmitting}
                       className={`flex w-full items-center justify-between gap-3 border-b border-zinc-800/70 px-4 py-3 text-left transition last:border-b-0 disabled:opacity-50 ${
                         selected
@@ -198,9 +195,7 @@ export default function RecipeItemPopup({
                 })
               ) : (
                 <div className="px-4 py-8 text-center">
-                  <p className="text-xs text-zinc-600">
-                    No ingredients found.
-                  </p>
+                  <p className="text-xs text-zinc-600">No ingredients found.</p>
                 </div>
               )}
             </div>
@@ -208,9 +203,7 @@ export default function RecipeItemPopup({
             {selectedIngredient && (
               <p className="mt-2 text-[10px] text-zinc-600">
                 Selected:{" "}
-                <span className="text-zinc-400">
-                  {selectedIngredient.name}
-                </span>
+                <span className="text-zinc-400">{selectedIngredient.name}</span>
               </p>
             )}
           </div>
@@ -226,9 +219,7 @@ export default function RecipeItemPopup({
                 min="0"
                 step="0.001"
                 value={quantity}
-                onChange={(event) =>
-                  onQuantityChange(event.target.value)
-                }
+                onChange={(event) => onQuantityChange(event.target.value)}
                 placeholder="0.000"
                 disabled={isSubmitting}
                 className="h-11 min-w-0 flex-1 bg-transparent px-4 text-sm font-medium text-zinc-200 outline-none placeholder:text-zinc-700 disabled:opacity-50"
@@ -262,13 +253,9 @@ export default function RecipeItemPopup({
             }
             className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 px-4 py-2 text-xs font-semibold text-zinc-950 transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {isSubmitting && (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            )}
+            {isSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
 
-            {mode === "create"
-              ? "Add Ingredient"
-              : "Save Changes"}
+            {mode === "create" ? "Add Ingredient" : "Save Changes"}
           </button>
         </div>
       </div>

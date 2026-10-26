@@ -78,6 +78,16 @@ export class MenuItemService {
               modifierGroups: true,
             },
           },
+
+          // NEW: Get restaurants where the item is explicitly unavailable.
+          restaurantMenus: {
+            where: {
+              isAvailable: false,
+            },
+            select: {
+              restaurantId: true,
+            },
+          },
         },
 
         orderBy: {
@@ -99,7 +109,14 @@ export class MenuItemService {
 
       category: item.category,
 
+      // Counts all stored restaurant configuration records.
       configuredRestaurantCount: item._count.restaurantMenus,
+
+      // NEW: Contains only explicitly unavailable restaurant IDs.
+      unavailableRestaurantIds: item.restaurantMenus.map(
+        (restaurantMenu) => restaurantMenu.restaurantId,
+      ),
+
       recipeIngredientCount: item._count.recipe,
       modifierGroupCount: item._count.modifierGroups,
 
@@ -117,6 +134,7 @@ export class MenuItemService {
       },
     };
   }
+
   // ============================================================
   // GET MENU ITEM PRICES ACROSS ALL RESTAURANTS
   // GET /menu-items/:menuItemId/restaurants
@@ -201,6 +219,7 @@ export class MenuItemService {
     return item;
   }
   // GET MENU ITEMS BY CATEGORY
+
   async findByCategory(categoryId: string) {
     const menuItems = await this.prisma.menuItem.findMany({
       where: {
@@ -215,6 +234,16 @@ export class MenuItemService {
             restaurantMenus: true,
             recipe: true,
             modifierGroups: true,
+          },
+        },
+
+        // Get restaurants where the item is explicitly unavailable.
+        restaurantMenus: {
+          where: {
+            isAvailable: false,
+          },
+          select: {
+            restaurantId: true,
           },
         },
       },
@@ -235,7 +264,14 @@ export class MenuItemService {
 
       category: item.category,
 
+      // Total stored restaurant configuration records.
       configuredRestaurantCount: item._count.restaurantMenus,
+
+      // Explicit restaurant-level availability overrides.
+      unavailableRestaurantIds: item.restaurantMenus.map(
+        (restaurantMenu) => restaurantMenu.restaurantId,
+      ),
+
       recipeIngredientCount: item._count.recipe,
       modifierGroupCount: item._count.modifierGroups,
 
@@ -247,6 +283,7 @@ export class MenuItemService {
       data,
     };
   }
+
   // UPDATE
   async update(id: string, updateDto: UpdateMenuItemDto) {
     await this.findOne(id);

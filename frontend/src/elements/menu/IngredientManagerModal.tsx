@@ -63,41 +63,27 @@ export default function IngredientManagerModal({
     (state) => state.ingredientsRefreshing,
   );
 
-  const ingredientsError = useCatalogStore(
-    (state) => state.ingredientsError,
-  );
+  const ingredientsError = useCatalogStore((state) => state.ingredientsError);
 
-  const ingredientsPage = useCatalogStore(
-    (state) => state.ingredientsPage,
-  );
+  const ingredientsPage = useCatalogStore((state) => state.ingredientsPage);
 
-  const ingredientsLimit = useCatalogStore(
-    (state) => state.ingredientsLimit,
-  );
+  const ingredientsLimit = useCatalogStore((state) => state.ingredientsLimit);
 
-  const ingredientsTotal = useCatalogStore(
-    (state) => state.ingredientsTotal,
-  );
+  const ingredientsTotal = useCatalogStore((state) => state.ingredientsTotal);
 
   const ingredientsTotalPages = useCatalogStore(
     (state) => state.ingredientsTotalPages,
   );
 
-  const fetchIngredients = useCatalogStore(
-    (state) => state.fetchIngredients,
-  );
+  const fetchIngredients = useCatalogStore((state) => state.fetchIngredients);
 
   const refreshIngredients = useCatalogStore(
     (state) => state.refreshIngredients,
   );
 
-  const addIngredient = useCatalogStore(
-    (state) => state.addIngredient,
-  );
+  const addIngredient = useCatalogStore((state) => state.addIngredient);
 
-  const editIngredient = useCatalogStore(
-    (state) => state.editIngredient,
-  );
+  const editIngredient = useCatalogStore((state) => state.editIngredient);
 
   const deactivateIngredient = useCatalogStore(
     (state) => state.deactivateIngredient,
@@ -119,20 +105,19 @@ export default function IngredientManagerModal({
 
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  const [editingIngredientId, setEditingIngredientId] = useState<
-    string | null
-  >(null);
+  const [editingIngredientId, setEditingIngredientId] = useState<string | null>(
+    null,
+  );
 
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [actionIngredientId, setActionIngredientId] =
-    useState<string | null>(null);
-
-  const [localError, setLocalError] = useState<string | null>(
+  const [actionIngredientId, setActionIngredientId] = useState<string | null>(
     null,
   );
+
+  const [localError, setLocalError] = useState<string | null>(null);
 
   // ============================================================
   // LOAD INGREDIENTS
@@ -144,12 +129,7 @@ export default function IngredientManagerModal({
     }
 
     void fetchIngredients(1, ingredientsLimit);
-  }, [
-    isOpen,
-    ingredients.length,
-    ingredientsLimit,
-    fetchIngredients,
-  ]);
+  }, [isOpen, ingredients.length, ingredientsLimit, fetchIngredients]);
 
   // ============================================================
   // FILTER
@@ -166,10 +146,7 @@ export default function IngredientManagerModal({
       return (
         ingredient.name.toLowerCase().includes(query) ||
         ingredient.uom.toLowerCase().includes(query) ||
-        (ingredient.isActive
-          ? "active"
-          : "inactive"
-        ).includes(query)
+        (ingredient.isActive ? "active" : "inactive").includes(query)
       );
     });
   }, [ingredients, searchTerm]);
@@ -181,17 +158,12 @@ export default function IngredientManagerModal({
   const isEditing = editingIngredientId !== null;
 
   const firstVisibleRow =
-    ingredientsTotal === 0
-      ? 0
-      : (ingredientsPage - 1) * ingredientsLimit + 1;
+    ingredientsTotal === 0 ? 0 : (ingredientsPage - 1) * ingredientsLimit + 1;
 
   const lastVisibleRow =
     ingredientsTotal === 0
       ? 0
-      : Math.min(
-          ingredientsPage * ingredientsLimit,
-          ingredientsTotal,
-        );
+      : Math.min(ingredientsPage * ingredientsLimit, ingredientsTotal);
 
   const visibleError = localError ?? ingredientsError;
 
@@ -242,9 +214,7 @@ export default function IngredientManagerModal({
   // ============================================================
 
   const openEditForm = (ingredientId: string) => {
-    const ingredient = ingredients.find(
-      (item) => item.id === ingredientId,
-    );
+    const ingredient = ingredients.find((item) => item.id === ingredientId);
 
     if (!ingredient) {
       return;
@@ -268,9 +238,7 @@ export default function IngredientManagerModal({
   // CREATE / UPDATE
   // ============================================================
 
-  const handleSubmit = async (
-    event: FormEvent<HTMLFormElement>,
-  ) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const name = form.name.trim();
@@ -347,9 +315,7 @@ export default function IngredientManagerModal({
 
       onIngredientsChanged?.();
     } catch (error) {
-      const ingredient = ingredients.find(
-        (item) => item.id === ingredientId,
-      );
+      const ingredient = ingredients.find((item) => item.id === ingredientId);
 
       setLocalError(
         getErrorMessage(
@@ -396,12 +362,7 @@ export default function IngredientManagerModal({
 
       await refreshIngredients();
     } catch (error) {
-      setLocalError(
-        getErrorMessage(
-          error,
-          "Unable to refresh ingredients.",
-        ),
-      );
+      setLocalError(getErrorMessage(error, "Unable to refresh ingredients."));
     }
   };
 
@@ -466,9 +427,7 @@ export default function IngredientManagerModal({
                     Catalog
                   </span>
 
-                  <span className="text-zinc-800">
-                    /
-                  </span>
+                  <span className="text-zinc-800">/</span>
 
                   <span className="text-[9px] font-mono font-bold uppercase tracking-[0.22em] text-cyan-400/80">
                     Ingredients
@@ -486,8 +445,7 @@ export default function IngredientManagerModal({
                 </div>
 
                 <p className="mt-1 text-[10px] text-zinc-600">
-                  Central ingredient master for recipes and menu
-                  operations.
+                  Central ingredient master for recipes and menu operations.
                 </p>
               </div>
             </div>
@@ -512,9 +470,7 @@ export default function IngredientManagerModal({
               <input
                 type="text"
                 value={searchTerm}
-                onChange={(event) =>
-                  setSearchTerm(event.target.value)
-                }
+                onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Search ingredients..."
                 className="h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950/80 pl-9 pr-3 text-xs text-zinc-200 outline-none transition placeholder:text-zinc-600 focus:border-cyan-500/40 focus:bg-cyan-500/[0.02] focus:shadow-[0_0_22px_rgba(34,211,238,0.05)]"
               />
@@ -524,20 +480,14 @@ export default function IngredientManagerModal({
               <button
                 type="button"
                 onClick={handleRefresh}
-                disabled={
-                  ingredientsRefreshing ||
-                  ingredientsLoading
-                }
+                disabled={ingredientsRefreshing || ingredientsLoading}
                 className="inline-flex h-10 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950/80 px-3 text-xs font-bold text-zinc-400 transition hover:border-cyan-500/30 hover:bg-cyan-500/5 hover:text-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <RefreshCw
                   className={`h-3.5 w-3.5 ${
-                    ingredientsRefreshing
-                      ? "animate-spin"
-                      : ""
+                    ingredientsRefreshing ? "animate-spin" : ""
                   }`}
                 />
-
                 Refresh
               </button>
 
@@ -559,9 +509,7 @@ export default function IngredientManagerModal({
           {visibleError && (
             <div className="shrink-0 border-b border-red-500/10 bg-red-500/5 px-5 py-2.5">
               <div className="flex items-center justify-between gap-4">
-                <p className="text-xs text-red-400">
-                  {visibleError}
-                </p>
+                <p className="text-xs text-red-400">{visibleError}</p>
 
                 <button
                   type="button"
@@ -582,8 +530,7 @@ export default function IngredientManagerModal({
           ==================================================== */}
 
           <div className="min-h-0 flex-1 overflow-hidden">
-            {ingredientsLoading &&
-            ingredients.length === 0 ? (
+            {ingredientsLoading && ingredients.length === 0 ? (
               <div className="flex h-full items-center justify-center">
                 <div className="text-center">
                   <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10">
@@ -607,9 +554,7 @@ export default function IngredientManagerModal({
                     <span>Ingredient</span>
                     <span>UOM</span>
                     <span>Status</span>
-                    <span className="text-right">
-                      Actions
-                    </span>
+                    <span className="text-right">Actions</span>
                   </div>
 
                   {/* Empty */}
@@ -635,112 +580,103 @@ export default function IngredientManagerModal({
                     </div>
                   ) : (
                     <div>
-                      {filteredIngredients.map(
-                        (ingredient) => {
-                          const isActionLoading =
-                            actionIngredientId ===
-                            ingredient.id;
+                      {filteredIngredients.map((ingredient) => {
+                        const isActionLoading =
+                          actionIngredientId === ingredient.id;
 
-                          return (
-                            <div
-                              key={ingredient.id}
-                              className="group grid grid-cols-[minmax(0,1fr)_90px_105px_75px] items-center gap-3 border-b border-zinc-900/80 px-5 py-3 transition-all duration-200 hover:border-cyan-500/10 hover:bg-gradient-to-r hover:from-cyan-500/[0.025] hover:via-emerald-500/[0.02] hover:to-transparent"
-                            >
-                              {/* Name */}
-                              <div className="min-w-0">
-                                <p className="truncate text-xs font-semibold text-zinc-200 transition group-hover:text-white">
-                                  {ingredient.name}
-                                </p>
+                        return (
+                          <div
+                            key={ingredient.id}
+                            className="group grid grid-cols-[minmax(0,1fr)_90px_105px_75px] items-center gap-3 border-b border-zinc-900/80 px-5 py-3 transition-all duration-200 hover:border-cyan-500/10 hover:bg-gradient-to-r hover:from-cyan-500/[0.025] hover:via-emerald-500/[0.02] hover:to-transparent"
+                          >
+                            {/* Name */}
+                            <div className="min-w-0">
+                              <p className="truncate text-xs font-semibold text-zinc-200 transition group-hover:text-white">
+                                {ingredient.name}
+                              </p>
 
-                                <p className="mt-0.5 truncate font-mono text-[9px] text-zinc-700">
-                                  {ingredient.id}
-                                </p>
-                              </div>
+                              <p className="mt-0.5 truncate font-mono text-[9px] text-zinc-700">
+                                {ingredient.id}
+                              </p>
+                            </div>
 
-                              {/* UOM */}
-                              <div>
-                                <span className="inline-flex rounded-lg border border-violet-500/20 bg-violet-500/[0.08] px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-violet-300 shadow-[0_0_14px_rgba(139,92,246,0.04)]">
-                                  {ingredient.uom}
-                                </span>
-                              </div>
+                            {/* UOM */}
+                            <div>
+                              <span className="inline-flex rounded-lg border border-violet-500/20 bg-violet-500/[0.08] px-2 py-1 font-mono text-[9px] font-bold uppercase tracking-wider text-violet-300 shadow-[0_0_14px_rgba(139,92,246,0.04)]">
+                                {ingredient.uom}
+                              </span>
+                            </div>
 
-                              {/* Status */}
-                              <div>
+                            {/* Status */}
+                            <div>
+                              <span
+                                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                                  ingredient.isActive
+                                    ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
+                                    : "border-red-500/20 bg-red-500/10 text-red-400"
+                                }`}
+                              >
                                 <span
-                                  className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+                                  className={`relative h-1.5 w-1.5 rounded-full ${
                                     ingredient.isActive
-                                      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400"
-                                      : "border-red-500/20 bg-red-500/10 text-red-400"
+                                      ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
+                                      : "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.7)]"
                                   }`}
                                 >
                                   <span
-                                    className={`relative h-1.5 w-1.5 rounded-full ${
+                                    className={`absolute inset-0 animate-ping rounded-full opacity-75 ${
                                       ingredient.isActive
-                                        ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
-                                        : "bg-red-400 shadow-[0_0_8px_rgba(248,113,113,0.7)]"
+                                        ? "bg-emerald-400"
+                                        : "bg-red-400"
                                     }`}
-                                  >
-                                    <span
-                                      className={`absolute inset-0 animate-ping rounded-full opacity-75 ${
-                                        ingredient.isActive
-                                          ? "bg-emerald-400"
-                                          : "bg-red-400"
-                                      }`}
-                                    />
-                                  </span>
-
-                                  {ingredient.isActive
-                                    ? "Active"
-                                    : "Inactive"}
+                                  />
                                 </span>
-                              </div>
 
-                              {/* Actions */}
-                              <div className="flex items-center justify-end gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    openEditForm(
-                                      ingredient.id,
-                                    )
-                                  }
-                                  title="Edit ingredient"
-                                  className="flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-zinc-600 transition hover:border-cyan-500/20 hover:bg-cyan-500/10 hover:text-cyan-300"
-                                >
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    void handleToggleStatus(
-                                      ingredient.id,
-                                      ingredient.isActive,
-                                    )
-                                  }
-                                  disabled={isActionLoading}
-                                  title={
-                                    ingredient.isActive
-                                      ? "Deactivate ingredient"
-                                      : "Activate ingredient"
-                                  }
-                                  className={`flex h-8 w-8 items-center justify-center rounded-lg border border-transparent transition ${
-                                    ingredient.isActive
-                                      ? "text-zinc-600 hover:border-rose-500/20 hover:bg-rose-500/10 hover:text-rose-300"
-                                      : "text-zinc-600 hover:border-emerald-500/20 hover:bg-emerald-500/10 hover:text-emerald-300"
-                                  } disabled:cursor-not-allowed disabled:opacity-50`}
-                                >
-                                  {isActionLoading ? (
-                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <Power className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              </div>
+                                {ingredient.isActive ? "Active" : "Inactive"}
+                              </span>
                             </div>
-                          );
-                        },
-                      )}
+
+                            {/* Actions */}
+                            <div className="flex items-center justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => openEditForm(ingredient.id)}
+                                title="Edit ingredient"
+                                className="flex h-8 w-8 items-center justify-center rounded-lg border border-cyan-500/20 bg-cyan-500/10 text-cyan-400 shadow-sm transition hover:border-cyan-400/40 hover:bg-cyan-500/20 hover:text-cyan-300"
+                              >
+                                <Edit3 className="h-3.5 w-3.5" />
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleToggleStatus(
+                                    ingredient.id,
+                                    ingredient.isActive,
+                                  )
+                                }
+                                disabled={isActionLoading}
+                                title={
+                                  ingredient.isActive
+                                    ? "Deactivate ingredient"
+                                    : "Activate ingredient"
+                                }
+                                className={`flex h-8 w-8 items-center justify-center rounded-lg border shadow-sm transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                  ingredient.isActive
+                                    ? "border-rose-500/20 bg-rose-500/10 text-rose-400 hover:border-rose-400/40 hover:bg-rose-500/20 hover:text-rose-300"
+                                    : "border-emerald-500/20 bg-emerald-500/10 text-emerald-400 hover:border-emerald-400/40 hover:bg-emerald-500/20 hover:text-emerald-300"
+                                }`}
+                              >
+                                {isActionLoading ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                ) : (
+                                  <Power className="h-3.5 w-3.5" />
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
@@ -760,9 +696,7 @@ export default function IngredientManagerModal({
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-cyan-400">
-                            {isEditing
-                              ? "EDIT INGREDIENT"
-                              : "NEW INGREDIENT"}
+                            {isEditing ? "EDIT INGREDIENT" : "NEW INGREDIENT"}
                           </p>
 
                           <h3 className="mt-1 text-base font-bold text-white">
@@ -772,8 +706,8 @@ export default function IngredientManagerModal({
                           </h3>
 
                           <p className="mt-1 text-xs leading-5 text-zinc-600">
-                            Maintain the central ingredient
-                            master used by recipes.
+                            Maintain the central ingredient master used by
+                            recipes.
                           </p>
                         </div>
 
@@ -788,10 +722,7 @@ export default function IngredientManagerModal({
                       </div>
 
                       {/* Form */}
-                      <form
-                        onSubmit={handleSubmit}
-                        className="mt-7 space-y-5"
-                      >
+                      <form onSubmit={handleSubmit} className="mt-7 space-y-5">
                         {/* Name */}
                         <div>
                           <label
@@ -843,8 +774,8 @@ export default function IngredientManagerModal({
                           />
 
                           <p className="mt-2 text-[10px] text-zinc-700">
-                            Use the same unit consistently
-                            when defining recipes.
+                            Use the same unit consistently when defining
+                            recipes.
                           </p>
                         </div>
 
@@ -867,8 +798,8 @@ export default function IngredientManagerModal({
                               </div>
 
                               <p className="mt-1 text-[10px] text-zinc-600">
-                                Inactive ingredients cannot be
-                                used for new recipe entries.
+                                Inactive ingredients cannot be used for new
+                                recipe entries.
                               </p>
                             </div>
 
@@ -877,8 +808,7 @@ export default function IngredientManagerModal({
                               onClick={() =>
                                 setForm((current) => ({
                                   ...current,
-                                  isActive:
-                                    !current.isActive,
+                                  isActive: !current.isActive,
                                 }))
                               }
                               disabled={isSubmitting}
@@ -903,9 +833,7 @@ export default function IngredientManagerModal({
                         {/* Error */}
                         {localError && (
                           <div className="rounded-xl border border-red-500/15 bg-red-500/5 px-3 py-2.5">
-                            <p className="text-xs text-red-400">
-                              {localError}
-                            </p>
+                            <p className="text-xs text-red-400">{localError}</p>
                           </div>
                         )}
 
@@ -934,9 +862,7 @@ export default function IngredientManagerModal({
                               <>
                                 <Check className="h-3.5 w-3.5" />
 
-                                {isEditing
-                                  ? "Save Changes"
-                                  : "Create"}
+                                {isEditing ? "Save Changes" : "Create"}
                               </>
                             )}
                           </button>
@@ -955,9 +881,8 @@ export default function IngredientManagerModal({
                         </p>
 
                         <p className="mt-2 text-xs leading-5 text-zinc-600">
-                          Select an ingredient to edit it, or
-                          create a new ingredient from the
-                          registry.
+                          Select an ingredient to edit it, or create a new
+                          ingredient from the registry.
                         </p>
 
                         <button
@@ -966,7 +891,6 @@ export default function IngredientManagerModal({
                           className="mt-5 inline-flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 px-4 py-2.5 text-xs font-bold text-emerald-300 transition hover:border-emerald-400/35 hover:from-emerald-500/15 hover:to-cyan-500/15 hover:text-emerald-200"
                         >
                           <PackagePlus className="h-3.5 w-3.5" />
-
                           Add Ingredient
                         </button>
                       </div>
@@ -996,11 +920,7 @@ export default function IngredientManagerModal({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  void handlePageChange(
-                    ingredientsPage - 1,
-                  )
-                }
+                onClick={() => void handlePageChange(ingredientsPage - 1)}
                 disabled={
                   ingredientsPage <= 1 ||
                   ingredientsLoading ||
@@ -1012,32 +932,18 @@ export default function IngredientManagerModal({
               </button>
 
               <div className="rounded-lg border border-cyan-500/15 bg-cyan-500/[0.05] px-3 py-1.5 font-mono text-[10px] text-zinc-500">
-                <span className="text-cyan-300">
-                  {ingredientsPage}
-                </span>
+                <span className="text-cyan-300">{ingredientsPage}</span>
 
-                <span className="mx-1 text-zinc-700">
-                  /
-                </span>
+                <span className="mx-1 text-zinc-700">/</span>
 
-                <span>
-                  {Math.max(
-                    ingredientsTotalPages,
-                    1,
-                  )}
-                </span>
+                <span>{Math.max(ingredientsTotalPages, 1)}</span>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  void handlePageChange(
-                    ingredientsPage + 1,
-                  )
-                }
+                onClick={() => void handlePageChange(ingredientsPage + 1)}
                 disabled={
-                  ingredientsPage >=
-                    ingredientsTotalPages ||
+                  ingredientsPage >= ingredientsTotalPages ||
                   ingredientsLoading ||
                   ingredientsRefreshing
                 }
