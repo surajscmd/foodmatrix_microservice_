@@ -1,13 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 
 import { navigation } from "@/utils/navigation";
-import type { User } from "@/utils/types";
 
 export default function DashboardShell({
   children,
@@ -17,32 +16,23 @@ export default function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const pathname = usePathname();
+  const router = useRouter();
 
   const currentPage = navigation
     .flatMap((section) => section.items)
     .find((item) => item.href === pathname);
 
-  const user: User = {
-    id: "USR-001",
-    name: "Suraj S",
-    email: "suraj@foodmatrix.com",
-    role: "Store Manager",
-    avatar: "https://i.pravatar.cc/100",
-  };
-
   return (
-    <div className="min-h-screen flex bg-[#070914] text-slate-100">
+    <div className="flex min-h-screen bg-[#070914] text-slate-100">
       <Sidebar
-        user={user}
         navigation={navigation}
         sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        onLogout={() => console.log("logout")}
+        onToggleSidebar={() => setSidebarOpen((open) => !open)}
         portal="edge"
       />
 
       <div
-        className={`flex flex-1 flex-col transition-all duration-300 ${
+        className={`flex min-w-0 flex-1 flex-col transition-all duration-300 ${
           sidebarOpen ? "ml-64" : "ml-0"
         }`}
       >
@@ -50,7 +40,7 @@ export default function DashboardShell({
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen((v) => !v)}
           alertsCount={3}
-          onOpenAlerts={() => console.log("Open alerts")}
+          onOpenAlerts={() => router.push("/restaurant/alerts")}
           portal="edge"
           title={currentPage?.header.title ?? "FoodMatrix"}
           subtitle={

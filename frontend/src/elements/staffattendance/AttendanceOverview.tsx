@@ -120,7 +120,7 @@ function MetricCard({
   };
 
   return (
-    <div className="bg-zinc-900/40 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between">
+    <div className="bg-zinc-950/80 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between">
       <div className="space-y-1">
         <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
           {title}

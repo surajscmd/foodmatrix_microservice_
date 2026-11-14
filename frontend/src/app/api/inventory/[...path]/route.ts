@@ -4,8 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 export const runtime = "nodejs";
 
 const API_URL = (
-  process.env.FOODMATRIX_API_URL ??
-  "http://localhost:8000"
+  process.env.FOODMATRIX_API_URL ?? "http://localhost:8000"
 ).replace(/\/+$/, "");
 
 type RouteContext = {
@@ -33,10 +32,7 @@ async function proxyRequest(
       !path.length ||
       path.some(
         (part) =>
-          !part ||
-          part === "." ||
-          part === ".." ||
-          /[/\\?#]/.test(part),
+          !part || part === "." || part === ".." || /[/\\?#]/.test(part),
       )
     ) {
       return NextResponse.json(
@@ -95,9 +91,7 @@ async function proxyRequest(
       {
         headers: {
           Cookie: cookie,
-          Origin:
-            request.headers.get("origin") ??
-            request.nextUrl.origin,
+          Origin: request.headers.get("origin") ?? request.nextUrl.origin,
         },
         timeout: 15_000,
         maxRedirects: 0,
@@ -115,8 +109,7 @@ async function proxyRequest(
     ) {
       return NextResponse.json(
         {
-          message:
-            "Unable to authenticate request. Please sign in again.",
+          message: "Unable to authenticate request. Please sign in again.",
         },
         {
           status: 401,
@@ -131,13 +124,9 @@ async function proxyRequest(
     // the request to Inventory Service on port 3006.
     // --------------------------------------------------
 
-    const pathName = path
-      .map((part) => encodeURIComponent(part))
-      .join("/");
+    const pathName = path.map((part) => encodeURIComponent(part)).join("/");
 
-    const targetUrl = new URL(
-      `${API_URL}/api/inventory/${pathName}`,
-    );
+    const targetUrl = new URL(`${API_URL}/api/inventory/${pathName}`);
 
     targetUrl.search = request.nextUrl.search;
 
@@ -150,8 +139,15 @@ async function proxyRequest(
       Authorization: `Bearer ${token}`,
     });
 
-    const contentType =
-      request.headers.get("content-type");
+    // Stock-request actions resolve warehouse scope from the authenticated session.
+    if (
+      path[0] === "stock-requests" &&
+      ["POST", "PATCH", "DELETE"].includes(request.method)
+    ) {
+      headers.set("Cookie", cookie);
+    }
+
+    const contentType = request.headers.get("content-type");
 
     if (contentType) {
       headers.set("Content-Type", contentType);
@@ -163,10 +159,7 @@ async function proxyRequest(
 
     let body: string | undefined;
 
-    if (
-      request.method !== "GET" &&
-      request.method !== "HEAD"
-    ) {
+    if (request.method !== "GET" && request.method !== "HEAD") {
       const requestBody = await request.text();
 
       if (requestBody) {
@@ -195,41 +188,30 @@ async function proxyRequest(
       "Cache-Control": "no-store",
     });
 
-    const responseContentType =
-      response.headers.get("content-type");
+    const responseContentType = response.headers.get("content-type");
 
     if (responseContentType) {
-      responseHeaders.set(
-        "Content-Type",
-        responseContentType,
-      );
+      responseHeaders.set("Content-Type", responseContentType);
     }
 
-    const requestId =
-      response.headers.get("Kong-Request-ID");
+    const requestId = response.headers.get("Kong-Request-ID");
 
     if (requestId) {
       responseHeaders.set("Kong-Request-ID", requestId);
     }
 
     const hasNoBody =
-      request.method === "HEAD" ||
-      [204, 205, 304].includes(response.status);
+      request.method === "HEAD" || [204, 205, 304].includes(response.status);
 
-    return new NextResponse(
-      hasNoBody ? null : await response.arrayBuffer(),
-      {
-        status: response.status,
-        headers: responseHeaders,
-      },
-    );
+    return new NextResponse(hasNoBody ? null : await response.arrayBuffer(), {
+      status: response.status,
+      headers: responseHeaders,
+    });
   } catch (error: unknown) {
     const isTimeout =
       (axios.isAxiosError(error) &&
-        (error.code === "ECONNABORTED" ||
-          error.code === "ETIMEDOUT")) ||
-      (error instanceof Error &&
-        error.name === "TimeoutError");
+        (error.code === "ECONNABORTED" || error.code === "ETIMEDOUT")) ||
+      (error instanceof Error && error.name === "TimeoutError");
 
     // Avoid logging session cookies, JWTs, or Axios configs.
     console.error(

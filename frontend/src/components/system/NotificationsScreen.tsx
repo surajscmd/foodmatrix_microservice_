@@ -124,7 +124,7 @@ export default function NotificationsScreen({
       {/* KPI CARDS */}
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Total Signals
@@ -140,7 +140,7 @@ export default function NotificationsScreen({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Unread
@@ -154,7 +154,7 @@ export default function NotificationsScreen({
           <p className="mt-1 text-xs text-zinc-500">Awaiting acknowledgement</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Critical
@@ -170,7 +170,7 @@ export default function NotificationsScreen({
           <p className="mt-1 text-xs text-zinc-500">High priority incidents</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Alert Events
@@ -189,17 +189,19 @@ export default function NotificationsScreen({
 
       {/* FILTER BAR */}
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap gap-2">
             {filters.map((filter) => (
               <button
                 key={filter.key}
+                type="button"
+                aria-pressed={activeFilter === filter.key}
                 onClick={() => setActiveFilter(filter.key)}
-                className={`rounded-xl px-4 py-2 text-xs font-semibold transition cursor-pointer ${
+                className={`cursor-pointer rounded-xl border px-3 py-1.5 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                   activeFilter === filter.key
-                    ? "bg-emerald-500 text-black"
-                    : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700"
+                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-300"
+                    : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
                 }`}
               >
                 {filter.label}
@@ -230,7 +232,7 @@ export default function NotificationsScreen({
       {/* Notification List starts below */}
       {/* NOTIFICATION LIST */}
 
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/40">
+      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
         {filteredNotifications.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24">
             <div className="flex h-20 w-20 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10">
@@ -259,12 +261,12 @@ export default function NotificationsScreen({
                   <div className="absolute left-0 top-0 h-full w-1 rounded-r-full bg-emerald-500" />
                 )}
 
-                <div className="flex flex-col gap-5 p-6 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
                   {/* LEFT */}
 
                   <div className="flex flex-1 gap-4">
                     <div
-                      className={`mt-1 flex h-12 w-12 items-center justify-center rounded-xl ${
+                      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${
                         typeStyles[notification.type]
                       }`}
                     >
@@ -273,7 +275,7 @@ export default function NotificationsScreen({
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-base font-semibold text-white">
+                        <h3 className="text-sm font-semibold text-zinc-200">
                           {notification.title}
                         </h3>
 
@@ -285,11 +287,11 @@ export default function NotificationsScreen({
                         )}
                       </div>
 
-                      <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-400">
+                      <p className="mt-1 max-w-4xl text-xs leading-5 text-zinc-400">
                         {notification.message}
                       </p>
 
-                      <div className="mt-5 flex flex-wrap gap-2">
+                      <div className="mt-3 flex flex-wrap gap-2">
                         <span
                           className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
                             priorityStyles[notification.priority]

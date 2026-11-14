@@ -26,7 +26,9 @@ export default function Sidebar({
   portal = "edge",
 }: SidebarProps) {
   const router = useRouter();
-
+  const clearOrganization = useOrganizationStore(
+    (state) => state.clearOrganization,
+  );
   const currentUser = useOrganizationStore((state) => state.currentUser);
 
   const handleLogout = async () => {
@@ -41,8 +43,9 @@ export default function Sidebar({
 
       console.log("Logout successful:", response.status);
 
-      router.replace("/login");
-      router.refresh();
+    clearOrganization();
+router.replace("/login");
+router.refresh();
     } catch (error) {
       console.error("Logout failed:", error);
 

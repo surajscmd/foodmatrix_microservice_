@@ -1,3 +1,5 @@
+import { getRestaurant } from "@/lib/organization-api";
+
 import type {
   AdjustmentResult,
   AdjustStockInput,
@@ -8,6 +10,7 @@ import type {
   CreateStockRequestInput,
   CreateWasteInput,
   DeleteStockRequestResult,
+  InventoryRestaurant,
   MovementQuery,
   PageQuery,
   PaginatedResult,
@@ -30,12 +33,15 @@ import type {
   WasteResult,
 } from "@/utils/types/inventory";
 
-// Re-export types so components can import from this file.
 export type * from "@/utils/types/inventory";
 
 const API_BASE = "/api/inventory";
 
 type HttpMethod = "GET" | "POST" | "PATCH" | "DELETE";
+
+// ======================================================
+// ERRORS
+// ======================================================
 
 export class InventoryApiError extends Error {
   readonly status: number;
@@ -47,7 +53,15 @@ export class InventoryApiError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function stockRequestError(error: unknown): string {
+  return error instanceof Error
+    ? error.message
+    : "Unable to process this stock request.";
+}
+
+function isRecord(
+  value: unknown,
+): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
@@ -62,7 +76,7 @@ function errorMessage(body: unknown, status: number): string {
         (value): value is string => typeof value === "string",
       );
 
-      if (messages.length) {
+      if (messages.length > 0) {
         return messages.join(", ");
       }
     }
@@ -71,11 +85,19 @@ function errorMessage(body: unknown, status: number): string {
   return `Inventory request failed (${status})`;
 }
 
+// ======================================================
+// REQUEST HELPERS
+// ======================================================
+
 function queryString(query: object = {}): string {
   const params = new URLSearchParams();
 
   for (const [key, value] of Object.entries(query)) {
-    if (value !== undefined && value !== null && value !== "") {
+    if (
+      value !== undefined &&
+      value !== null &&
+      value !== ""
+    ) {
       params.set(key, String(value));
     }
   }
@@ -86,11 +108,17 @@ function queryString(query: object = {}): string {
 }
 
 function segment(value: string): string {
-  if (!value.trim()) {
-    throw new Error("A required inventory ID is missing");
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error("A required inventory ID is missing.");
   }
 
-  return encodeURIComponent(value);
+  return encodeURIComponent(value.trim());
+}
+
+function checkAborted(options?: RequestOptions): void {
+  if (options?.signal?.aborted) {
+    throw new DOMException("Request aborted", "AbortError");
+  }
 }
 
 async function request<T>(
@@ -99,6 +127,8 @@ async function request<T>(
   body?: unknown,
   options: RequestOptions = {},
 ): Promise<T> {
+  checkAborted(options);
+
   const response = await fetch(`${API_BASE}/${path}`, {
     method,
     credentials: "same-origin",
@@ -106,9 +136,13 @@ async function request<T>(
     signal: options.signal,
     headers: {
       Accept: "application/json",
-      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...(body !== undefined
+        ? { "Content-Type": "application/json" }
+        : {}),
     },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined
+      ? { body: JSON.stringify(body) }
+      : {}),
   });
 
   const text = await response.text();
@@ -120,7 +154,7 @@ async function request<T>(
     } catch {
       throw new InventoryApiError(
         response.ok
-          ? "Inventory Service returned invalid JSON"
+          ? "Inventory Service returned invalid JSON."
           : `Inventory request failed (${response.status})`,
         response.status,
       );
@@ -136,7 +170,7 @@ async function request<T>(
 
   if (payload === null) {
     throw new InventoryApiError(
-      "Inventory Service returned an empty response",
+      "Inventory Service returned an empty response.",
       response.status,
     );
   }
@@ -144,7 +178,10 @@ async function request<T>(
   return payload as T;
 }
 
-async function getData<T>(path: string, options?: RequestOptions): Promise<T> {
+async function getData<T>(
+  path: string,
+  options?: RequestOptions,
+): Promise<T> {
   const response = await request<ApiResponse<T>>(
     path,
     "GET",
@@ -160,57 +197,201 @@ async function mutate<T>(
   body?: unknown,
   method: "POST" | "PATCH" = "POST",
 ): Promise<T> {
-  const response = await request<ApiResponse<T>>(path, method, body);
+  const response = await request<ApiResponse<T>>(
+    path,
+    method,
+    body,
+  );
 
   return response.data;
 }
 
 // ======================================================
-// WAREHOUSE STOCK — 5 ROUTES
+// RESTAURANT LOOKUPS
+// Shared by stock requests and transfers.
+// Each unique restaurant is fetched once per enrichment call.
+// ======================================================
+
+async function fetchRestaurantMap(
+  ids: string[],
+  options?: RequestOptions,
+): Promise<Map<string, InventoryRestaurant>> {
+  checkAborted(options);
+
+  const restaurantIds = [...new Set(ids.filter(Boolean))];
+
+  const results = await Promise.allSettled(
+    restaurantIds.map(
+      async (id): Promise<InventoryRestaurant> => {
+        const restaurant = await getRestaurant(id);
+
+        if (
+          typeof restaurant?.name !== "string" ||
+          !restaurant.name.trim()
+        ) {
+          throw new Error(
+            `Organization Service returned no name for restaurant ${id}.`,
+          );
+        }
+
+        return {
+          id,
+          name: restaurant.name,
+        };
+      },
+    ),
+  );
+
+  checkAborted(options);
+
+  const restaurants = new Map<string, InventoryRestaurant>();
+
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      restaurants.set(result.value.id, result.value);
+    } else {
+      console.error(
+        "Restaurant lookup failed:",
+        restaurantIds[index],
+        result.reason,
+      );
+    }
+  });
+
+  return restaurants;
+}
+
+// ======================================================
+// STOCK REQUEST ENRICHMENT
+// ======================================================
+
+async function enrichRequestRestaurants(
+  requests: StockRequest[],
+  options?: RequestOptions,
+): Promise<StockRequest[]> {
+  const restaurants = await fetchRestaurantMap(
+    requests.map((item) => item.restaurantId),
+    options,
+  );
+
+  return requests.map((item) => ({
+    ...item,
+    restaurant:
+      restaurants.get(item.restaurantId) ??
+      item.restaurant ??
+      null,
+  }));
+}
+
+async function getEnrichedRequestPage(
+  path: string,
+  options?: RequestOptions,
+): Promise<PaginatedResult<StockRequest>> {
+  const result = await getData<
+    PaginatedResult<StockRequest>
+  >(path, options);
+
+  if (
+    !Array.isArray(result?.data) ||
+    !result.pagination ||
+    !Number.isInteger(result.pagination.totalPages) ||
+    result.pagination.totalPages < 0
+  ) {
+    throw new Error("Invalid stock request list response.");
+  }
+
+  return {
+    ...result,
+    data: await enrichRequestRestaurants(
+      result.data,
+      options,
+    ),
+  };
+}
+
+// ======================================================
+// TRANSFER ENRICHMENT
+// ======================================================
+
+async function enrichTransferRestaurants(
+  transfers: StockTransfer[],
+  options?: RequestOptions,
+): Promise<StockTransfer[]> {
+  const restaurants = await fetchRestaurantMap(
+    transfers.map((item) => item.toRestaurantId),
+    options,
+  );
+
+  return transfers.map((item) => ({
+    ...item,
+    restaurant:
+      restaurants.get(item.toRestaurantId) ??
+      item.restaurant ??
+      null,
+  }));
+}
+
+async function getEnrichedTransferPage(
+  path: string,
+  options?: RequestOptions,
+): Promise<PaginatedResult<StockTransfer>> {
+  const result = await getData<
+    PaginatedResult<StockTransfer>
+  >(path, options);
+
+  if (
+    !Array.isArray(result?.data) ||
+    !result.pagination ||
+    !Number.isInteger(result.pagination.totalPages) ||
+    result.pagination.totalPages < 0
+  ) {
+    throw new Error("Invalid stock transfer list response.");
+  }
+
+  return {
+    ...result,
+    data: await enrichTransferRestaurants(
+      result.data,
+      options,
+    ),
+  };
+}
+
+// ======================================================
+// WAREHOUSE STOCK
 // ======================================================
 
 export async function getWarehouseStocks(
   warehouseId: string,
   query: PageQuery = {},
-  options: RequestOptions = {},
+  options?: RequestOptions,
 ): Promise<PaginatedResult<WarehouseStockView>> {
-  const params = new URLSearchParams({
-    page: String(query.page ?? 1),
-    limit: String(query.limit ?? 10),
-  });
-
-  const response = await fetch(
-    `/api/inventory/warehouse-stock/warehouse/${encodeURIComponent(
-      warehouseId,
-    )}?${params}`,
-    {
-      credentials: "same-origin",
-      cache: "no-store",
-      signal: options.signal,
-    },
+  // Warehouse stock returns pagination at the top level.
+  const result = await request<
+    PaginatedResult<WarehouseStockView>
+  >(
+    `warehouse-stock/warehouse/${segment(warehouseId)}` +
+      queryString({
+        page: query.page ?? 1,
+        limit: query.limit ?? 10,
+      }),
+    "GET",
+    undefined,
+    options,
   );
 
-  const body = await response.json();
-
-  if (!response.ok) {
-    throw new Error(
-      typeof body.message === "string"
-        ? body.message
-        : "Failed to fetch warehouse stock",
-    );
-  }
-
   return {
-    data: body.data,
-    pagination: body.pagination,
+    data: result.data,
+    pagination: result.pagination,
   };
 }
+
 export function getWarehouseIngredientStock(
   warehouseId: string,
   ingredientId: string,
   options?: RequestOptions,
 ): Promise<WarehouseStockView> {
-  return getData(
+  return getData<WarehouseStockView>(
     `warehouse-stock/warehouse/${segment(
       warehouseId,
     )}/ingredient/${segment(ingredientId)}`,
@@ -221,7 +402,10 @@ export function getWarehouseIngredientStock(
 export function receiveWarehouseStock(
   input: ReceiveStockInput,
 ): Promise<WarehouseStock> {
-  return mutate("warehouse-stock/receive", input);
+  return mutate<WarehouseStock>(
+    "warehouse-stock/receive",
+    input,
+  );
 }
 
 export function bulkReceiveWarehouseStock(
@@ -232,7 +416,12 @@ export function bulkReceiveWarehouseStock(
     stockMovement: AdjustmentResult<WarehouseStock>["stockMovement"];
   }[]
 > {
-  return mutate("warehouse-stock/receive/bulk", input);
+  return mutate<
+    {
+      stock: WarehouseStock;
+      stockMovement: AdjustmentResult<WarehouseStock>["stockMovement"];
+    }[]
+  >("warehouse-stock/receive/bulk", input);
 }
 
 export function adjustWarehouseStock(
@@ -240,14 +429,30 @@ export function adjustWarehouseStock(
   ingredientId: string,
   input: AdjustStockInput,
 ): Promise<AdjustmentResult<WarehouseStock>> {
-  return mutate(
-    `warehouse-stock/${segment(warehouseId)}/${segment(ingredientId)}/adjust`,
+  return mutate<AdjustmentResult<WarehouseStock>>(
+    `warehouse-stock/${segment(warehouseId)}/${segment(
+      ingredientId,
+    )}/adjust`,
     input,
   );
 }
 
+export async function deleteWarehouseStockRecord(
+  warehouseId: string,
+  ingredientId: string,
+  reason: string,
+): Promise<void> {
+  await request<unknown>(
+    `warehouse-stock/${segment(warehouseId)}/${segment(
+      ingredientId,
+    )}`,
+    "DELETE",
+    { reason },
+  );
+}
+
 // ======================================================
-// RESTAURANT STOCK — 4 ROUTES
+// RESTAURANT STOCK
 // ======================================================
 
 export function getRestaurantStocks(
@@ -255,8 +460,9 @@ export function getRestaurantStocks(
   query: PageQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<RestaurantStockView>> {
-  return request(
-    `restaurant-stock/${segment(restaurantId)}` + queryString(query),
+  return request<PaginatedResult<RestaurantStockView>>(
+    `restaurant-stock/${segment(restaurantId)}` +
+      queryString(query),
     "GET",
     undefined,
     options,
@@ -268,8 +474,9 @@ export function getRestaurantLowStock(
   query: PageQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<RestaurantStockView>> {
-  return request(
-    `restaurant-stock/${segment(restaurantId)}/low-stock` + queryString(query),
+  return request<PaginatedResult<RestaurantStockView>>(
+    `restaurant-stock/${segment(restaurantId)}/low-stock` +
+      queryString(query),
     "GET",
     undefined,
     options,
@@ -281,8 +488,10 @@ export function getRestaurantIngredientStock(
   ingredientId: string,
   options?: RequestOptions,
 ): Promise<RestaurantStockView> {
-  return getData(
-    `restaurant-stock/${segment(restaurantId)}/${segment(ingredientId)}`,
+  return getData<RestaurantStockView>(
+    `restaurant-stock/${segment(restaurantId)}/${segment(
+      ingredientId,
+    )}`,
     options,
   );
 }
@@ -292,21 +501,26 @@ export function adjustRestaurantStock(
   ingredientId: string,
   input: AdjustStockInput,
 ): Promise<AdjustmentResult<RestaurantStock>> {
-  return mutate(
-    `restaurant-stock/${segment(restaurantId)}/${segment(ingredientId)}/adjust`,
+  return mutate<AdjustmentResult<RestaurantStock>>(
+    `restaurant-stock/${segment(restaurantId)}/${segment(
+      ingredientId,
+    )}/adjust`,
     input,
   );
 }
 
 // ======================================================
-// STOCK MOVEMENTS — 3 ROUTES
+// STOCK MOVEMENTS
 // ======================================================
 
 export function getStockMovements(
   query: MovementQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockMovementView>> {
-  return getData(`stock-movements${queryString(query)}`, options);
+  return getData<PaginatedResult<StockMovementView>>(
+    `stock-movements${queryString(query)}`,
+    options,
+  );
 }
 
 export function getRestaurantStockMovements(
@@ -314,8 +528,9 @@ export function getRestaurantStockMovements(
   query: MovementQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockMovementView>> {
-  return getData(
-    `stock-movements/restaurant/${segment(restaurantId)}` + queryString(query),
+  return getData<PaginatedResult<StockMovementView>>(
+    `stock-movements/restaurant/${segment(restaurantId)}` +
+      queryString(query),
     options,
   );
 }
@@ -325,34 +540,48 @@ export function getWarehouseStockMovements(
   query: MovementQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockMovementView>> {
-  return getData(
-    `stock-movements/warehouse/${segment(warehouseId)}` + queryString(query),
+  return getData<PaginatedResult<StockMovementView>>(
+    `stock-movements/warehouse/${segment(warehouseId)}` +
+      queryString(query),
     options,
   );
 }
 
 // ======================================================
-// STOCK REQUESTS — 12 ROUTES
+// STOCK REQUESTS — CREATE / LIST / DETAILS
 // ======================================================
 
 export function createStockRequest(
   input: CreateStockRequestInput,
 ): Promise<StockRequest> {
-  return mutate("stock-requests", input);
+  return mutate<StockRequest>("stock-requests", input);
 }
 
 export function getStockRequests(
   query: RequestQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockRequest>> {
-  return getData(`stock-requests${queryString(query)}`, options);
+  return getEnrichedRequestPage(
+    `stock-requests${queryString(query)}`,
+    options,
+  );
 }
 
-export function getStockRequest(
+export async function getStockRequest(
   requestId: string,
   options?: RequestOptions,
 ): Promise<StockRequest> {
-  return getData(`stock-requests/${segment(requestId)}`, options);
+  const stockRequest = await getData<StockRequest>(
+    `stock-requests/${segment(requestId)}`,
+    options,
+  );
+
+  const [enriched] = await enrichRequestRestaurants(
+    [stockRequest],
+    options,
+  );
+
+  return enriched ?? stockRequest;
 }
 
 export function getRestaurantStockRequests(
@@ -360,8 +589,9 @@ export function getRestaurantStockRequests(
   query: RequestQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockRequest>> {
-  return getData(
-    `stock-requests/restaurant/${segment(restaurantId)}` + queryString(query),
+  return getEnrichedRequestPage(
+    `stock-requests/restaurant/${segment(restaurantId)}` +
+      queryString(query),
     options,
   );
 }
@@ -371,17 +601,26 @@ export function getWarehouseStockRequests(
   query: RequestQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockRequest>> {
-  return getData(
-    `stock-requests/warehouse/${segment(warehouseId)}` + queryString(query),
+  return getEnrichedRequestPage(
+    `stock-requests/warehouse/${segment(warehouseId)}` +
+      queryString(query),
     options,
   );
 }
+
+// ======================================================
+// STOCK REQUESTS — ACTIONS
+// ======================================================
 
 export function updateStockRequest(
   requestId: string,
   input: UpdateStockRequestInput,
 ): Promise<StockRequest | null> {
-  return mutate(`stock-requests/${segment(requestId)}`, input, "PATCH");
+  return mutate<StockRequest | null>(
+    `stock-requests/${segment(requestId)}`,
+    input,
+    "PATCH",
+  );
 }
 
 export function deleteStockRequest(
@@ -389,9 +628,11 @@ export function deleteStockRequest(
   restaurantId: string,
   userId: string,
 ): Promise<DeleteStockRequestResult> {
-  // This endpoint has no outer { message, data } envelope.
-  return request(
-    `stock-requests/${segment(requestId)}/restaurant/${segment(restaurantId)}` +
+  // This endpoint returns its result without a data envelope.
+  return request<DeleteStockRequestResult>(
+    `stock-requests/${segment(
+      requestId,
+    )}/restaurant/${segment(restaurantId)}` +
       queryString({ userId }),
     "DELETE",
   );
@@ -400,29 +641,39 @@ export function deleteStockRequest(
 export function cancelStockRequest(
   requestId: string,
 ): Promise<StockRequest | null> {
-  return mutate(`stock-requests/${segment(requestId)}/cancel`);
+  return mutate<StockRequest | null>(
+    `stock-requests/${segment(requestId)}/cancel`,
+  );
 }
 
 export function approveStockRequest(
   requestId: string,
   input: ApproveStockRequestInput,
 ): Promise<StockTransfer> {
-  // Backend returns the newly created transfer.
-  return mutate(`stock-requests/${segment(requestId)}/approve`, input);
+  // Approval returns the newly created transfer.
+  return mutate<StockTransfer>(
+    `stock-requests/${segment(requestId)}/approve`,
+    input,
+  );
 }
 
 export function rejectStockRequest(
   requestId: string,
   reason: string,
 ): Promise<StockRequest | null> {
-  return mutate(`stock-requests/${segment(requestId)}/reject`, { reason });
+  return mutate<StockRequest | null>(
+    `stock-requests/${segment(requestId)}/reject`,
+    { reason },
+  );
 }
 
 export function createStockRequestFromLowStock(
   restaurantId: string,
 ): Promise<StockRequest> {
-  return mutate(
-    `stock-requests/restaurant/${segment(restaurantId)}/from-low-stock`,
+  return mutate<StockRequest>(
+    `stock-requests/restaurant/${segment(
+      restaurantId,
+    )}/from-low-stock`,
   );
 }
 
@@ -431,7 +682,7 @@ export function getStockRequestLowStock(
   query: PageQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<RestaurantStockView>> {
-  return getData(
+  return getData<PaginatedResult<RestaurantStockView>>(
     `stock-requests/restaurant/${segment(
       restaurantId,
     )}/low-stock${queryString(query)}`,
@@ -440,7 +691,7 @@ export function getStockRequestLowStock(
 }
 
 // ======================================================
-// STOCK TRANSFERS — 10 ROUTES
+// TRANSFERS — LISTS
 // ======================================================
 
 export function getWarehouseTransfers(
@@ -448,8 +699,9 @@ export function getWarehouseTransfers(
   query: TransferQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockTransfer>> {
-  return getData(
-    `stock-transfers/warehouse/${segment(warehouseId)}` + queryString(query),
+  return getEnrichedTransferPage(
+    `stock-transfers/warehouse/${segment(warehouseId)}` +
+      queryString(query),
     options,
   );
 }
@@ -459,73 +711,126 @@ export function getRestaurantTransfers(
   query: TransferQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<StockTransfer>> {
-  return getData(
-    `stock-transfers/restaurant/${segment(restaurantId)}` + queryString(query),
+  return getEnrichedTransferPage(
+    `stock-transfers/restaurant/${segment(restaurantId)}` +
+      queryString(query),
     options,
   );
 }
 
-export function getStockTransfer(
+// ======================================================
+// TRANSFER DETAILS
+// Returns items, shipment, discrepancies, request relations,
+// and the destination restaurant name.
+// ======================================================
+
+export async function getStockTransfer(
   transferId: string,
   options?: RequestOptions,
 ): Promise<StockTransfer> {
-  return getData(`stock-transfers/${segment(transferId)}`, options);
+  const transfer = await getData<StockTransfer>(
+    `stock-transfers/${segment(transferId)}`,
+    options,
+  );
+
+  const [enriched] = await enrichTransferRestaurants(
+    [transfer],
+    options,
+  );
+
+  return enriched ?? transfer;
 }
+
+// ======================================================
+// TRANSFERS — WAREHOUSE PREPARATION
+// ======================================================
 
 export function startTransferPicking(
   transferId: string,
 ): Promise<StockTransfer | null> {
-  return mutate(`stock-transfers/${segment(transferId)}/start-picking`);
+  return mutate<StockTransfer | null>(
+    `stock-transfers/${segment(transferId)}/start-picking`,
+  );
 }
 
 export function markTransferReadyToShip(
   transferId: string,
 ): Promise<StockTransfer | null> {
-  return mutate(`stock-transfers/${segment(transferId)}/ready-to-ship`);
+  return mutate<StockTransfer | null>(
+    `stock-transfers/${segment(transferId)}/ready-to-ship`,
+  );
 }
+
+// ======================================================
+// TRANSFERS — SHIPMENT / DISPATCH
+// ======================================================
 
 export function createTransferShipment(
   transferId: string,
   input: CreateShipmentInput,
 ): Promise<Shipment> {
-  return mutate(`stock-transfers/${segment(transferId)}/shipment`, input);
+  return mutate<Shipment>(
+    `stock-transfers/${segment(transferId)}/shipment`,
+    input,
+  );
 }
 
 export function shipStockTransfer(
   transferId: string,
   input: ShipTransferInput,
 ): Promise<StockTransfer> {
-  return mutate(`stock-transfers/${segment(transferId)}/ship`, input);
+  return mutate<StockTransfer>(
+    `stock-transfers/${segment(transferId)}/ship`,
+    input,
+  );
 }
 
 export function markTransferInTransit(
   transferId: string,
 ): Promise<StockTransfer | null> {
-  return mutate(`stock-transfers/${segment(transferId)}/in-transit`);
+  return mutate<StockTransfer | null>(
+    `stock-transfers/${segment(transferId)}/in-transit`,
+  );
 }
+
+// ======================================================
+// TRANSFERS — RESTAURANT RECEIPT
+// ======================================================
 
 export function receiveStockTransfer(
   transferId: string,
   input: ReceiveTransferInput,
 ): Promise<StockTransfer> {
-  return mutate(`stock-transfers/${segment(transferId)}/receive`, input);
+  return mutate<StockTransfer>(
+    `stock-transfers/${segment(transferId)}/receive`,
+    input,
+  );
 }
+
+// ======================================================
+// TRANSFERS — DISCREPANCY RESOLUTION
+// ======================================================
 
 export function resolveTransferDiscrepancy(
   transferId: string,
   resolution: string,
 ): Promise<StockTransfer> {
-  return mutate(`stock-transfers/${segment(transferId)}/resolve-discrepancy`, {
-    resolution,
-  });
+  return mutate<StockTransfer>(
+    `stock-transfers/${segment(
+      transferId,
+    )}/resolve-discrepancy`,
+    { resolution },
+  );
 }
 
 // ======================================================
-// WASTE LOGS — 3 ROUTES
+// WASTE LOGS
 // ======================================================
 
-export function createWasteLog(input: CreateWasteInput): Promise<WasteResult> {
-  return mutate("waste-logs", input);
+export function createWasteLog(
+  input: CreateWasteInput,
+): Promise<WasteResult> {
+  return mutate<WasteResult>("waste-logs", input);
 }
 
 export function getRestaurantWasteLogs(
@@ -533,8 +838,9 @@ export function getRestaurantWasteLogs(
   query: PageQuery = {},
   options?: RequestOptions,
 ): Promise<PaginatedResult<WasteLogView>> {
-  return getData(
-    `waste-logs/restaurant/${segment(restaurantId)}` + queryString(query),
+  return getData<PaginatedResult<WasteLogView>>(
+    `waste-logs/restaurant/${segment(restaurantId)}` +
+      queryString(query),
     options,
   );
 }
@@ -543,12 +849,14 @@ export function getWasteLog(
   wasteLogId: string,
   options?: RequestOptions,
 ): Promise<WasteLogView> {
-  return getData(`waste-logs/${segment(wasteLogId)}`, options);
+  return getData<WasteLogView>(
+    `waste-logs/${segment(wasteLogId)}`,
+    options,
+  );
 }
 
 // ======================================================
 // LOAD ALL WAREHOUSE STOCK
-// Used for warehouse-wide search, metrics, and pagination.
 // ======================================================
 
 export async function loadAllWarehouseStock(
@@ -561,33 +869,41 @@ export async function loadAllWarehouseStock(
   let totalPages = 1;
 
   do {
-    if (signal.aborted) {
-      throw new DOMException("Request aborted", "AbortError");
-    }
+    checkAborted({ signal });
 
-    const response = await getWarehouseStocks(
+    const result = await getWarehouseStocks(
       warehouseId,
       { page, limit: 50 },
       { signal },
     );
 
-    response.data.forEach((item) => {
-      records.set(item.id, item);
-    });
+    if (
+      !Array.isArray(result?.data) ||
+      !result.pagination ||
+      !Number.isInteger(result.pagination.totalPages) ||
+      result.pagination.totalPages < 0
+    ) {
+      throw new Error("Invalid warehouse stock response.");
+    }
 
-    totalPages = response.pagination.totalPages;
-    page += 1;
+    for (const stock of result.data) {
+      records.set(stock.id, stock);
+    }
+
+    totalPages = result.pagination.totalPages;
+    page++;
   } while (page <= totalPages);
+
+  checkAborted({ signal });
 
   return [...records.values()];
 }
 
 // ======================================================
 // LOAD WAREHOUSE MOVEMENT PAGE
-// getWarehouseStockMovements already unwraps the response.
 // ======================================================
 
-export async function loadStockMovements(
+export function loadStockMovements(
   warehouseId: string,
   filters: MovementQuery,
   signal: AbortSignal,
@@ -596,24 +912,5 @@ export async function loadStockMovements(
     warehouseId,
     filters,
     { signal },
-  );
-}
-
-// ======================================================
-// DELETE WAREHOUSE STOCK
-// Requires the DELETE endpoint provided previously.
-// ======================================================
-
-export async function deleteWarehouseStockRecord(
-  warehouseId: string,
-  ingredientId: string,
-  reason: string,
-): Promise<void> {
-  await request(
-    `warehouse-stock/${encodeURIComponent(
-      warehouseId,
-    )}/${encodeURIComponent(ingredientId)}`,
-    "DELETE",
-    { reason },
   );
 }

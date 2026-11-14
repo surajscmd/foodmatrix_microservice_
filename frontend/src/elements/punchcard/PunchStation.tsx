@@ -1,408 +1,71 @@
-"use client";
-
-import { useMemo, useState } from "react";
-import { ChevronDown, User, Timer, ShieldCheck, Terminal } from "lucide-react";
-
-import type { AttendanceLog, Employee } from "@/utils/types";
+import { CalendarClock, LogIn, Search } from "lucide-react";
+import { useState } from "react";
+import type { ShiftSchedule } from "@/lib/hr-api";
 
 interface PunchStationProps {
-  employees: Employee[];
-  attendanceLogs: AttendanceLog[];
-  searchTerm: string;
-  onPunchIn: (employeeId: string) => void;
+  schedules: ShiftSchedule[];
+  timeZone: string;
+  blocked: boolean;
+  pendingId: string | null;
+  onPunchIn: (schedule: ShiftSchedule) => void;
 }
 
-export default function PunchStation({
-  employees,
-  attendanceLogs,
-  searchTerm,
-  onPunchIn,
-}: PunchStationProps) {
-  const [selectedEmployee, setSelectedEmployee] = useState(
-    employees[0]?.id ?? "",
+export default function PunchStation({ schedules, timeZone, blocked, pendingId, onPunchIn }: PunchStationProps) {
+  const [query, setQuery] = useState("");
+  const search = query.trim().toLowerCase();
+  const visible = schedules.filter(({ staff }) =>
+    `${staff.firstName} ${staff.lastName} ${staff.employeeCode} ${staff.role}`.toLowerCase().includes(search),
   );
-
-  const [employeeOpen, setEmployeeOpen] = useState(false);
-
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(
-      (employee) =>
-        employee.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.role.toLowerCase().includes(searchTerm.toLowerCase()),
-    );
-  }, [employees, searchTerm]);
-
-  const activePunch = (employeeId: string) =>
-    attendanceLogs.find(
-      (log) => log.employeeId === employeeId && !log.checkOut,
-    );
-
-  const selectedEmployeeData = employees.find(
-    (emp) => emp.id === selectedEmployee,
-  );
+  const time = new Intl.DateTimeFormat("en-IN", { timeZone, hour: "numeric", minute: "2-digit" });
 
   return (
-    <div className="lg:col-span-5 space-y-5">
-      {/* TERMINAL STATUS */}
-
-      <div
-        className="
-        rounded-2xl 
-        border border-zinc-800
-        bg-zinc-900/40
-        p-5
-      "
-      >
+    <section aria-labelledby="punch-station" className="min-w-0 overflow-hidden rounded-2xl border border-cyan-300/25 bg-slate-900">
+      <div className="border-b border-white/10 bg-linear-to-r from-cyan-950 to-slate-900 p-4">
         <div className="flex items-center gap-3">
-          <div
-            className="
-            w-12 h-12
-            rounded-xl
-            bg-emerald-500/10
-            border border-emerald-500/20
-            flex items-center justify-center
-          "
-          >
-            <Terminal className="w-6 h-6 text-emerald-400" />
-          </div>
-
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-cyan-300/20 text-cyan-200"><CalendarClock size={18} aria-hidden /></span>
           <div>
-            <span
-              className="
-              text-[10px]
-              uppercase
-              tracking-widest
-              font-mono
-              text-zinc-500
-            "
-            >
-              Edge Device
-            </span>
-
-            <h2
-              className="
-              mt-1
-              text-sm
-              font-semibold
-              text-white
-            "
-            >
-              Biometric Punch Terminal
-            </h2>
+            <h2 id="punch-station" className="text-base font-semibold text-white">Clock in</h2>
+            <p className="text-xs text-cyan-100/85">Select a shift from the roster</p>
           </div>
         </div>
+        <label className="mt-4 flex items-center gap-2 rounded-lg border border-white/15 bg-slate-950/65 px-3 focus-within:border-cyan-300">
+          <Search size={15} className="shrink-0 text-slate-400" aria-hidden />
+          <span className="sr-only">Search scheduled staff</span>
+          <input type="search" value={query} onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search staff by name or code"
+            className="h-9 min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-slate-400" />
+        </label>
       </div>
 
-      {/* EMPLOYEE SELECTOR */}
-
-      <div
-        className="
-        rounded-2xl
-        border border-zinc-800
-        bg-zinc-900/40
-        p-5
-        space-y-5
-      "
-      >
-        <div>
-          <span
-            className="
-            text-[10px]
-            uppercase
-            tracking-widest
-            font-mono
-            text-zinc-500
-          "
-          >
-            Employee
-          </span>
-
-          <h3
-            className="
-            mt-1
-            text-sm
-            font-semibold
-            text-white
-          "
-          >
-            Select Staff Member
-          </h3>
-        </div>
-
-        {/* CUSTOM SELECT */}
-
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setEmployeeOpen(!employeeOpen)}
-            className="
-              w-full
-              flex
-              items-center
-              justify-between
-              rounded-xl
-              border
-              border-zinc-800
-              bg-zinc-950
-              px-4
-              py-3
-              hover:border-emerald-500/40
-              transition
-            "
-          >
-            <div className="flex items-center gap-3">
-              <div
-                className="
-                w-9
-                h-9
-                rounded-full
-                bg-emerald-500/10
-                border
-                border-emerald-500/20
-                flex
-                items-center
-                justify-center
-              "
-              >
-                <User className="w-4 h-4 text-emerald-400" />
-              </div>
-
-              <div className="text-left">
-                <p className="text-sm text-white font-medium">
-                  {selectedEmployeeData?.name ?? "Select Employee"}
-                </p>
-
-                <p className="text-xs text-zinc-500">
-                  {selectedEmployeeData?.role ?? "Choose staff member"}
-                </p>
-              </div>
-            </div>
-
-            <ChevronDown
-              className={`
-                w-4 h-4
-                text-zinc-500
-                transition-transform
-                ${employeeOpen ? "rotate-180" : ""}
-              `}
-            />
-          </button>
-
-          {employeeOpen && (
-            <div
-              className="
-              absolute
-              z-50
-              top-full
-              mt-2
-              w-full
-              rounded-xl
-              border
-              border-zinc-800
-              bg-zinc-950
-              shadow-2xl
-              overflow-hidden
-            "
-            >
-              <div
-                className="
-                max-h-64
-                overflow-y-auto
-                p-2
-              "
-              >
-                {filteredEmployees.map((employee) => {
-                  const punched = activePunch(employee.id);
-
-                  return (
-                    <button
-                      key={employee.id}
-                      disabled={!!punched}
-                      onClick={() => {
-                        setSelectedEmployee(employee.id);
-                        setEmployeeOpen(false);
-                      }}
-                      className={`
-                        w-full
-                        flex
-                        items-center
-                        justify-between
-                        px-3
-                        py-3
-                        rounded-lg
-                        transition
-
-                        ${
-                          punched
-                            ? "opacity-40 cursor-not-allowed"
-                            : "hover:bg-zinc-900"
-                        }
-
-                        ${
-                          selectedEmployee === employee.id
-                            ? "bg-emerald-500/10"
-                            : ""
-                        }
-                      `}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="
-                          w-8
-                          h-8
-                          rounded-full
-                          bg-zinc-900
-                          border
-                          border-zinc-800
-                          flex
-                          items-center
-                          justify-center
-                          text-xs
-                          font-semibold
-                          text-zinc-300
-                        "
-                        >
-                          {employee.name.charAt(0)}
-                        </div>
-
-                        <div className="text-left">
-                          <p className="text-sm text-white">{employee.name}</p>
-
-                          <p className="text-xs text-zinc-500">
-                            {employee.role}
-                          </p>
-                        </div>
-                      </div>
-
-                      {punched && (
-                        <span
-                          className="
-                          text-[11px]
-                          text-orange-400
-                          bg-orange-400/10
-                          px-2
-                          py-1
-                          rounded-md
-                        "
-                        >
-                          On Duty
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* EMPLOYEE INFO */}
-
-        {selectedEmployeeData && (
-          <div className="rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-950 to-zinc-900/60 p-4 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 font-bold">
-                {selectedEmployeeData.name.charAt(0)}
-              </div>
-
-              <div>
-                <p className="text-sm font-semibold text-white">
-                  {selectedEmployeeData.name}
-                </p>
-
-                <p className="text-xs text-zinc-500">Identity Verified</p>
-              </div>
-
-              <div className="ml-auto px-2.5 py-1 rounded-full text-[10px] uppercase tracking-wider bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Ready
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-zinc-800 flex items-center justify-between">
-              <p className="text-[12px] uppercase tracking-wider text-zinc-500">
-                Assigned Role
-              </p>
-
-              <p className="text-xs font-medium text-white">
-                {selectedEmployeeData.role}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ACTION */}
-
-        <button
-          onClick={() => {
-            if (selectedEmployee) {
-              onPunchIn(selectedEmployee);
-            }
-          }}
-          disabled={!selectedEmployee || !!activePunch(selectedEmployee)}
-          className="
-            w-full
-            rounded-xl
-            bg-emerald-500
-            py-3
-            font-bold
-            uppercase
-            text-slate-950
-            transition
-            hover:bg-emerald-400
-            disabled:bg-zinc-800
-            disabled:text-zinc-600
-            disabled:cursor-not-allowed
-            flex
-            items-center
-            justify-center
-            gap-2
-          "
-        >
-          <Timer className="w-4 h-4" />
-          Swipe Card In
-        </button>
-      </div>
-
-      {/* GUIDE */}
-
-      <div
-        className="
-        rounded-2xl
-        border border-zinc-800
-        bg-zinc-900/40
-        p-5
-      "
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <ShieldCheck className="w-5 h-5 text-emerald-400" />
-
-          <h3 className="text-sm font-semibold text-white">
-            Terminal Procedure
-          </h3>
-        </div>
-
-        <div
-          className="
-          space-y-3
-          text-sm
-          text-zinc-500
-        "
-        >
-          <p>1. Select an employee.</p>
-
-          <p>2. Verify badge identity.</p>
-
-          <p>
-            3. Press
-            <strong className="text-white"> Swipe Card In</strong>.
-          </p>
-
-          <p>
-            4. Use attendance board for
-            <strong className="text-white"> Swipe Out</strong>.
-          </p>
-        </div>
-      </div>
-    </div>
+      {visible.length ? (
+        <ul className="divide-y divide-white/10">
+          {visible.map((schedule) => {
+            const { firstName, lastName, employeeCode, role } = schedule.staff;
+            const start = time.format(new Date(schedule.scheduledStart));
+            return (
+              <li key={schedule.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 hover:bg-white/5">
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">{firstName} {lastName}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">{employeeCode} · {role}</p>
+                  <p className="mt-1 text-xs text-cyan-100">
+                    {schedule.shiftTemplate?.name && `${schedule.shiftTemplate.name} · `}
+                    {start}–{time.format(new Date(schedule.scheduledEnd))}
+                  </p>
+                </div>
+                <button type="button" disabled={blocked} onClick={() => onPunchIn(schedule)}
+                  aria-label={`Clock in ${firstName} ${lastName} for the ${start} shift`}
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-cyan-300 px-3 text-xs font-semibold text-cyan-950 hover:bg-cyan-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:opacity-50">
+                  <LogIn size={14} aria-hidden />{pendingId === schedule.id ? "Saving…" : "Clock in"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="px-4 py-8 text-center text-sm text-slate-300">
+          {search ? "No rostered staff match your search." : "No shifts are available to clock in."}
+        </p>
+      )}
+    </section>
   );
 }

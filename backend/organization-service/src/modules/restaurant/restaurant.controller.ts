@@ -67,6 +67,7 @@ export class RestaurantController {
     SystemUserRole.SUPER_ADMIN,
     SystemUserRole.FRANCHISE_ADMIN,
     SystemUserRole.RESTAURANT_ADMIN,
+    SystemUserRole.STAFF,
   )
   async findOne(
     @Req() req: AuthenticatedRequest,
@@ -75,21 +76,18 @@ export class RestaurantController {
     const user = req.user!;
 
     if (
-      user.role === SystemUserRole.RESTAURANT_ADMIN &&
+      (user.role === SystemUserRole.RESTAURANT_ADMIN ||
+        user.role === SystemUserRole.STAFF) &&
       user.managedRestaurantId !== id
     ) {
-      // Reuse NotFound later if you want to hide resource existence.
       throw new ForbiddenException('You do not have access to this restaurant');
     }
 
-    const data = await this.restaurantService.findOne(id);
-
     return {
       message: 'Restaurant fetched successfully',
-      data,
+      data: await this.restaurantService.findOne(id),
     };
   }
-
   @Patch(':id')
   @Roles(
     SystemUserRole.SUPER_ADMIN,

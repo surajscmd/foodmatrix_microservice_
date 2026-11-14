@@ -1,15 +1,19 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 
 import { Kafka } from 'kafkajs';
 import type { Consumer } from 'kafkajs';
 
-import { OrderInventoryService } from '../modules/order-inventory/order-inventory.service.js';
+import {
+  InsufficientRestaurantStockError,
+  OrderInventoryService,
+} from '../modules/order-inventory/order-inventory.service.js';
 
 import type { OrderCompleteEvent } from '../modules/order-inventory/events/order-complete.event.js';
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(KafkaConsumerService.name);
   private readonly kafka = new Kafka({
     clientId: 'inventory-service-consumer',
     brokers: ['localhost:9094', 'localhost:9095', 'localhost:9096'],
@@ -18,6 +22,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly consumer: Consumer = this.kafka.consumer({
     groupId: 'inventory-service-group',
   });
+  private readonly failedEvents = this.kafka.producer();
 
   constructor(private readonly orderInventoryService: OrderInventoryService) {}
 
@@ -30,6 +35,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     // CONNECT CONSUMER
     // ----------------------------------------------------
 
+    await this.failedEvents.connect();
     await this.consumer.connect();
 
     console.log('Inventory Kafka consumer connected');
@@ -66,7 +72,31 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
         console.log('Event:', JSON.stringify(event, null, 2));
         console.log('==========================================');
 
-        await this.orderInventoryService.processOrderComplete(event);
+        try {
+          await this.orderInventoryService.processOrderComplete(event);
+        } catch (error) {
+          if (!(error instanceof InsufficientRestaurantStockError)) throw error;
+
+          // Kafka may advance the source offset only after saving the failed event.
+          await this.failedEvents.send({
+            topic: 'order-complete-stock-shortage',
+            acks: -1,
+            messages: [
+              {
+                key: `${topic}:${partition}:${message.offset}`,
+                value: JSON.stringify({
+                  event,
+                  source: { topic, partition, offset: message.offset },
+                  ingredientId: error.ingredientId,
+                  requiredQuantity: error.requiredQuantity,
+                }),
+              },
+            ],
+          });
+          this.logger.warn(
+            `Stock deduction deferred for item ${event.orderItemId}: ingredient ${error.ingredientId}, required ${error.requiredQuantity} (${topic}:${partition}:${message.offset}).`,
+          );
+        }
       },
     });
   }
@@ -76,7 +106,11 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   // ======================================================
 
   async onModuleDestroy(): Promise<void> {
-    await this.consumer.disconnect();
+    try {
+      await this.consumer.disconnect();
+    } finally {
+      await this.failedEvents.disconnect();
+    }
 
     console.log('Inventory Kafka consumer disconnected');
   }

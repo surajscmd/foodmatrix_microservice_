@@ -5,101 +5,76 @@ import { useEffect } from "react";
 import {
   getCurrentUser,
   getFranchise,
+  getRestaurant,
   getRestaurants,
 } from "@/lib/organization-api";
-
 import { useOrganizationStore } from "@/store/organization-store";
 
 export default function OrganizationBootstrap() {
-  const isHydrated = useOrganizationStore(
-    (state) => state.isHydrated,
-  );
-
-  const setCurrentUser = useOrganizationStore(
-    (state) => state.setCurrentUser,
-  );
-
-  const setFranchise = useOrganizationStore(
-    (state) => state.setFranchise,
-  );
-
-  const setRestaurants = useOrganizationStore(
-    (state) => state.setRestaurants,
-  );
-
-  const setLoading = useOrganizationStore(
-    (state) => state.setLoading,
-  );
-
-  const setHydrated = useOrganizationStore(
-    (state) => state.setHydrated,
-  );
+  const isHydrated = useOrganizationStore((state) => state.isHydrated);
 
   useEffect(() => {
-    if (isHydrated) {
-      return;
-    }
+    if (isHydrated) return;
 
     let cancelled = false;
+    const store = useOrganizationStore.getState();
 
-    const restoreOrganization = async () => {
+    async function restoreOrganization() {
+      store.setLoading(true);
+      store.setError(null);
+
       try {
-        setLoading(true);
-
-        const currentUserData = await getCurrentUser();
-
+        const currentUser = await getCurrentUser();
         if (cancelled) return;
 
-        setCurrentUser(currentUserData);
+        store.setCurrentUser(currentUser);
 
-        const role = currentUserData.systemUser.role;
+        const { role, managedRestaurantId } = currentUser.systemUser;
 
-        const isOperationsUser =
-          role === "SUPER_ADMIN" ||
-          role === "FRANCHISE_ADMIN" ||
-          role === "OPERATIONS";
-
-        if (isOperationsUser) {
-          const [franchiseData, restaurantsData] =
-            await Promise.all([
-              getFranchise(),
-              getRestaurants(),
-            ]);
+        if (role === "RESTAURANT_ADMIN" || role === "STAFF") {
+          const restaurant = managedRestaurantId
+            ? await getRestaurant(managedRestaurantId)
+            : null;
 
           if (cancelled) return;
 
-          setFranchise(franchiseData);
-          setRestaurants(restaurantsData);
+          store.setSelectedRestaurant(restaurant);
+          store.setRestaurants(restaurant ? [restaurant] : []);
         }
 
-        if (!cancelled) {
-          setHydrated(true);
+        if (
+          role === "SUPER_ADMIN" ||
+          role === "FRANCHISE_ADMIN" ||
+          role === "OPERATIONS"
+        ) {
+          const [franchise, restaurants] = await Promise.all([
+            getFranchise(),
+            getRestaurants(),
+          ]);
+
+          if (cancelled) return;
+
+          store.setFranchise(franchise);
+          store.setRestaurants(restaurants);
         }
-      } catch (error) {
-        console.error(
-          "Failed to restore organization state:",
-          error,
-        );
+      } catch {
+        if (!cancelled) {
+          store.setError("Unable to load your account or organization.");
+        }
       } finally {
         if (!cancelled) {
-          setLoading(false);
+          store.setLoading(false);
+          store.setHydrated(true);
         }
       }
-    };
+    }
 
     void restoreOrganization();
 
     return () => {
       cancelled = true;
     };
-  }, [
-    isHydrated,
-    setCurrentUser,
-    setFranchise,
-    setRestaurants,
-    setLoading,
-    setHydrated,
-  ]);
+  }, [isHydrated]);
 
   return null;
 }

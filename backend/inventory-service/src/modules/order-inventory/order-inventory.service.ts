@@ -17,6 +17,15 @@ import {
 
 import type { OrderCompleteEvent } from './events/order-complete.event.js';
 
+export class InsufficientRestaurantStockError extends ConflictException {
+  constructor(
+    readonly ingredientId: string,
+    readonly requiredQuantity: string,
+  ) {
+    super(`Insufficient restaurant stock for ingredient ${ingredientId}`);
+  }
+}
+
 @Injectable()
 export class OrderInventoryService {
   constructor(
@@ -72,6 +81,8 @@ export class OrderInventoryService {
     // ----------------------------------------------------------
     // 2. COLLECT IDS FOR CATALOG
     // ----------------------------------------------------------
+
+    if (await this.wasDeducted(this.prisma, event)) return;
 
     const menuItemIds = [event.menuItemId];
 
@@ -147,61 +158,72 @@ export class OrderInventoryService {
     // This prevents partial inventory deduction.
     // ----------------------------------------------------------
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const [ingredientId, quantity] of ingredientConsumption.entries()) {
-        // ----------------------------------------------------
-        // ATOMIC CHECK + DEDUCTION
-        // ----------------------------------------------------
+    await this.prisma.$transaction(
+      async (tx) => {
+        // A replay must not deduct an order item a second time.
+        const key = `order-complete:${event.restaurantId}:${event.orderItemId}`;
+        await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+        if (await this.wasDeducted(tx, event)) return;
+        for (const [
+          ingredientId,
+          quantity,
+        ] of ingredientConsumption.entries()) {
+          // ----------------------------------------------------
+          // ATOMIC CHECK + DEDUCTION
+          // ----------------------------------------------------
 
-        const updatedStock = await tx.restaurantStock.updateMany({
-          where: {
-            restaurantId: event.restaurantId,
+          const updatedStock = await tx.restaurantStock.updateMany({
+            where: {
+              restaurantId: event.restaurantId,
 
-            ingredientId,
+              ingredientId,
 
-            quantityOnHand: {
-              gte: quantity,
+              quantityOnHand: {
+                gte: quantity,
+              },
             },
-          },
 
-          data: {
-            quantityOnHand: {
-              decrement: quantity,
+            data: {
+              quantityOnHand: {
+                decrement: quantity,
+              },
             },
-          },
-        });
+          });
 
-        // ----------------------------------------------------
-        // STOCK DOES NOT EXIST OR IS INSUFFICIENT
-        // ----------------------------------------------------
+          // ----------------------------------------------------
+          // STOCK DOES NOT EXIST OR IS INSUFFICIENT
+          // ----------------------------------------------------
 
-        if (updatedStock.count !== 1) {
-          throw new ConflictException(
-            `Insufficient restaurant stock for ingredient ${ingredientId}`,
-          );
+          if (updatedStock.count !== 1) {
+            throw new InsufficientRestaurantStockError(
+              ingredientId,
+              quantity.toString(),
+            );
+          }
+
+          // ----------------------------------------------------
+          // CREATE POS SALE MOVEMENT
+          // ----------------------------------------------------
+
+          await tx.stockMovement.create({
+            data: {
+              locationType: 'RESTAURANT',
+
+              locationId: event.restaurantId,
+
+              ingredientId,
+
+              movementType: 'POS_SALE',
+
+              quantityChange: quantity.negated(),
+
+              referenceId: event.orderItemId,
+            },
+          });
         }
-
-        // ----------------------------------------------------
-        // CREATE POS SALE MOVEMENT
-        // ----------------------------------------------------
-
-        await tx.stockMovement.create({
-          data: {
-            locationType: 'RESTAURANT',
-
-            locationId: event.restaurantId,
-
-            ingredientId,
-
-            movementType: 'POS_SALE',
-
-            quantityChange: quantity.negated(),
-
-            referenceId: event.orderItemId,
-          },
-        });
-      }
-    });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
+    );
 
     console.log(
       `Inventory consumption completed for order item ${event.orderItemId}`,
@@ -211,6 +233,22 @@ export class OrderInventoryService {
   // ============================================================
   // MENU ITEM CONSUMPTION
   // ============================================================
+
+  private async wasDeducted(
+    prisma: Prisma.TransactionClient,
+    event: OrderCompleteEvent,
+  ): Promise<boolean> {
+    const movement = await prisma.stockMovement.findFirst({
+      where: {
+        locationType: 'RESTAURANT',
+        locationId: event.restaurantId,
+        movementType: 'POS_SALE',
+        referenceId: event.orderItemId,
+      },
+      select: { id: true },
+    });
+    return movement !== null;
+  }
 
   private addMenuItemConsumption(
     event: OrderCompleteEvent,

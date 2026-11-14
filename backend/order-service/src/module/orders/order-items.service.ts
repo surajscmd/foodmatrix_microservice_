@@ -176,6 +176,15 @@ export class OrderItemsService {
           throw new NotFoundException('Order item not found in this order.');
         }
 
+        if (
+          orderItem.unavailableRequestedAt &&
+          !orderItem.unavailableResolvedAt
+        ) {
+          throw new ConflictException(
+            'Review the unavailable dish before removing it.',
+          );
+        }
+
         await tx.orderItem.delete({
           where: {
             id: orderItem.id,
@@ -188,7 +197,11 @@ export class OrderItemsService {
           },
         });
 
-        if (remainingItems.length === 0) {
+        if (
+          !remainingItems.some(
+            (item) => item.status !== OrderItemStatus.CANCELLED,
+          )
+        ) {
           throw new BadRequestException(
             'An order must contain at least one item.',
           );
@@ -308,11 +321,166 @@ export class OrderItemsService {
   // PATCH /orders/:id/kitchen/items/:itemId/status
   // ============================================================
 
+  async reportUnavailable(orderId: string, itemId: string, reason: string) {
+    const cleanReason = reason?.trim();
+    if (!cleanReason || cleanReason.length > 500) {
+      throw new BadRequestException('Enter a reason of 1 to 500 characters.');
+    }
+
+    const order = await this.prisma.$transaction(
+      async (tx) => {
+        const item = await tx.orderItem.findFirst({
+          where: { id: itemId, orderId },
+          include: { order: true },
+        });
+        if (!item) throw new NotFoundException('Order item not found.');
+        this.ensureUnavailableReviewAllowed(item.order.status, item.status);
+        if (item.unavailableRequestedAt && !item.unavailableResolvedAt) {
+          throw new ConflictException(
+            'This dish is already awaiting cashier review.',
+          );
+        }
+        await tx.orderItem.update({
+          where: { id: itemId },
+          data: {
+            unavailableReason: cleanReason,
+            unavailableRequestedAt: new Date(),
+            unavailableResolvedAt: null,
+          },
+        });
+        return tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          include: this.orderInclude(),
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    return { message: 'Dish reported unavailable.', data: order };
+  }
+
+  async reviewUnavailable(
+    orderId: string,
+    itemId: string,
+    decision: 'approve' | 'cancel-order' | 'dismiss',
+  ) {
+    const order = await this.prisma.$transaction(
+      async (tx) => {
+        const current = await tx.order.findUnique({
+          where: { id: orderId },
+          include: { items: true },
+        });
+        const item = current?.items.find((entry) => entry.id === itemId);
+        if (!current || !item)
+          throw new NotFoundException('Order item not found.');
+        this.ensureUnavailableReviewAllowed(current.status, item.status);
+        if (!item.unavailableRequestedAt || item.unavailableResolvedAt) {
+          throw new ConflictException(
+            'There is no open request for this dish.',
+          );
+        }
+
+        const resolvedAt = new Date();
+        if (decision === 'dismiss') {
+          await tx.orderItem.update({
+            where: { id: itemId },
+            data: { unavailableResolvedAt: resolvedAt },
+          });
+          return tx.order.findUniqueOrThrow({
+            where: { id: orderId },
+            include: this.orderInclude(),
+          });
+        }
+
+        await this.ensureNoCompletedPayment(tx, orderId);
+        const remaining = current.items.filter(
+          (entry) =>
+            entry.id !== itemId && entry.status !== OrderItemStatus.CANCELLED,
+        );
+        if ((remaining.length === 0) !== (decision === 'cancel-order')) {
+          throw new ConflictException(
+            'The order changed. Review the remaining dishes before confirming.',
+          );
+        }
+        const subtotal = remaining.reduce(
+          (sum, entry) => sum.plus(entry.total),
+          new Prisma.Decimal(0),
+        );
+        const total = this.calculateOrderTotal(
+          subtotal,
+          current.discount,
+          current.tax,
+        );
+        if (remaining.length > 0 && total.lt(0)) {
+          throw new ConflictException(
+            'The discount exceeds the revised bill. Review the order totals before approving.',
+          );
+        }
+
+        await tx.orderItem.update({
+          where: { id: itemId },
+          data: {
+            status: OrderItemStatus.CANCELLED,
+            total: 0,
+            unavailableResolvedAt: resolvedAt,
+          },
+        });
+
+        const cancelled = remaining.length === 0;
+        const ready =
+          current.status === OrderStatus.PREPARING &&
+          remaining.every((entry) => entry.status === OrderItemStatus.READY);
+        return tx.order.update({
+          where: { id: orderId },
+          data: {
+            subtotal,
+            total: cancelled ? 0 : total,
+            ...(cancelled
+              ? {
+                  status: OrderStatus.CANCELLED,
+                  cancelledAt: resolvedAt,
+                  cancelReason: item.unavailableReason,
+                  tax: 0,
+                  discount: 0,
+                }
+              : ready
+                ? { status: OrderStatus.READY }
+                : {}),
+          },
+          include: this.orderInclude(),
+        });
+      },
+      { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+    );
+
+    return { message: 'Unavailability request reviewed.', data: order };
+  }
+
+  private ensureUnavailableReviewAllowed(
+    orderStatus: OrderStatus,
+    itemStatus: OrderItemStatus,
+  ) {
+    if (
+      (orderStatus !== OrderStatus.CONFIRMED &&
+        orderStatus !== OrderStatus.PREPARING) ||
+      (itemStatus !== OrderItemStatus.PENDING &&
+        itemStatus !== OrderItemStatus.PREPARING)
+    )
+      throw new ConflictException(
+        'Only queued or cooking dishes can be reported or reviewed.',
+      );
+  }
+
   async updateItemStatus(
     orderId: string,
     orderItemId: string,
     status: UpdateOrderItemStatusDto['status'],
   ) {
+    if (status === OrderItemStatus.CANCELLED) {
+      throw new BadRequestException(
+        'Report an unavailable dish for cashier review to cancel it.',
+      );
+    }
     const result = await this.prisma.$transaction(
       async (tx) => {
         const order = await tx.order.findUnique({
@@ -346,6 +514,12 @@ export class OrderItemsService {
         }
 
         this.validateItemStatusTransition(orderItem.status, status);
+        if (
+          orderItem.unavailableRequestedAt &&
+          !orderItem.unavailableResolvedAt
+        ) {
+          throw new ConflictException('This dish is awaiting cashier review.');
+        }
 
         const updatedItem = await tx.orderItem.update({
           where: {
@@ -586,6 +760,7 @@ export class OrderItemsService {
       const existingItem = existingItems.find(
         (item) =>
           item.status === OrderItemStatus.PENDING &&
+          (!item.unavailableRequestedAt || !!item.unavailableResolvedAt) &&
           item.menuItemId === line.menuItemId &&
           areModifiersEqual(item.modifiers, line.modifiers),
       );

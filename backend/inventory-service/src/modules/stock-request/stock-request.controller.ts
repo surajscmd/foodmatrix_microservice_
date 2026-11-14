@@ -2,7 +2,9 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
+  Headers,
   Param,
   Patch,
   Post,
@@ -12,6 +14,7 @@ import {
 import { StockRequestStatus } from '@prisma/client';
 
 import { StockRequestService } from './stock-request.service.js';
+import { StockRequestIdentityService } from './stock-request-identity.service.js';
 
 import { CreateStockRequestDto } from './dto/create-stock-request.dto.js';
 import { ApproveStockRequestDto } from './dto/approve-stock-request.dto.js';
@@ -20,7 +23,31 @@ import { UpdateStockRequestDto } from './dto/update-stock-request.dto.js';
 
 @Controller('stock-requests')
 export class StockRequestController {
-  constructor(private readonly stockRequestService: StockRequestService) {}
+  constructor(
+    private readonly stockRequestService: StockRequestService,
+    private readonly identity: StockRequestIdentityService,
+  ) {}
+
+  private async requestOwner(
+    id: string,
+    cookie?: string,
+    restaurantId?: string,
+  ) {
+    const owner = await this.stockRequestService.findOwner(id);
+    if (restaurantId && owner.restaurantId !== restaurantId) {
+      throw new ForbiddenException(
+        'This request belongs to a different restaurant.',
+      );
+    }
+    const { userId } = await this.identity.restaurantActor(
+      cookie,
+      owner.restaurantId,
+    );
+    // Existing requests used a shared actor. Only the assigned restaurant manager may manage them.
+    return owner.requestedBy === 'SYSTEM-RESTAURANT-MANAGER'
+      ? owner.requestedBy
+      : userId;
+  }
 
   // ======================================================
   // ======================================================
@@ -53,12 +80,18 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post()
-  async create(@Body() dto: CreateStockRequestDto) {
-    // TODO:
-    // Replace with authenticated user's ID from JWT.
-    const requestedBy = 'SYSTEM-RESTAURANT-MANAGER';
-
-    const data = await this.stockRequestService.create(dto, requestedBy);
+  async create(
+    @Body() dto: CreateStockRequestDto,
+    @Headers('cookie') cookie?: string,
+  ) {
+    const { userId, warehouseId } = await this.identity.restaurantActor(
+      cookie,
+      dto.restaurantId,
+    );
+    const data = await this.stockRequestService.create(
+      { ...dto, warehouseId },
+      userId,
+    );
 
     return {
       message: 'Stock request created successfully',
@@ -108,10 +141,8 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post(':id/cancel')
-  async cancel(@Param('id') id: string) {
-    // TODO:
-    // Replace with authenticated user's ID from JWT.
-    const userId = 'SYSTEM-RESTAURANT-MANAGER';
+  async cancel(@Param('id') id: string, @Headers('cookie') cookie?: string) {
+    const userId = await this.requestOwner(id, cookie);
 
     const data = await this.stockRequestService.cancel(id, userId);
 
@@ -134,11 +165,12 @@ export class StockRequestController {
   async update(
     @Param('id') requestId: string,
     @Body() dto: UpdateStockRequestDto,
+    @Headers('cookie') cookie?: string,
   ) {
     const data = await this.stockRequestService.update(
       requestId,
       dto,
-      'SYSTEM-RESTAURANT-MANAGER',
+      await this.requestOwner(requestId, cookie),
     );
 
     return {
@@ -161,12 +193,12 @@ export class StockRequestController {
   async deleteByRestaurant(
     @Param('id') requestId: string,
     @Param('restaurantId') restaurantId: string,
-    @Query('userId') userId: string,
+    @Headers('cookie') cookie?: string,
   ) {
     return this.stockRequestService.deleteByRestaurant(
       requestId,
       restaurantId,
-      userId,
+      await this.requestOwner(requestId, cookie, restaurantId),
     );
   }
 
@@ -232,20 +264,14 @@ export class StockRequestController {
 
     @Body()
     dto: ApproveStockRequestDto,
+    @Headers('cookie') cookie?: string,
   ) {
-    // TODO:
-    // Replace with authenticated warehouse admin ID.
-    const approvedBy = 'SYSTEM-WAREHOUSE-ADMIN';
-
-    // TODO:
-    // Get this from the authenticated user's
-    // warehouse assignment.
-    const warehouseId = 'e49a43e8-5fcb-44c4-a3fe-35354b00b3ef';
+    const { userId, warehouseId } = await this.identity.warehouseActor(cookie);
 
     const data = await this.stockRequestService.approve(
       id,
       dto,
-      approvedBy,
+      userId,
       warehouseId,
     );
 
@@ -269,20 +295,14 @@ export class StockRequestController {
 
     @Body()
     dto: RejectStockRequestDto,
+    @Headers('cookie') cookie?: string,
   ) {
-    // TODO:
-    // Replace with authenticated warehouse admin ID.
-    const rejectedBy = 'SYSTEM-WAREHOUSE-ADMIN';
-
-    // TODO:
-    // Get this from authenticated user's
-    // warehouse assignment.
-    const warehouseId = 'WAREHOUSE-ID';
+    const { userId, warehouseId } = await this.identity.warehouseActor(cookie);
 
     const data = await this.stockRequestService.reject(
       id,
       dto,
-      rejectedBy,
+      userId,
       warehouseId,
     );
 
@@ -362,11 +382,18 @@ export class StockRequestController {
   // ======================================================
 
   @Post('restaurant/:restaurantId/from-low-stock')
-  async createFromLowStock(@Param('restaurantId') restaurantId: string) {
+  async createFromLowStock(
+    @Param('restaurantId') restaurantId: string,
+    @Headers('cookie') cookie?: string,
+  ) {
+    const { userId, warehouseId } = await this.identity.restaurantActor(
+      cookie,
+      restaurantId,
+    );
     const data = await this.stockRequestService.createFromLowStock(
       restaurantId,
-      'e49a43e8-5fcb-44c4-a3fe-35354b00b3ef',
-      'SYSTEM-RESTAURANT-MANAGER',
+      warehouseId,
+      userId,
     );
 
     return {

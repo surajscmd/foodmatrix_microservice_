@@ -1,3 +1,7 @@
+// ======================================================
+// SHARED TYPES
+// ======================================================
+
 export type DecimalValue = string | number;
 
 export type LocationType =
@@ -33,11 +37,23 @@ export type TransferStatus =
   | "REJECTED"
   | "CANCELLED";
 
+export type TransferDiscrepancyType =
+  | "SHORT_RECEIPT"
+  | "DAMAGED"
+  | "MISSING"
+  | "WRONG_ITEM"
+  | "OTHER";
+
 export interface Ingredient {
   id: string;
   name: string;
   uom: string;
   isActive: boolean;
+}
+
+export interface InventoryRestaurant {
+  id: string;
+  name: string;
 }
 
 export interface Pagination {
@@ -82,7 +98,7 @@ export interface RequestOptions {
 }
 
 // ======================================================
-// STOCK
+// WAREHOUSE STOCK
 // ======================================================
 
 export interface WarehouseStock {
@@ -97,6 +113,10 @@ export interface WarehouseStockView extends WarehouseStock {
   ingredient: Ingredient | null;
 }
 
+// ======================================================
+// RESTAURANT STOCK
+// ======================================================
+
 export interface RestaurantStock {
   id: string;
   restaurantId: string;
@@ -110,6 +130,10 @@ export interface RestaurantStock {
 export interface RestaurantStockView extends RestaurantStock {
   ingredient: Ingredient | null;
 }
+
+// ======================================================
+// STOCK MOVEMENTS
+// ======================================================
 
 export interface StockMovement {
   id: string;
@@ -126,6 +150,10 @@ export interface StockMovement {
 export interface StockMovementView extends StockMovement {
   ingredient: Ingredient | null;
 }
+
+// ======================================================
+// STOCK INPUTS / RESULTS
+// ======================================================
 
 export interface AdjustmentResult<T> {
   stock: T | null;
@@ -161,8 +189,10 @@ export interface StockRequestItem {
   id: string;
   stockRequestId: string;
   ingredientId: string;
+
   requestedQty: DecimalValue;
   approvedQty: DecimalValue | null;
+
   ingredient?: Ingredient | null;
 }
 
@@ -170,21 +200,30 @@ export interface StockRequest {
   id: string;
   restaurantId: string;
   warehouseId: string;
+
+  // Populated by the frontend inventory API helper.
+  restaurant?: InventoryRestaurant | null;
+
   requestedBy: string;
   approvedBy: string | null;
   rejectedBy: string | null;
+
   status: StockRequestStatus;
+
   reason: string | null;
   rejectionReason: string | null;
+
   requestedAt: string;
   approvedAt: string | null;
   rejectedAt: string | null;
   fulfilledAt: string | null;
+
   createdAt: string;
   updatedAt: string;
+
+  // Some mutation responses omit relations.
   items?: StockRequestItem[];
 
-  // List endpoints may return selected transfer fields only.
   transfers?: Array<
     Pick<StockTransfer, "id"> & Partial<StockTransfer>
   >;
@@ -220,79 +259,70 @@ export interface DeleteStockRequestResult {
 }
 
 // ======================================================
-// TRANSFERS / SHIPMENTS
+// OPERATIONS STOCK REQUEST VIEWS
+// ======================================================
+
+export type RequestStatus = StockRequestStatus;
+
+export type StockRequestLine = StockRequestItem;
+
+export type OperationsStockRequest = Omit<
+  StockRequest,
+  "items"
+> & {
+  items: StockRequestItem[];
+};
+
+export type StockRequestPage =
+  PaginatedResult<OperationsStockRequest>;
+
+export type ApproveRequestPayload =
+  ApproveStockRequestInput;
+
+// ======================================================
+// STOCK TRANSFERS
 // ======================================================
 
 export interface StockTransferItem {
   id: string;
   transferId: string;
   ingredientId: string;
+
   requestedQty: DecimalValue;
   approvedQty: DecimalValue | null;
   shippedQty: DecimalValue | null;
   receivedQty: DecimalValue | null;
+
   ingredient?: Ingredient | null;
-}
-
-export interface Shipment {
-  id: string;
-  transferId: string;
-  carrierName: string | null;
-  trackingNumber: string | null;
-  shipperName: string | null;
-  shipperPhone: string | null;
-  driverName: string | null;
-  driverPhone: string | null;
-  vehicleNumber: string | null;
-  vehicleType: string | null;
-  dispatchLocation: string | null;
-  deliveryLocation: string | null;
-  estimatedArrival: string | null;
-  dispatchedAt: string | null;
-  deliveredAt: string | null;
-  notes: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface TransferDiscrepancy {
-  id: string;
-  transferId: string;
-  transferItemId: string;
-  type:
-    | "SHORT_RECEIPT"
-    | "DAMAGED"
-    | "MISSING"
-    | "WRONG_ITEM"
-    | "OTHER";
-  expectedQty: DecimalValue | null;
-  actualQty: DecimalValue | null;
-  reason: string | null;
-  reportedBy: string;
-  resolvedBy: string | null;
-  resolution: string | null;
-  createdAt: string;
-  resolvedAt: string | null;
 }
 
 export interface StockTransfer {
   id: string;
   stockRequestId: string | null;
+
   fromWarehouseId: string;
   toRestaurantId: string;
+
+  // Destination restaurant, populated by the API helper.
+  restaurant?: InventoryRestaurant | null;
+
   status: TransferStatus;
+
   requestedBy: string | null;
   approvedBy: string | null;
   rejectedBy: string | null;
   shippedBy: string | null;
   receivedBy: string | null;
+
   requestedAt: string;
   approvedAt: string | null;
   rejectedAt: string | null;
   shippedAt: string | null;
   receivedAt: string | null;
   completedAt: string | null;
+
   rejectionReason: string | null;
+
   createdAt: string;
   updatedAt: string;
 
@@ -303,20 +333,74 @@ export interface StockTransfer {
   stockRequest?: Partial<StockRequest> | null;
 }
 
+// ======================================================
+// OPERATIONS TRANSFER VIEWS
+// ======================================================
+
+export type OperationsStockTransfer = Omit<
+  StockTransfer,
+  "items"
+> & {
+  items: StockTransferItem[];
+};
+
+// ======================================================
+// SHIPMENTS
+// ======================================================
+
+export interface Shipment {
+  id: string;
+  transferId: string;
+
+  carrierName: string | null;
+  trackingNumber: string | null;
+
+  shipperName: string | null;
+  shipperPhone: string | null;
+
+  driverName: string | null;
+  driverPhone: string | null;
+
+  vehicleNumber: string | null;
+  vehicleType: string | null;
+
+  dispatchLocation: string | null;
+  deliveryLocation: string | null;
+
+  estimatedArrival: string | null;
+  dispatchedAt: string | null;
+  deliveredAt: string | null;
+
+  notes: string | null;
+
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CreateShipmentInput {
   carrierName?: string;
   trackingNumber?: string;
+
+  // Backend maps dispatcher fields to Shipment.shipper fields.
   dispatcherName?: string;
   dispatcherPhone?: string;
+
   driverName?: string;
   driverPhone?: string;
+
   vehicleNumber?: string;
   vehicleType?: string;
+
   dispatchLocation?: string;
   deliveryLocation?: string;
+
   estimatedArrival?: string;
   notes?: string;
 }
+
+// ======================================================
+// TRANSFER INPUTS
+// ======================================================
 
 export interface ShipTransferInput {
   items: {
@@ -331,6 +415,30 @@ export interface ReceiveTransferInput {
     receivedQty: number;
     reason?: string;
   }[];
+}
+
+// ======================================================
+// TRANSFER DISCREPANCIES
+// ======================================================
+
+export interface TransferDiscrepancy {
+  id: string;
+  transferId: string;
+  transferItemId: string;
+
+  type: TransferDiscrepancyType;
+
+  expectedQty: DecimalValue | null;
+  actualQty: DecimalValue | null;
+
+  reason: string | null;
+
+  reportedBy: string;
+  resolvedBy: string | null;
+  resolution: string | null;
+
+  createdAt: string;
+  resolvedAt: string | null;
 }
 
 // ======================================================
@@ -361,4 +469,16 @@ export interface WasteResult {
   wasteLog: WasteLog;
   stockMovement: StockMovement;
   stock: RestaurantStock | null;
+}
+// ======================================================
+// STOCK AUDIT FILTERS
+// ======================================================
+
+export interface StockAuditFilterValues {
+  location: "WAREHOUSE" | "RESTAURANT";
+  restaurantId: string;
+  ingredientId: string;
+  movementType: MovementType | "";
+  fromDate: string;
+  toDate: string;
 }

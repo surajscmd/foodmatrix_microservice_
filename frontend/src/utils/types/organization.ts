@@ -107,7 +107,7 @@ export interface Restaurant {
   status: RestaurantStatus;
 
   franchiseId: string;
-
+  defaultCurrency?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -56,6 +56,20 @@ export class PaymentService {
           );
         }
 
+        const openRequest = await tx.orderItem.findFirst({
+          where: {
+            orderId: order.id,
+            unavailableRequestedAt: { not: null },
+            unavailableResolvedAt: null,
+          },
+          select: { id: true },
+        });
+        if (openRequest) {
+          throw new ConflictException(
+            'Review the unavailable dish before taking payment.',
+          );
+        }
+
         // ------------------------------------------------------
         // NORMALIZE AMOUNT
         // ------------------------------------------------------

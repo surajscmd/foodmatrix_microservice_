@@ -68,10 +68,13 @@ export class RestaurantService {
     });
   }
 
-  async findOne(id: string): Promise<Restaurant> {
+  async findOne(id: string) {
     const restaurant = await this.prisma.restaurant.findUnique({
-      where: {
-        id,
+      where: { id },
+      include: {
+        franchise: {
+          select: { defaultCurrency: true },
+        },
       },
     });
 
@@ -79,7 +82,12 @@ export class RestaurantService {
       throw new NotFoundException('Restaurant not found');
     }
 
-    return restaurant;
+    const { franchise, ...record } = restaurant;
+
+    return {
+      ...record,
+      defaultCurrency: franchise.defaultCurrency,
+    };
   }
 
   async update(id: string, dto: UpdateRestaurantDto): Promise<Restaurant> {

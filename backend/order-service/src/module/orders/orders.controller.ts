@@ -8,15 +8,18 @@ import {
   Headers,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
-
+import { timingSafeEqual } from 'node:crypto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddOrderItemsDto } from './dto/add-order-items.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { UpdateOrderItemStatusDto } from './dto/update-order-item-status.dto';
+import { ReviewUnavailableItemDto } from './dto/review-unavailable-item.dto';
 
 import { OrderService } from './orders.service';
 import { OrderItemsService } from './order-items.service';
@@ -68,6 +71,48 @@ export class OrderController {
 
     return this.orderService.getUpcomingOrders(restaurantId, page, limit);
   }
+  @Get()
+  async listRegisterOrders(
+    @Query('restaurantId') restaurantId: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('view', new DefaultValuePipe('open')) view: string,
+  ) {
+    const id = restaurantId?.trim();
+
+    if (!id) {
+      throw new BadRequestException('restaurantId is required.');
+    }
+
+    if (view !== 'open' && view !== 'history') {
+      throw new BadRequestException('view must be open or history.');
+    }
+
+    return this.orderService.listRegisterOrders(id, page, view);
+  }
+
+  @Get('dashboard')
+  async getDashboard(
+    @Headers('x-dashboard-key') providedKey: string | undefined,
+    @Query('restaurantId') restaurantId: string,
+  ) {
+    const configuredKey = process.env.RESTAURANT_DASHBOARD_KEY;
+    const expected = Buffer.from(configuredKey ?? '');
+    const provided = Buffer.from(providedKey ?? '');
+
+    if (
+      expected.length === 0 ||
+      expected.length !== provided.length ||
+      !timingSafeEqual(expected, provided)
+    ) {
+      throw new UnauthorizedException();
+    }
+
+    if (!restaurantId?.trim()) {
+      throw new BadRequestException('restaurantId is required.');
+    }
+
+    return this.orderService.getRestaurantDashboard(restaurantId);
+  }
 
   // ============================================================
   // GET ORDER
@@ -104,6 +149,32 @@ export class OrderController {
       orderId,
       orderItemId,
       dto.status,
+    );
+  }
+
+  @Post(':id/items/:itemId/unavailability')
+  reportUnavailable(
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: CancelOrderDto,
+  ) {
+    return this.orderItemsService.reportUnavailable(
+      orderId,
+      itemId,
+      dto.reason,
+    );
+  }
+
+  @Patch(':id/items/:itemId/unavailability')
+  reviewUnavailable(
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ReviewUnavailableItemDto,
+  ) {
+    return this.orderItemsService.reviewUnavailable(
+      orderId,
+      itemId,
+      dto.decision,
     );
   }
 

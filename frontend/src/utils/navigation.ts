@@ -8,18 +8,16 @@ import {
   Tv,
   UserCheck,
   Utensils,
-  Building2,
   ClipboardList,
   PackageSearch,
   ShoppingCart,
   Store,
-  Truck,
   Users,
 } from "lucide-react";
 
 import type { SidebarNavSection } from "./types";
 
-// resturant navigation object 
+// resturant navigation object
 export const navigation: SidebarNavSection[] = [
   {
     title: "Overview",
@@ -81,6 +79,15 @@ export const navigation: SidebarNavSection[] = [
           subtitle: "Employee Check-In & Check-Out",
         },
       },
+      {
+        title: "Shift & Attendance",
+        href: "/restaurant/attendancereports",
+        icon: CalendarDays,
+        header: {
+          title: "Shift & Attendance",
+          subtitle: "Workforce Management",
+        },
+      },
     ],
   },
 
@@ -94,21 +101,6 @@ export const navigation: SidebarNavSection[] = [
         header: {
           title: "Inventory Management",
           subtitle: "Stock & Procurement",
-        },
-      },
-    ],
-  },
-
-  {
-    title: "Workforce Management",
-    items: [
-      {
-        title: "Shift & Attendance",
-        href: "/restaurant/attendancereports",
-        icon: CalendarDays,
-        header: {
-          title: "Shift & Attendance",
-          subtitle: "Workforce Management",
         },
       },
     ],
@@ -212,21 +204,12 @@ export const regionalNavigation: SidebarNavSection[] = [
         },
       },
       {
-        title: "Sourcing Hub",
-        href: "/operations/sourcinghub",
+        title: "Stock Requests",
+        href: "/operations/stockrequests",
         icon: ShoppingCart,
         header: {
-          title: "Sourcing Hub",
-          subtitle: "Procurement & Purchasing",
-        },
-      },
-      {
-        title: "Supplier Network",
-        href: "/operations/supplier",
-        icon: Truck,
-        header: {
-          title: "Supplier Network",
-          subtitle: "Vendor Management",
+          title: "Stock Requests",
+          subtitle: "Inventory Management",
         },
       },
       {
@@ -238,6 +221,15 @@ export const regionalNavigation: SidebarNavSection[] = [
           subtitle: "Distribution & Logistics",
         },
       },
+      {
+        title: "Stock Audit",
+        href: "/operations/stockaudit",
+        icon: ClipboardList,
+        header: {
+          title: "Stock Audit",
+          subtitle: "Inventory Movements & Audit Trail",
+        },
+      },
     ],
   },
 
@@ -245,22 +237,21 @@ export const regionalNavigation: SidebarNavSection[] = [
     title: "System Utilities",
     items: [
       {
-        title: "Alerts Hub",
-        href: "/restaurant/alerts",
+        title: "Notifications",
+        href: "/operations/notifications",
         icon: Bell,
-        badge: 3,
         header: {
-          title: "Alerts Hub",
-          subtitle: "Notifications & Critical Events",
+          title: "Notifications",
+          subtitle: "Warehouse Activity & Updates",
         },
       },
       {
         title: "Platform Settings",
-        href: "/restaurant/settings",
+        href: "/operations/settings",
         icon: Settings,
         header: {
           title: "Platform Settings",
-          subtitle: "Regional Configuration",
+          subtitle: "Display & Notification Preferences",
         },
       },
     ],

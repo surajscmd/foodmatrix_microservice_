@@ -156,6 +156,9 @@ model OrderItem {
   orderId String @map("order_id") @db.Uuid
   order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
   status OrderItemStatus @default(PENDING)
+  unavailableReason      String?   @map("unavailable_reason") @db.VarChar(500)
+  unavailableRequestedAt DateTime? @map("unavailable_requested_at") @db.Timestamptz(3)
+  unavailableResolvedAt  DateTime? @map("unavailable_resolved_at") @db.Timestamptz(3)
   // ------------------------------------------
   // CATALOG REFERENCE
   // ------------------------------------------

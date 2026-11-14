@@ -95,7 +95,7 @@ export default function KitchenScreen({
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-900/40">
+          <div className="px-4 py-3 rounded-xl border border-zinc-800 bg-zinc-950/80">
             <span className="block text-[10px] uppercase font-mono text-zinc-500">
               Station
             </span>
@@ -124,7 +124,7 @@ export default function KitchenScreen({
       <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
         {/* Active */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <Utensils className="w-5 h-5 text-emerald-400" />
@@ -146,7 +146,7 @@ export default function KitchenScreen({
 
         {/* Pending */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center">
               <Clock className="w-5 h-5 text-amber-400" />
@@ -166,7 +166,7 @@ export default function KitchenScreen({
 
         {/* Preparing */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
               <CookingPot className="w-5 h-5 text-blue-400" />
@@ -188,7 +188,7 @@ export default function KitchenScreen({
 
         {/* Ready */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5 text-emerald-400" />
@@ -208,7 +208,7 @@ export default function KitchenScreen({
 
         {/* Average */}
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-4">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4">
           <div className="flex items-center justify-between">
             <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center">
               <AlertTriangle className="w-5 h-5 text-rose-400" />
@@ -234,7 +234,7 @@ export default function KitchenScreen({
           CONSOLIDATED PREP QUEUE
       ======================================================= */}
 
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 overflow-hidden">
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 overflow-hidden">
         <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-5 p-5 border-b border-zinc-800">
           <div className="flex items-center gap-3">
             <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
@@ -284,7 +284,7 @@ export default function KitchenScreen({
       ======================================================= */}
 
       {activeOrders.length === 0 ? (
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 py-20 flex flex-col items-center justify-center">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 py-20 flex flex-col items-center justify-center">
           <ChefHat className="w-12 h-12 text-zinc-700 mb-4" />
 
           <h3 className="text-lg font-semibold text-white">
@@ -303,7 +303,7 @@ export default function KitchenScreen({
             return (
               <div
                 key={order.id}
-                className={`relative rounded-2xl border bg-zinc-900/40 overflow-hidden transition-all duration-300 hover:border-emerald-500/20 ${
+                className={`relative rounded-2xl border bg-zinc-950/80 overflow-hidden transition-all duration-300 hover:border-emerald-500/20 ${
                   delayed ? "border-rose-500/30" : "border-zinc-800"
                 }`}
               >

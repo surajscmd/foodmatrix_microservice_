@@ -97,7 +97,7 @@ export default function ShiftPlanner({
   };
 
   return (
-    <div className="max-w-xl mx-auto bg-zinc-900/30 border border-zinc-800 rounded-2xl p-6">
+    <div className="max-w-xl mx-auto bg-zinc-950/80 border border-zinc-800 rounded-2xl p-6">
       <div className="flex items-center gap-3 border-b border-zinc-800 pb-4 mb-6">
         <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
           <Plus className="w-5 h-5 text-emerald-400" />

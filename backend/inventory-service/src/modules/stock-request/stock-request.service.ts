@@ -258,6 +258,15 @@ export class StockRequestService {
   // COMMON
   // ======================================================
 
+  async findOwner(id: string) {
+    const request = await this.prisma.stockRequest.findUnique({
+      where: { id },
+      select: { restaurantId: true, requestedBy: true },
+    });
+    if (!request) throw new NotFoundException('Stock request not found');
+    return request;
+  }
+
   async findById(id: string) {
     const request = await this.prisma.stockRequest.findUnique({
       where: {

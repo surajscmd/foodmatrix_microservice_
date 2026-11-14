@@ -371,12 +371,12 @@ export function InventoryIngredientSearch({
 // ======================================================
 // PAGINATION
 // ======================================================
-
 interface InventoryPaginationProps {
   page: number;
   limit: number;
   total: number;
   loading?: boolean;
+  itemLabel?: string;
   onPageChange: (page: number) => void;
   onLimitChange: (limit: number) => void;
 }
@@ -386,6 +386,7 @@ export function InventoryPagination({
   limit,
   total,
   loading = false,
+  itemLabel = "stock items",
   onPageChange,
   onLimitChange,
 }: InventoryPaginationProps) {
@@ -450,8 +451,8 @@ export function InventoryPagination({
         <span className="font-semibold text-zinc-300">
           {startItem}-{endItem}
         </span>{" "}
-        of <span className="font-semibold text-zinc-300">{total}</span> stock
-        items
+        of <span className="font-semibold text-zinc-300">{total}</span>{" "}
+        {itemLabel}
       </div>
 
       <div className="flex flex-wrap items-center justify-end gap-2">

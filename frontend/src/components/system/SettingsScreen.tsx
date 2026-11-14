@@ -122,7 +122,7 @@ export default function SettingsScreen({
       {/* ================= KPI ================= */}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Database
@@ -135,7 +135,7 @@ export default function SettingsScreen({
           <p className="mt-1 text-xs text-zinc-500">Connected successfully</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               POS Sync
@@ -148,7 +148,7 @@ export default function SettingsScreen({
           <p className="mt-1 text-xs text-zinc-500">Last sync 12 sec ago</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               API
@@ -161,7 +161,7 @@ export default function SettingsScreen({
           <p className="mt-1 text-xs text-zinc-500">99.98% uptime</p>
         </div>
 
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
+        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5">
           <div className="flex items-center justify-between">
             <span className="text-xs font-mono uppercase text-zinc-500">
               Security
@@ -183,7 +183,7 @@ export default function SettingsScreen({
         <div className="space-y-6 xl:col-span-7">
           {/* Profile */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
             <div className="mb-6 flex items-center gap-3">
               <div className="rounded-xl bg-emerald-500/10 p-3">
                <UserIcon className="h-5 w-5 text-emerald-400" />
@@ -276,7 +276,7 @@ export default function SettingsScreen({
 
           {/* Restaurant Information */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
             <div className="mb-6 flex items-center gap-3">
               <div className="rounded-xl bg-blue-500/10 p-3">
                 <Store className="h-5 w-5 text-blue-400" />
@@ -367,7 +367,7 @@ export default function SettingsScreen({
         <div className="space-y-6 xl:col-span-5">
           {/* Preferences */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
             <div className="mb-5 flex items-center gap-3">
               <MonitorCog className="h-5 w-5 text-emerald-400" />
 
@@ -422,7 +422,7 @@ export default function SettingsScreen({
 
           {/* API */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
             <div className="mb-5 flex items-center gap-3">
               <Key className="h-5 w-5 text-amber-400" />
 
@@ -447,7 +447,7 @@ export default function SettingsScreen({
 
           {/* System */}
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-950/80 p-6">
             <div className="mb-4 flex items-center gap-3">
               <Activity className="h-5 w-5 text-emerald-400" />
 

@@ -18,12 +18,18 @@ const run = async () => {
           numPartitions: 3,
           replicationFactor: 3,
         },
+        {
+          topic: "order-complete-stock-shortage",
+          numPartitions: 3,
+          replicationFactor: 3,
+        },
       ],
     });
 
-    console.log("Topic created successfully");
+    console.log("Order topics are ready");
   } catch (error) {
     console.error("Kafka error:", error);
+    process.exitCode = 1;
   } finally {
     await admin.disconnect();
   }

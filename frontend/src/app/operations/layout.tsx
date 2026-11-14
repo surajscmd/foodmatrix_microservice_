@@ -7,7 +7,8 @@ import Header from "@/components/Header";
 import Sidebar from "@/components/Sidebar";
 
 import { regionalNavigation } from "@/utils/navigation";
-import type { User } from "@/utils/types";
+
+import NotificationProvider from "@/providers/NotificationProvider";
 
 export default function DashboardShell({
   children,
@@ -22,50 +23,41 @@ export default function DashboardShell({
     .flatMap((section) => section.items)
     .find((item) => item.href === pathname);
 
-  const user: User = {
-    id: "USR-001",
-    name: "Suraj S",
-    email: "suraj@foodmatrix.com",
-    role: "Store Manager",
-    avatar: "https://i.pravatar.cc/100",
-  };
-
   return (
-    <div className="min-h-screen flex bg-[#070914] text-slate-100">
-      <Sidebar
-        user={user}
-        navigation={regionalNavigation}
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-        portal="edge"
-      />
-
-      <div
-        className={`flex flex-1 flex-col transition-all duration-300 ${
-          sidebarOpen ? "ml-64" : "ml-0"
-        }`}
-      >
-        <Header
+    <NotificationProvider scope="WAREHOUSE">
+      <div className="min-h-screen flex bg-[#070914] text-slate-100">
+        <Sidebar
+          navigation={regionalNavigation}
           sidebarOpen={sidebarOpen}
-          onToggleSidebar={() => setSidebarOpen((v) => !v)}
-          alertsCount={3}
-          onOpenAlerts={() => console.log("Open alerts")}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
           portal="edge"
-          title={currentPage?.header.title ?? "FoodMatrix"}
-          subtitle={
-            currentPage?.header.subtitle ?? "Restaurant Dashboard"
-          }
         />
 
-        <main className="flex-1 overflow-y-auto bg-[#070914] p-6">
-          {children}
-        </main>
+        <div
+          className={`flex flex-1 flex-col transition-all duration-300 ${
+            sidebarOpen ? "ml-64" : "ml-0"
+          }`}
+        >
+          <Header
+            sidebarOpen={sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen((v) => !v)}
+            alertsCount={3}
+            onOpenAlerts={() => console.log("Open alerts")}
+            portal="edge"
+            title={currentPage?.header.title ?? "FoodMatrix"}
+            subtitle={currentPage?.header.subtitle ?? "Restaurant Dashboard"}
+          />
 
-        <footer className="border-t border-zinc-800 bg-[#070914] px-6 py-4 text-[10px] font-mono text-zinc-600 flex justify-between">
-          <span>FOODMATRIX OPERATIONS SYSTEM</span>
-          <span>STATE NODE REPLICATED • SSL SECURE</span>
-        </footer>
+          <main className="flex-1 overflow-y-auto bg-[#070914] p-6">
+            {children}
+          </main>
+
+          <footer className="border-t border-zinc-800 bg-[#070914] px-6 py-4 text-[10px] font-mono text-zinc-600 flex justify-between">
+            <span>FOODMATRIX OPERATIONS SYSTEM</span>
+            <span>STATE NODE REPLICATED • SSL SECURE</span>
+          </footer>
+        </div>
       </div>
-    </div>
+    </NotificationProvider>
   );
 }

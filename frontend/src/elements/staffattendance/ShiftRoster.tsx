@@ -42,7 +42,7 @@ export default function ShiftRoster({
       rounded-2xl
       border
       border-zinc-800
-      bg-zinc-900/30
+      bg-zinc-950/80
       overflow-hidden
     "
     >

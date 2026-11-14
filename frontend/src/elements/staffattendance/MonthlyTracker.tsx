@@ -148,7 +148,7 @@ export default function MonthlyTracker({
     <div className="space-y-6">
       {/* HEADER */}
 
-      <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-5 flex flex-col lg:flex-row justify-between gap-4">
+      <div className="bg-zinc-950/80 border border-zinc-800 rounded-2xl p-5 flex flex-col lg:flex-row justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
             <Calendar className="w-4 h-4 text-emerald-400" />
@@ -201,7 +201,7 @@ export default function MonthlyTracker({
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* CALENDAR LEFT SIDE */}
 
-        <div className="lg:col-span-8 bg-zinc-900/30 border border-zinc-800 rounded-2xl p-5">
+        <div className="lg:col-span-8 bg-zinc-950/80 border border-zinc-800 rounded-2xl p-5">
           <div className="flex justify-between items-center border-b border-zinc-800 pb-3 mb-4">
             <span className="text-xs font-mono uppercase text-zinc-300 font-bold">
               Attendance Calendar
@@ -289,7 +289,7 @@ export default function MonthlyTracker({
         </div>
         {/* AUDIT PANEL */}
 
-        <div className="lg:col-span-4 bg-zinc-900/30 border border-zinc-800 rounded-2xl p-5 space-y-5">
+        <div className="lg:col-span-4 bg-zinc-950/80 border border-zinc-800 rounded-2xl p-5 space-y-5">
           <div className="border-b border-zinc-800 pb-3">
             <div className="flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider font-mono text-emerald-400">

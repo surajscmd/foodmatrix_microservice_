@@ -110,7 +110,112 @@ export class OrderService {
       },
     };
   }
+  async listRegisterOrders(
+    restaurantId: string,
+    page: number,
+    view: 'open' | 'history' = 'open',
+  ) {
+    const limit = 20;
+    const currentPage = Number.isSafeInteger(page) && page > 0 ? page : 1;
 
+    const where: Prisma.OrderWhereInput = {
+      restaurantId,
+      status: {
+        in:
+          view === 'history'
+            ? [OrderStatus.COMPLETED, OrderStatus.CANCELLED]
+            : [
+                OrderStatus.PENDING,
+                OrderStatus.CONFIRMED,
+                OrderStatus.PREPARING,
+                OrderStatus.READY,
+              ],
+      },
+    };
+
+    const [data, total] = await Promise.all([
+      this.prisma.order.findMany({
+        where,
+        skip: (currentPage - 1) * limit,
+        take: limit,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        include: this.orderInclude(),
+      }),
+      this.prisma.order.count({ where }),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page: currentPage,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+  async getRestaurantDashboard(restaurantId: string) {
+    const now = new Date();
+    const start = new Date(now);
+    start.setUTCHours(0, 0, 0, 0);
+    start.setUTCDate(start.getUTCDate() - 6);
+
+    const dailyTotals = new Map<string, Prisma.Decimal>();
+
+    for (let offset = 0; offset < 7; offset++) {
+      const date = new Date(start);
+      date.setUTCDate(start.getUTCDate() + offset);
+      dailyTotals.set(date.toISOString().slice(0, 10), new Prisma.Decimal(0));
+    }
+
+    const [queue, payments] = await Promise.all([
+      this.getUpcomingOrders(restaurantId, 1, 8),
+      this.prisma.payment.findMany({
+        where: {
+          order: { restaurantId },
+          status: { in: [PaymentStatus.COMPLETED, PaymentStatus.REFUNDED] },
+          OR: [
+            { createdAt: { gte: start, lte: now } },
+            { refundedAt: { gte: start, lte: now } },
+          ],
+        },
+        select: { amount: true, createdAt: true, refundedAt: true },
+      }),
+    ]);
+
+    function record(date: Date, amount: Prisma.Decimal) {
+      if (date < start || date > now) return;
+
+      const day = date.toISOString().slice(0, 10);
+      const total = dailyTotals.get(day);
+
+      if (total !== undefined) {
+        dailyTotals.set(day, total.plus(amount));
+      }
+    }
+
+    for (const payment of payments) {
+      record(payment.createdAt, payment.amount);
+
+      if (payment.refundedAt) {
+        record(payment.refundedAt, payment.amount.negated());
+      }
+    }
+
+    return {
+      queueTotal: queue.pagination.total,
+      queue: queue.data.map(({ id, orderNumber, status, createdAt }) => ({
+        id,
+        orderNumber,
+        status,
+        createdAt,
+      })),
+      revenue: Array.from(dailyTotals, ([day, amount]) => ({
+        day,
+        amount: amount.toNumber(),
+      })),
+    };
+  }
   // ============================================================
   // CREATE ORDER
   // ============================================================
@@ -427,6 +532,10 @@ export class OrderService {
         orderId,
 
         status: OrderItemStatus.PENDING,
+        OR: [
+          { unavailableRequestedAt: null },
+          { unavailableResolvedAt: { not: null } },
+        ],
       },
 
       data: {

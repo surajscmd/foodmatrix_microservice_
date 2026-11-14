@@ -1,189 +1,183 @@
 "use client";
 
+import { useId } from "react";
 import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  ReferenceLine,
   ResponsiveContainer,
-  AreaChart,
-  Area,
+  Tooltip,
   XAxis,
   YAxis,
-  Tooltip,
-  CartesianGrid,
 } from "recharts";
 
-import { TrendingUp } from "lucide-react";
-import { dailyRevenue } from "@/utils/mockData";
+import type { OrderDashboard } from "@/lib/order-api";
 
-export default function RevenueChart() {
+interface RevenueChartProps {
+  revenue: OrderDashboard["revenue"];
+  currency?: string;
+}
+
+const shortDate = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+const fullDate = new Intl.DateTimeFormat("en-IN", {
+  weekday: "long",
+  day: "numeric",
+  month: "long",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+const compactAmount = new Intl.NumberFormat("en-IN", {
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+function formatDay(day: string, formatter: Intl.DateTimeFormat) {
+  const date = new Date(`${day}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? day : formatter.format(date);
+}
+
+export default function RevenueChart({
+  revenue,
+  currency,
+}: RevenueChartProps) {
+  const chartId = useId();
+  const positiveFill = `${chartId}-positive`;
+  const negativeFill = `${chartId}-negative`;
+  const currencyCode = currency?.trim().toUpperCase();
+
+  const money = new Intl.NumberFormat(
+    "en-IN",
+    currencyCode && /^[A-Z]{3}$/.test(currencyCode)
+      ? { style: "currency", currency: currencyCode }
+      : { maximumFractionDigits: 2 },
+  );
+
+  if (revenue.length === 0) {
+    return (
+      <p className="rounded-xl border border-dashed border-zinc-700 p-4 text-sm text-zinc-400">
+        No payment dates to display.
+      </p>
+    );
+  }
+
+  const netTotal = revenue.reduce((sum, day) => sum + day.amount, 0);
+  const hasNegativeDays = revenue.some(({ amount }) => amount < 0);
+  const allDaysZero = revenue.every(({ amount }) => amount === 0);
+
   return (
-    <section
-      className="
-      overflow-hidden
-      rounded-3xl
-      border
-      border-zinc-800
-      bg-zinc-900/50
-      backdrop-blur-md
-      "
-    >
-      {/* Header */}
-
-      <div
-        className="
-        flex
-        flex-col
-        gap-5
-        border-b
-        border-zinc-800
-        p-6
-        md:flex-row
-        md:items-center
-        md:justify-between
-        "
-      >
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
+          <p className="text-xs font-medium text-zinc-400">Period total</p>
           <p
-            className="
-            text-[10px]
-            font-mono
-            uppercase
-            tracking-[0.18em]
-            text-zinc-500
-            "
+            className={`mt-1 break-words text-3xl font-semibold tracking-tight tabular-nums sm:text-4xl ${
+              netTotal < 0 ? "text-rose-300" : "text-emerald-200"
+            }`}
           >
-            SALES ANALYTICS
-          </p>
-
-          <h2
-            className="
-            mt-2
-            text-2xl
-            font-bold
-            text-white
-            "
-          >
-            Revenue Performance
-          </h2>
-
-          <p className="mt-1 text-sm text-zinc-500">
-            Daily revenue generated this week
+            {money.format(netTotal)}
           </p>
         </div>
 
-        <div
-          className="
-          flex
-          items-center
-          gap-4
-          rounded-2xl
-          border
-          border-emerald-500/20
-          bg-emerald-500/10
-          px-5
-          py-3
-          "
-        >
-          <div
-            className="
-            flex
-            h-11
-            w-11
-            items-center
-            justify-center
-            rounded-xl
-            bg-emerald-500/15
-            "
-          >
-            <TrendingUp size={22} className="text-emerald-400" />
-          </div>
-
-          <div>
-            <p className="text-[10px] font-mono uppercase tracking-widest text-emerald-300">
-              Weekly Revenue
-            </p>
-
-            <h3 className="text-2xl font-bold text-white">$88,450</h3>
-          </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-zinc-300">
+          <span className="inline-flex items-center gap-2">
+            <span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-400" />
+            Positive net
+          </span>
+          {hasNegativeDays && (
+            <span className="inline-flex items-center gap-2">
+              <span aria-hidden="true" className="h-2 w-2 rounded-full bg-rose-400" />
+              Negative net
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Chart */}
+      {allDaysZero ? (
+        <p className="rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-6 text-sm text-zinc-300">
+          Net payments were zero on every day in this period.
+        </p>
+      ) : (
+        <div className="h-56 min-w-0 rounded-xl border border-zinc-800 bg-gradient-to-b from-slate-900/70 to-zinc-950 px-1.5 pb-2 pt-3 sm:h-64 sm:px-3">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              accessibilityLayer
+              data={revenue}
+              margin={{ top: 4, right: 8, bottom: 4, left: 0 }}
+            >
+              <defs>
+                <linearGradient id={positiveFill} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#5eead4" />
+                  <stop offset="100%" stopColor="#059669" />
+                </linearGradient>
+                <linearGradient id={negativeFill} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor="#be123c" />
+                  <stop offset="100%" stopColor="#fda4af" />
+                </linearGradient>
+              </defs>
 
-      <div className="h-[340px] px-4 pb-4 pt-2">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart
-            data={dailyRevenue}
-            margin={{
-              top: 20,
-              right: 15,
-              left: -20,
-              bottom: 5,
-            }}
-          >
-            <defs>
-              <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#10b981" stopOpacity={0.45} />
+              <CartesianGrid vertical={false} stroke="#303540" strokeDasharray="4 4" />
 
-                <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-              </linearGradient>
-            </defs>
+              <XAxis
+                dataKey="day"
+                axisLine={false}
+                tickLine={false}
+                tickMargin={10}
+                minTickGap={12}
+                tick={{ fill: "#cbd5e1", fontSize: 11 }}
+                tickFormatter={(day: string) => formatDay(day, shortDate)}
+              />
 
-            <CartesianGrid
-              stroke="#27272a"
-              vertical={false}
-              strokeDasharray="4 4"
-            />
+              <YAxis
+                width={48}
+                axisLine={false}
+                tickLine={false}
+                tickMargin={6}
+                tick={{ fill: "#a1a1aa", fontSize: 11 }}
+                tickFormatter={(amount: number) => compactAmount.format(amount)}
+              />
 
-            <XAxis
-              dataKey="day"
-              tick={{
-                fill: "#71717a",
-                fontSize: 12,
-              }}
-              tickLine={false}
-              axisLine={false}
-            />
+              <ReferenceLine y={0} stroke="#71717a" />
 
-            <YAxis
-              tickFormatter={(v) => `$${v / 1000}k`}
-              tick={{
-                fill: "#71717a",
-                fontSize: 12,
-              }}
-              tickLine={false}
-              axisLine={false}
-            />
+              <Tooltip
+                labelFormatter={(day) => formatDay(String(day), fullDate)}
+                formatter={(amount) => money.format(Number(amount))}
+                cursor={{ fill: "#334155", fillOpacity: 0.4 }}
+                contentStyle={{
+                  backgroundColor: "#111827",
+                  border: "1px solid #475569",
+                  borderRadius: 12,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
+                itemStyle={{ color: "#e2e8f0" }}
+              />
 
-            <Tooltip
-              contentStyle={{
-                background: "#18181b",
-                border: "1px solid #3f3f46",
-                borderRadius: 12,
-              }}
-              labelStyle={{
-                color: "#a1a1aa",
-              }}
-              formatter={(value) => [
-                `$${Number(value).toLocaleString()}`,
-                "Revenue",
-              ]}
-            />
-
-            <Area
-              type="monotone"
-              dataKey="revenue"
-              stroke="#10b981"
-              strokeWidth={3}
-              fill="url(#revenueGradient)"
-              activeDot={{
-                r: 6,
-                stroke: "#10b981",
-                strokeWidth: 3,
-                fill: "#18181b",
-              }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
+              <Bar
+                dataKey="amount"
+                name="Net payments"
+                maxBarSize={38}
+                radius={5}
+                isAnimationActive={false}
+              >
+                {revenue.map(({ day, amount }) => (
+                  <Cell
+                    key={day}
+                    fill={`url(#${amount < 0 ? negativeFill : positiveFill})`}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+    </div>
   );
 }

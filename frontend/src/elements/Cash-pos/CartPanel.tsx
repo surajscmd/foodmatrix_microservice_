@@ -1,239 +1,191 @@
 "use client";
 
-import { useState } from "react";
-import {
-  Minus,
-  Plus,
-  Trash2,
-  ShoppingCart,
-  RotateCcw,
-  MonitorPlay,
-  Check,
-} from "lucide-react";
-import { usePosStore } from "@/store/pos.store";
-import type { Order } from "@/utils/types";
-import type { FulfillmentType } from "@/utils/pos.types";
+import { useState, type FormEvent } from "react";
+import { Minus, Plus, ShoppingBag } from "lucide-react";
+import type { CreateOrderInput, OrderType } from "@/lib/order-api";
+import type { RegisterMenuItem } from "./MenuCatalog";
 
-interface CartPanelProps {
-  onAddOrder: (order: Partial<Order>) => void;
+export interface CartLine {
+  item: RegisterMenuItem;
+  quantity: number;
 }
 
-export default function CartPanel({ onAddOrder }: CartPanelProps) {
-  const {
-    cart,
-    updateQuantity,
-    removeFromCart,
-    clearCart,
-    discountPct,
-    setDiscount,
-    fulfillmentType,
-    setFulfillmentType,
-    customerName,
-    setCustomerName,
-  } = usePosStore();
+interface Props {
+  lines: CartLine[];
+  busy: boolean;
+  uncertain: boolean;
+  formatMoney: (amount: number) => string;
+  onQuantityChange: (item: RegisterMenuItem, delta: number) => void;
+  onSubmit: (order: CreateOrderInput) => void;
+  onDiscard: () => void;
+}
 
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+const orderTypes: { value: OrderType; label: string }[] = [
+  { value: "TAKEAWAY", label: "Takeaway" },
+  { value: "DINE_IN", label: "Dine-in" },
+  { value: "DELIVERY", label: "Delivery" },
+];
 
-  const subtotal = cart.reduce(
-    (sum, item) => sum + item.menuItem.price * item.quantity,
+const focus = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
+const field = `mt-1 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white ${focus}`;
+const stepper = `grid size-9 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-white enabled:hover:bg-zinc-800 disabled:opacity-50 ${focus}`;
+
+export default function CartPanel({
+  lines,
+  busy,
+  uncertain,
+  formatMoney,
+  onQuantityChange,
+  onSubmit,
+  onDiscard,
+}: Props) {
+  const [type, setType] = useState<OrderType>("TAKEAWAY");
+
+  const estimate = lines.reduce(
+    (sum, { item, quantity }) => sum + Math.round(item.price * 100) * quantity,
     0,
-  );
+  ) / 100;
 
-  const discountValue = subtotal * (discountPct / 100);
-  const taxValue = (subtotal - discountValue) * 0.1;
-  const total = subtotal - discountValue + taxValue;
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (busy || uncertain || lines.length === 0) return;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (cart.length === 0) return;
-
-    const orderItems = cart.map((item) => ({
-      menuItemId: item.menuItem.id,
-      name: item.menuItem.name,
-      quantity: item.quantity,
-      price: item.menuItem.price,
+    const form = new FormData(event.currentTarget);
+    const phone = String(form.get("phone") ?? "").trim();
+    const items = lines.map(({ item, quantity }) => ({
+      menuItemId: item.id,
+      quantity,
     }));
 
-    onAddOrder({
-      restaurantId: "R-101",
-      restaurantName: "FoodMatrix Downtown",
-      items: orderItems,
-      total: Number(total.toFixed(2)),
-      status: "Pending",
-      timestamp: new Date().toLocaleTimeString("en-US", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: false,
-      }),
-      type: fulfillmentType,
-      cashierName: "James Loo",
-      customerName,
-    });
-
-    clearCart();
-
-    setSuccessMsg(
-      "Takeout order successfully dispatched to KDS kitchen streams!",
-    );
-
-    setTimeout(() => setSuccessMsg(null), 4000);
-  };
+    if (type === "DINE_IN") {
+      onSubmit({ type, phone, items, tableId: String(form.get("table") ?? "").trim() });
+    } else {
+      onSubmit({ type, phone, items });
+    }
+  }
 
   return (
-    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 flex flex-col h-[620px] shadow-2xl">
-      {successMsg && (
-        <div className="mb-3 p-3 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl flex items-center gap-2 text-xs font-semibold">
-          <Check className="w-4 h-4" />
-          {successMsg}
+    <form onSubmit={submit} className="space-y-4 p-4">
+      {lines.length === 0 && !uncertain ? (
+        <div className="rounded-xl border border-violet-400/30 bg-violet-950/40 p-5 text-center">
+          <span className="mx-auto grid size-10 place-items-center rounded-xl bg-violet-300 text-violet-950">
+            <ShoppingBag aria-hidden="true" className="size-5" />
+          </span>
+          <p className="mt-2 text-sm font-medium text-white">Start a new order</p>
+          <p className="mt-1 text-xs text-zinc-400">Tap an item in the menu to add it.</p>
         </div>
+      ) : (
+        <fieldset disabled={busy || uncertain} className="min-w-0 space-y-4">
+          <legend className="sr-only">New order</legend>
+
+          <ul className="max-h-72 divide-y divide-zinc-800 overflow-y-auto rounded-xl border border-zinc-800 bg-zinc-950/50">
+            {lines.map(({ item, quantity }) => (
+              <li key={item.id} className="flex items-center justify-between gap-3 p-3">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-white">{item.name}</p>
+                  <p className="mt-1 text-xs tabular-nums text-zinc-400">
+                    {formatMoney(item.price * quantity)}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <button
+                    type="button"
+                    aria-label={`Remove one ${item.name}`}
+                    onClick={() => onQuantityChange(item, -1)}
+                    className={stepper}
+                  >
+                    <Minus aria-hidden="true" className="size-4" />
+                  </button>
+                  <span className="min-w-6 text-center text-sm tabular-nums">{quantity}</span>
+                  <button
+                    type="button"
+                    aria-label={`Add one ${item.name}`}
+                    disabled={quantity >= 99}
+                    onClick={() => onQuantityChange(item, 1)}
+                    className={stepper}
+                  >
+                    <Plus aria-hidden="true" className="size-4" />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+
+          <div role="group" aria-label="Order type" className="grid grid-cols-3 gap-1.5">
+            {orderTypes.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={type === value}
+                onClick={() => setType(value)}
+                className={`min-h-10 rounded-lg border px-1 text-xs font-semibold disabled:opacity-50 ${focus} ${
+                  type === value
+                    ? "border-violet-400/50 bg-violet-400/15 text-violet-200"
+                    : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-violet-400/40"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          {type === "DINE_IN" && (
+            <label className="block text-xs font-medium text-zinc-300">
+              Table
+              <input
+                name="table"
+                required
+                pattern={"\\S.*"}
+                maxLength={50}
+                placeholder="e.g. T04"
+                className={field}
+              />
+            </label>
+          )}
+
+          <label className="block text-xs font-medium text-zinc-300">
+            Customer phone
+            <input
+              name="phone"
+              type="tel"
+              autoComplete="tel"
+              required
+              minLength={7}
+              maxLength={20}
+              pattern={"[0-9+\\-\\s]{7,20}"}
+              title="Use 7–20 characters: digits, spaces, + or -."
+              className={field}
+            />
+          </label>
+
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-violet-400/10 px-3 py-2.5">
+            <span className="text-sm text-violet-200">Estimated total</span>
+            <strong className="text-lg tabular-nums text-white">{formatMoney(estimate)}</strong>
+          </div>
+
+          <button
+            type="submit"
+            disabled={lines.length === 0}
+            className={`min-h-11 w-full rounded-xl bg-violet-300 px-3 text-sm font-semibold text-violet-950 enabled:hover:bg-violet-200 disabled:opacity-50 ${focus}`}
+          >
+            {busy ? "Working…" : "Place & confirm"}
+          </button>
+        </fieldset>
       )}
 
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-800 pb-3 mb-4">
-        <div className="flex items-center gap-2">
-          <ShoppingCart className="w-4 h-4 text-emerald-400" />
-          <span className="text-xs font-semibold text-white">
-            Active Terminal Cart
-          </span>
-        </div>
-
-        {cart.length > 0 && (
+      {uncertain && (
+        <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-sm text-amber-200">
+          <p>Check Open orders below before starting another order.</p>
           <button
-            onClick={clearCart}
-            className="text-[10px] text-zinc-500 hover:text-rose-400 font-mono flex items-center gap-1 cursor-pointer"
+            type="button"
+            disabled={busy}
+            onClick={onDiscard}
+            className={`mt-2 min-h-9 rounded-lg text-sm font-semibold underline disabled:opacity-50 ${focus}`}
           >
-            <RotateCcw className="w-3 h-3" />
-            Reset Basket
+            Clear draft after checking
           </button>
-        )}
-      </div>
-
-      {/* Cart Items */}
-      <div className="flex-1 h-full overflow-y-auto space-y-2">
-        {cart.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-zinc-600 font-mono text-[10px] text-center">
-            <ShoppingCart className="w-7 h-7 text-zinc-800 mb-2" />
-            Cart is empty
-          </div>
-        ) : (
-          cart.map((item) => (
-            <div
-              key={item.menuItem.id}
-              className="p-2.5 bg-zinc-950 border border-zinc-800 rounded-xl flex items-center justify-between gap-3 text-xs"
-            >
-              <div className="flex-1">
-                <span className="font-semibold text-white block truncate">
-                  {item.menuItem.name}
-                </span>
-
-                <span className="text-[9px] text-emerald-400 font-mono">
-                  ${item.menuItem.price.toFixed(2)} / unit
-                </span>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => updateQuantity(item.menuItem.id, -1)}
-                  className="p-1 border border-zinc-800 rounded text-zinc-500 hover:text-white"
-                >
-                  <Minus className="w-2.5 h-2.5" />
-                </button>
-
-                <span className="text-white font-mono w-4 text-center">
-                  {item.quantity}
-                </span>
-
-                <button
-                  onClick={() => updateQuantity(item.menuItem.id, 1)}
-                  className="p-1 border border-zinc-800 rounded text-zinc-500 hover:text-white"
-                >
-                  <Plus className="w-2.5 h-2.5" />
-                </button>
-
-                <button
-                  onClick={() => removeFromCart(item.menuItem.id)}
-                  className="text-zinc-600 hover:text-rose-400 ml-1"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-3 pt-3 border-t border-zinc-800"
-      >
-        <div className="grid grid-cols-2 gap-3">
-          <input
-            value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
-            className="bg-zinc-950 border border-zinc-800 rounded-xl py-1.5 px-2 text-xs text-white"
-            placeholder="Customer"
-          />
-
-          <select
-            value={fulfillmentType}
-            onChange={(e) =>
-              setFulfillmentType(e.target.value as FulfillmentType)
-            }
-           className="w-full appearance-none bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white font-medium focus:outline-none focus:border-emerald-500 cursor-pointer transition-colors"
-          >
-            <option className="bg-zinc-950 text-white" value="Takeout">
-              Takeout
-            </option>
-
-            <option className="bg-zinc-950 text-white" value="Drive-Thru">
-              Drive-Thru
-            </option>
-          </select>
         </div>
-
-        <div className="grid grid-cols-4 gap-1 bg-zinc-950 p-1 border border-zinc-800 rounded-xl">
-          {[0, 10, 15, 20].map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setDiscount(value)}
-              className={`py-1 rounded-lg text-[9px] font-mono ${
-                discountPct === value
-                  ? "bg-emerald-500/10 text-emerald-400"
-                  : "text-zinc-500"
-              }`}
-            >
-              {value === 0 ? "None" : `${value}%`}
-            </button>
-          ))}
-        </div>
-
-        <div className="bg-zinc-950 border border-zinc-800 rounded-xl p-3 text-[10px] font-mono space-y-1">
-          <div className="flex justify-between">
-            <span>Subtotal</span>
-            <span>${subtotal.toFixed(2)}</span>
-          </div>
-
-          <div className="flex justify-between">
-            <span>Tax</span>
-            <span>${taxValue.toFixed(2)}</span>
-          </div>
-
-          <div className="border-t border-zinc-800 pt-2 flex justify-between text-emerald-400 font-bold">
-            <span>Total</span>
-            <span>${total.toFixed(2)}</span>
-          </div>
-        </div>
-
-        <button
-          disabled={cart.length === 0}
-          className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 disabled:opacity-40"
-        >
-          <MonitorPlay className="w-4 h-4" />
-          Send Takeout/Drive-Thru to KDS
-        </button>
-      </form>
-    </div>
+      )}
+    </form>
   );
 }
