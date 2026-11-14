@@ -39,6 +39,8 @@ export class NotificationController {
       query.page,
       query.limit,
       query.isRead,
+      query.priority,
+      query.search,
     );
   }
 

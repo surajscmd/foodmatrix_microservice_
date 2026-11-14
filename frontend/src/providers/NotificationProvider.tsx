@@ -19,7 +19,9 @@ import {
   markNotificationRead,
 } from "@/lib/notification-api";
 
+import { playSavedNotificationSound, unlockNotificationAudio } from "@/lib/notification-sound";
 import { useOrganizationStore } from "@/store/organization-store";
+import { usePlatformPreferences } from "@/store/platform-preferences";
 
 import type {
   NotificationItem,
@@ -79,10 +81,11 @@ export default function NotificationProvider({
     (state) => state.restaurants,
   );
 
+  const user = currentUser?.systemUser;
   const restaurantId =
-    currentUser?.systemUser.managedRestaurantId ||
-    selectedRestaurant?.id ||
-    "";
+    user?.isActive && (user.role === "RESTAURANT_ADMIN" || user.role === "STAFF")
+      ? user.managedRestaurantId ?? ""
+      : "";
 
   const restaurantName =
     restaurants.find((item) => item.id === restaurantId)?.name ||
@@ -138,6 +141,7 @@ function NotificationSession({
   const [revision, setRevision] = useState(0);
   const [syncKey, setSyncKey] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const notificationSound = usePlatformPreferences().notificationSound;
 
   const socketRef = useRef<Socket | null>(null);
   const mounted = useRef(false);
@@ -242,7 +246,6 @@ function NotificationSession({
     return () => controller.abort();
   }, [scope, locationId, syncKey]);
 
-  // Live connection.
   useEffect(() => {
     if (!locationId) return;
 
@@ -254,6 +257,7 @@ function NotificationSession({
     const socket = io(`${origin}/notifications`, {
       path: "/api/notification/socket.io",
       transports: ["websocket"],
+      withCredentials: true,
       autoConnect: false,
       forceNew: true,
       reconnection: true,
@@ -265,18 +269,25 @@ function NotificationSession({
     socketRef.current = socket;
 
     const onConnect = () => {
-      setConnected(true);
-
-      if (scope === "WAREHOUSE") {
-        socket.emit("join-warehouse", {
-          warehouseId: locationId,
-        });
-      } else {
-        socket.emit("join-restaurant", {
-          restaurantId: locationId,
-        });
+      if (scope === "RESTAURANT") {
+        socket.timeout(7000).emit(
+          "join-restaurant",
+          { restaurantId: locationId },
+          (error: Error | null, response?: { joined: boolean }) => {
+            if (socketRef.current !== socket || !socket.connected) return;
+            if (error || !response?.joined) {
+              socket.disconnect();
+              return;
+            }
+            setConnected(true);
+            scheduleSync();
+          },
+        );
+        return;
       }
 
+      socket.emit("join-warehouse", { warehouseId: locationId });
+      setConnected(true);
       scheduleSync();
     };
 
@@ -294,12 +305,9 @@ function NotificationSession({
         return;
       }
 
-      const targetId =
-        scope === "WAREHOUSE"
-          ? item.warehouseId
-          : item.restaurantId;
-
+      const targetId = scope === "RESTAURANT" ? item.restaurantId : item.warehouseId;
       if (targetId === locationId) {
+        if (scope === "RESTAURANT") playSavedNotificationSound();
         scheduleSync();
       }
     };
@@ -312,18 +320,6 @@ function NotificationSession({
     socket.connect();
 
     return () => {
-      if (socket.connected) {
-        if (scope === "WAREHOUSE") {
-          socket.emit("leave-warehouse", {
-            warehouseId: locationId,
-          });
-        } else {
-          socket.emit("leave-restaurant", {
-            restaurantId: locationId,
-          });
-        }
-      }
-
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
       socket.off("connect_error", onDisconnect);
@@ -337,6 +333,13 @@ function NotificationSession({
     };
   }, [scope, locationId, scheduleSync]);
 
+  useEffect(() => {
+    if (scope !== "RESTAURANT" || !locationId || !notificationSound) return;
+    const unlock = () => { void unlockNotificationAudio().catch(() => {}); };
+    window.addEventListener("click", unlock, { once: true });
+    return () => window.removeEventListener("click", unlock);
+  }, [scope, locationId, notificationSound]);
+
   // Reconcile missed events and read changes from other sessions.
   useEffect(() => {
     if (!locationId) return;
@@ -349,11 +352,9 @@ function NotificationSession({
       }
     };
 
-    const interval = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        scheduleSync();
-      }
-    }, 60000);
+    const interval = scope === "WAREHOUSE"
+      ? window.setInterval(onVisibility, 60_000)
+      : undefined;
 
     window.addEventListener("focus", onFocus);
     document.addEventListener("visibilitychange", onVisibility);
@@ -366,7 +367,7 @@ function NotificationSession({
         onVisibility,
       );
     };
-  }, [locationId, scheduleSync]);
+  }, [locationId, scope, scheduleSync]);
 
   const runReadAction = useCallback(
     async (
@@ -432,7 +433,7 @@ function NotificationSession({
         notificationsHref:
           scope === "WAREHOUSE"
             ? "/operations/notifications"
-            : "/restaurant/notifications",
+            : "/restaurant/alerts",
         preview,
         unreadCount,
         totalCount,

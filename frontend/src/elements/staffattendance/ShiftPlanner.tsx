@@ -1,293 +1,207 @@
-"use client";
+import { CalendarPlus, RefreshCw } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 
-import { useState } from "react";
-import { Check, Plus } from "lucide-react";
+import {
+  attendanceError,
+  createShiftSchedule,
+  getActiveShiftTemplates,
+  getStaffByRestaurant,
+  type ShiftTemplate,
+  type Staff,
+} from "@/lib/hr-api";
+import { restaurantDateTime } from "./report-dates";
 
-import type { Employee, Restaurant, Shift } from "@/utils/types";
+const field = "h-10 w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-white scheme-dark focus:border-emerald-400 focus:outline-none disabled:opacity-50";
+const fieldLabel = "grid min-w-0 gap-1.5 text-xs font-medium text-zinc-300";
 
-interface ShiftPlannerProps {
-  employees: Employee[];
-  restaurants: Restaurant[];
-  onAddShifts: (shifts: Partial<Shift>[]) => void;
-  setActiveTab: (tab: "roster" | "monthly-tracker" | "add-shift") => void;
+type Pattern = "single" | "weekday" | "weekly" | "daily";
+
+function shiftDates(day: string, pattern: Pattern) {
+  if (pattern === "single") return [day];
+  const first = new Date(`${day.slice(0, 7)}-01T00:00:00Z`);
+  const weekday = new Date(`${day}T00:00:00Z`).getUTCDay();
+  const dates: string[] = [];
+  for (const date = new Date(first); date.getUTCMonth() === first.getUTCMonth(); date.setUTCDate(date.getUTCDate() + 1)) {
+    const weekDay = date.getUTCDay();
+    if (pattern === "daily" || (pattern === "weekday" && weekDay >= 1 && weekDay <= 5) || (pattern === "weekly" && weekDay === weekday)) {
+      dates.push(date.toISOString().slice(0, 10));
+    }
+  }
+  return dates;
 }
 
-type SchedulePattern = "weekly" | "weekday" | "daily";
-type ScheduleMode = "single" | "month";
+export default function ShiftPlanner({ restaurantId, timeZone, initialDay, onSavingChange, onSaved }: {
+  restaurantId: string;
+  timeZone: string;
+  initialDay: string;
+  onSavingChange: (saving: boolean) => void;
+  onSaved: (date: string, count: number) => void;
+}) {
+  const [options, setOptions] = useState<{ staff: Staff[]; templates: ShiftTemplate[] }>();
+  const [loadError, setLoadError] = useState("");
+  const [revision, setRevision] = useState(0);
+  const [staffId, setStaffId] = useState("");
+  const [templateId, setTemplateId] = useState("");
+  const [day, setDay] = useState(initialDay);
+  const [pattern, setPattern] = useState<Pattern>("single");
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [confirmedDates, setConfirmedDates] = useState<string[]>([]);
+  const template = options?.templates.find((item) => item.id === templateId);
+  const dates = day ? shiftDates(day, pattern) : [];
 
-export default function ShiftPlanner({
-  employees,
-  restaurants,
-  onAddShifts,
-  setActiveTab,
-}: ShiftPlannerProps) {
-  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
-  const [restaurantId, setRestaurantId] = useState(restaurants[0]?.id ?? "");
-
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
-
-  const [startTime, setStartTime] = useState("09:00");
-  const [endTime, setEndTime] = useState("17:00");
-
-  const [mode, setMode] = useState<ScheduleMode>("single");
-
-  const [pattern, setPattern] = useState<SchedulePattern>("weekly");
-
-  const createShift = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
-    const employee = employees.find((emp) => emp.id === employeeId);
-
-    const restaurant = restaurants.find((rest) => rest.id === restaurantId);
-
-    if (!employee || !restaurant) return;
-
-    const dates: string[] = [];
-
-    if (mode === "single") {
-      dates.push(date);
-    } else {
-      const baseDate = new Date(date);
-
-      const year = baseDate.getFullYear();
-      const month = baseDate.getMonth();
-
-      const totalDays = new Date(year, month + 1, 0).getDate();
-
-      for (let i = 1; i <= totalDays; i++) {
-        const currentDate = new Date(year, month, i);
-
-        const formatted = currentDate.toISOString().slice(0, 10);
-
-        if (pattern === "daily") {
-          dates.push(formatted);
-        }
-
-        if (
-          pattern === "weekday" &&
-          currentDate.getDay() >= 1 &&
-          currentDate.getDay() <= 5
-        ) {
-          dates.push(formatted);
-        }
-
-        if (
-          pattern === "weekly" &&
-          currentDate.getDay() === baseDate.getDay()
-        ) {
-          dates.push(formatted);
-        }
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [first, templates] = await Promise.all([
+          getStaffByRestaurant(restaurantId, 1, 50),
+          getActiveShiftTemplates(restaurantId),
+        ]);
+        const remaining = await Promise.all(Array.from(
+          { length: Math.max(0, first.data.pagination.totalPages - 1) },
+          (_, index) => getStaffByRestaurant(restaurantId, index + 2, 50),
+        ));
+        if (cancelled) return;
+        const staff = [...first.data.data, ...remaining.flatMap((page) => page.data.data)]
+          .filter((person) => person.status === "ACTIVE")
+          .sort((a, b) => a.firstName.localeCompare(b.firstName));
+        setOptions({ staff, templates });
+      } catch (error) {
+        if (!cancelled) setLoadError(attendanceError(error, "Unable to load staff or shift templates."));
       }
     }
+    void load();
+    return () => { cancelled = true; };
+  }, [restaurantId, revision]);
 
-    const payload = dates.map((shiftDate) => ({
-      employeeId: employee.id,
-      employeeName: employee.name,
-      role: employee.role,
-      restaurantId: restaurant.id,
-      restaurantName: restaurant.name,
-      date: shiftDate,
-      startTime,
-      endTime,
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving || !staffId || !template || !dates.length) return;
+
+    setSaveError("");
+    const clockTimes = template.segments.map((segment, index, segments) => ({
+      ...segment,
+      startDay: segments.slice(0, index).filter((entry) => entry.crossesMidnight).length,
     }));
+    const first = clockTimes[0];
+    const last = clockTimes.at(-1);
+    if (!first || !last) {
+      setSaveError("This template has no shift times.");
+      return;
+    }
 
-    onAddShifts(payload);
+    const tasks = dates.filter((date) => !confirmedDates.includes(date)).map((date) => {
+      const end = new Date(`${date}T00:00:00Z`);
+      end.setUTCDate(end.getUTCDate() + last.startDay + Number(last.crossesMidnight));
+      return {
+        date,
+        scheduledStart: restaurantDateTime(`${date}T${first.startTime}`, timeZone),
+        scheduledEnd: restaurantDateTime(`${end.toISOString().slice(0, 10)}T${last.endTime}`, timeZone),
+      };
+    });
 
-    setActiveTab("roster");
-  };
+    setSaving(true);
+    onSavingChange(true);
+    const saved = [...confirmedDates];
+    try {
+      // Save in order and keep successful dates out of any retry.
+      for (const { date, scheduledStart, scheduledEnd } of tasks) {
+        if (!scheduledStart || !scheduledEnd || scheduledEnd <= scheduledStart) {
+          setSaveError(`${date}: The template times fall outside a valid shift in ${timeZone}.`);
+          return;
+        }
+
+        try {
+          await createShiftSchedule({ restaurantId, staffId, shiftTemplateId: template.id, scheduledStart, scheduledEnd });
+          saved.push(date);
+        } catch (error) {
+          setSaveError(`${date}: ${attendanceError(error, "Unable to confirm the shift was saved. Check the roster before retrying.")}`);
+          return;
+        }
+      }
+      onSaved(day, saved.length);
+    } finally {
+      setConfirmedDates(saved);
+      setSaving(false);
+      onSavingChange(false);
+    }
+  }
 
   return (
-    <div className="max-w-xl mx-auto bg-zinc-950/80 border border-zinc-800 rounded-2xl p-6">
-      <div className="flex items-center gap-3 border-b border-zinc-800 pb-4 mb-6">
-        <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-          <Plus className="w-5 h-5 text-emerald-400" />
+    <section aria-labelledby="shift-planner" className="min-w-0 overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-linear-to-r from-emerald-950 to-zinc-900 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-300/15 text-emerald-200">
+            <CalendarPlus size={17} aria-hidden />
+          </span>
+          <h2 id="shift-planner" className="text-sm font-semibold text-white">Add shifts</h2>
         </div>
-
-        <div>
-          <h3 className="text-sm font-medium text-white">
-            Plan Employee Shift
-          </h3>
-
-          <p className="text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-            Labor Forecasting
-          </p>
-        </div>
+        <span className="text-xs text-zinc-300">{timeZone.replaceAll("_", " ")}</span>
       </div>
-
-      <form onSubmit={createShift} className="space-y-5">
-        <div className="grid md:grid-cols-2 gap-4">
-          <SelectField
-            label="Employee"
-            value={employeeId}
-            onChange={setEmployeeId}
-          >
-            {employees.map((employee) => (
-              <option key={employee.id} value={employee.id}>
-                {employee.name}
-              </option>
-            ))}
-          </SelectField>
-
-          <SelectField
-            label="Restaurant"
-            value={restaurantId}
-            onChange={setRestaurantId}
-          >
-            {restaurants.map((restaurant) => (
-              <option key={restaurant.id} value={restaurant.id}>
-                {restaurant.name}
-              </option>
-            ))}
-          </SelectField>
+      {loadError && (
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <p role="alert" className="text-sm text-rose-200">{loadError}</p>
+          <button type="button" onClick={() => { setLoadError(""); setRevision((value) => value + 1); }} className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-xs font-medium text-white hover:bg-zinc-800"><RefreshCw size={14} aria-hidden />Retry</button>
         </div>
-
-        <div className="space-y-2">
-          <label className="text-[10px] uppercase tracking-wider font-mono text-zinc-500">
-            Scheduling Scope
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => setMode("single")}
-              className={`${mode === "single" ? "bg-emerald-500/10 border-emerald-500 text-emerald-400" : "bg-zinc-950 border-zinc-800 text-zinc-500"} rounded-xl border py-2 text-xs transition`}
+      )}
+      {!options && !loadError && <p role="status" className="p-4 text-sm text-zinc-300">Loading staff and shift templates…</p>}
+      {options && (
+        <form onSubmit={(event) => void save(event)}>
+          <div className="space-y-3 p-4">
+            <fieldset
+              disabled={saving || confirmedDates.length > 0}
+              className="grid min-w-0 gap-3 @lg:grid-cols-2 @5xl:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_minmax(0,0.8fr)_minmax(0,1.2fr)]"
             >
-              Single Shift
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setMode("month")}
-              className={`${mode === "month" ? "bg-emerald-500/10 border-emerald-500 text-emerald-400" : "bg-zinc-950 border-zinc-800 text-zinc-500"} rounded-xl border py-2 text-xs transition`}
-            >
-              Monthly Plan
+              <label className={fieldLabel}>
+                Staff member
+                <select value={staffId} onChange={(e) => setStaffId(e.target.value)} required className={field}>
+                  <option value="">{options.staff.length ? "Select staff" : "No active staff"}</option>
+                  {options.staff.map((person) => <option key={person.id} value={person.id}>{person.firstName} {person.lastName} · {person.employeeCode}</option>)}
+                </select>
+              </label>
+              <label className={fieldLabel}>
+                Shift template
+                <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} required className={field}>
+                  <option value="">{options.templates.length ? "Select template" : "No active shift templates"}</option>
+                  {options.templates.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+              <label className={fieldLabel}>
+                Shift date
+                <input type="date" value={day} onChange={(e) => setDay(e.target.value)} required className={field} />
+              </label>
+              <label className={fieldLabel}>
+                Repeat
+                <select value={pattern} onChange={(e) => setPattern(e.target.value as Pattern)} className={field}>
+                  <option value="single">One day</option>
+                  <option value="weekly">Same weekday this month</option>
+                  <option value="weekday">Weekdays this month</option>
+                  <option value="daily">Every day this month</option>
+                </select>
+              </label>
+            </fieldset>
+            {template && (
+              <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border border-emerald-400/20 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100 tabular-nums">
+                <span className="font-medium text-emerald-200">Template hours</span>
+                {template.segments.map((segment) => `${segment.startTime}–${segment.endTime}${segment.crossesMidnight ? " (+1 day)" : ""}`).join(" · ")}
+              </p>
+            )}
+            {saveError && <p role="alert" className="text-sm text-rose-200">{saveError}</p>}
+            {confirmedDates.length > 0 && <p role="status" className="text-sm text-emerald-200">{confirmedDates.length} of {dates.length} shifts saved.</p>}
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-800 bg-[#18191d] px-4 py-3">
+            {confirmedDates.length > 0 && (
+              <button type="button" disabled={saving} onClick={() => onSaved(confirmedDates[0] ?? day, confirmedDates.length)} className="min-h-10 rounded-lg border border-zinc-700 px-3 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+                View saved shifts
+              </button>
+            )}
+            <button type="submit" disabled={saving || !staffId || !template || !dates.length} className="min-h-10 w-full rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-emerald-950 enabled:hover:bg-emerald-200 disabled:opacity-50 @lg:w-auto">
+              {saving ? "Saving…" : confirmedDates.length ? "Retry remaining shifts" : dates.length > 1 ? `Save ${dates.length} shifts` : "Save shift"}
             </button>
           </div>
-        </div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <InputField
-            label={mode === "single" ? "Shift Date" : "Anchor Date"}
-            type="date"
-            value={date}
-            onChange={setDate}
-          />
-
-          {mode === "month" && (
-            <SelectField
-              label="Repeat Pattern"
-              value={pattern}
-              onChange={(value) => setPattern(value as SchedulePattern)}
-            >
-              <option value="weekly">Weekly</option>
-
-              <option value="weekday">Weekdays</option>
-
-              <option value="daily">Every Day</option>
-            </SelectField>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <InputField
-            label="Start Time"
-            type="time"
-            value={startTime}
-            onChange={setStartTime}
-          />
-
-          <InputField
-            label="End Time"
-            type="time"
-            value={endTime}
-            onChange={setEndTime}
-          />
-        </div>
-
-        {mode === "month" && (
-          <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3">
-            <p className="text-[10px] uppercase font-mono text-emerald-400">
-              Monthly Automation
-            </p>
-
-            <p className="text-xs text-zinc-400 mt-1">
-              System will generate recurring shift blocks automatically.
-            </p>
-          </div>
-        )}
-
-        <div className="pt-4 border-t border-zinc-800 flex gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab("roster")}
-            className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-2 text-xs text-zinc-400 hover:text-white transition"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="submit"
-            className="flex-1 rounded-xl bg-emerald-500 py-2 text-xs font-medium text-zinc-950 flex items-center justify-center gap-2 hover:bg-emerald-400 transition"
-          >
-            <Check className="w-4 h-4" />
-            Publish Shift
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
-function SelectField({
-  label,
-  value,
-  onChange,
-  children,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] uppercase tracking-wider font-mono text-zinc-500">
-        {label}
-      </label>
-
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-emerald-500/50"
-      >
-        {children}
-      </select>
-    </div>
-  );
-}
-
-function InputField({
-  label,
-  type,
-  value,
-  onChange,
-}: {
-  label: string;
-  type: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] uppercase tracking-wider font-mono text-zinc-500">
-        {label}
-      </label>
-
-      <input
-        type={type}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-emerald-500/50"
-      />
-    </div>
+        </form>
+      )}
+    </section>
   );
 }

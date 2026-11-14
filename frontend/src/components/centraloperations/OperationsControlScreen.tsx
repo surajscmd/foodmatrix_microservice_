@@ -1,44 +1,41 @@
 "use client";
 
-import {
-  BarChart3,
-  Bell,
-  DollarSign,
-  ShoppingBag,
-  Store,
-  TrendingUp,
-  Users,
-} from "lucide-react";
+import Link from "next/link";
+import { BarChart3, Bell, Package, ShoppingBag, Store, Users } from "lucide-react";
+
+import RevenueChart from "@/elements/edgedashboard/RevenueChart";
+import CreateSystemUser from "@/elements/operations/CreateSystemUser";
+import FranchiseOverview from "@/elements/operations/FranchiseOverview";
 import MetricCard from "@/elements/operations/MetricCard";
 import QuickActionCard from "@/elements/operations/QuickActionCard";
 import RegionPerformanceCard from "@/elements/operations/RegionPerformanceCard";
-import {
-  corporateMetrics,
-  initialEmployees,
-  initialOrders,
-  initialRestaurants,
-} from "@/utils/mockData";
-
-import FranchiseOverview from "@/elements/operations/FranchiseOverview";
-import CreateSystemUser from "@/elements/operations/CreateSystemUser";
-
+import useOperationsMetrics from "@/elements/operations/useOperationsMetrics";
 
 export default function OperationsControlScreen() {
-  const activeRestaurants = initialRestaurants.filter(
-    (r) => r.status === "Operational",
-  ).length;
-
-  const totalRevenue = initialRestaurants.reduce(
-    (sum, restaurant) => sum + restaurant.revenue24h,
-    0,
-  );
-
-  const totalEmployees = initialEmployees.length;
-
-  const activeOrders = initialOrders.filter(
-    (order) => order.status !== "Completed",
-  ).length;
-
+  const { restaurants, orders, staff, currency, alerts, activity, activityError, activityLoading, locationId, accountReady } = useOperationsMetrics();
+  const day = new Date().toISOString().slice(0, 10);
+  const money = new Intl.NumberFormat("en-IN", { style: "currency", currency: /^[A-Z]{3}$/.test(currency) ? currency : "INR" });
+  const time = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" });
+  const allOrdersLoaded = orders != null && orders.every(({ dashboard }) => dashboard !== null);
+  const totals = new Map<string, number>();
+  if (allOrdersLoaded) {
+    for (const { dashboard } of orders) {
+      for (const { day, amount } of dashboard?.revenue ?? []) {
+        totals.set(day, (totals.get(day) ?? 0) + amount);
+      }
+    }
+  }
+  const revenue = Array.from(totals, ([day, amount]) => ({ day, amount })).sort((a, b) => a.day.localeCompare(b.day));
+  const today = allOrdersLoaded ? totals.get(day) ?? 0 : null;
+  const openOrders = allOrdersLoaded ? orders.reduce((sum, item) => sum + (item.dashboard?.queueTotal ?? 0), 0) : null;
+  const activeRestaurants = restaurants?.filter((restaurant) => restaurant.status === "ACTIVE").length;
+  const criticalAlerts = alerts?.data.filter((alert) => alert.priority === "CRITICAL") ?? [];
+  const sources = [
+    { service: "Restaurant directory", state: restaurants ? "Available" : accountReady ? "Unavailable" : "Loading" },
+    { service: "Order Service", state: allOrdersLoaded ? "Available" : orders === undefined ? "Loading" : orders?.some(({ dashboard }) => dashboard) ? "Partial data" : "Unavailable" },
+    { service: "HR Service", state: staff == null ? staff === null ? "Unavailable" : "Loading" : "Available" },
+    { service: "Warehouse notifications", state: activityError || (!locationId && accountReady) ? "Unavailable" : activityLoading || !locationId ? "Loading" : "Available" },
+  ];
   return (
     <div className="space-y-8 animate-fade-in">
       {/* Hero */}
@@ -48,39 +45,14 @@ export default function OperationsControlScreen() {
       {/* KPI */}
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          title="Revenue Today"
-          value={`₹${totalRevenue.toLocaleString("en-IN")}`}
-          // Using parseFloat will extract the number even if the string is "+12.5%"
-          change={parseFloat(corporateMetrics.totalRevenueMonthly.change) || 0}
-          description="vs yesterday"
-        />
-
-        <MetricCard
-          title="Open Orders"
-          value={activeOrders}
-          change={12.6}
-          description="currently processing"
-        />
-
-        <MetricCard
-          title="Restaurants"
-          value={activeRestaurants}
-          change={4.2}
-          description="network online"
-        />
-
-        <MetricCard
-          title="Employees"
-          value={totalEmployees}
-          change={2.8}
-          description="active workforce"
-        />
+        <MetricCard title="Revenue Today" value={today === null ? "—" : money.format(today)} description="Net payments today (UTC)" />
+        <MetricCard title="Kitchen Queue" value={openOrders ?? "—"} description="Orders awaiting completion" />
+        <MetricCard title="Restaurants" value={activeRestaurants ?? "—"} description="Active locations" />
+        <MetricCard title="Employees" value={staff ?? "—"} description="Staff visible to your account" />
       </section>
-
       {/* Quick Actions */}
 
-      <section className="space-y-5">
+      <section className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
@@ -93,46 +65,46 @@ export default function OperationsControlScreen() {
           </div>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
           <QuickActionCard
             title="Franchise Network"
             description="Manage all restaurant locations across the region."
-            href="/regional/franchises"
+            href="/operations/restaurants"
             icon={Store}
           />
 
           <QuickActionCard
             title="Staff Registry"
             description="View employees, roles and workforce allocation."
-            href="/regional/staff"
+            href="/operations/staff"
             icon={Users}
           />
 
           <QuickActionCard
             title="Inventory"
             description="Monitor stock levels and warehouse movement."
-            href="/regional/inventory"
+            href="/operations/inventory"
             icon={ShoppingBag}
           />
 
           <QuickActionCard
-            title="Analytics"
-            description="Business intelligence and performance insights."
-            href="/regional/analytics"
+            title="Stock Audit"
+            description="Review stock movements and inventory history."
+            href="/operations/stockaudit"
             icon={BarChart3}
           />
 
           <QuickActionCard
-            title="Financial Overview"
-            description="Revenue, profitability and operational costs."
-            href="/regional/finance"
-            icon={DollarSign}
+            title="Fulfillment"
+            description="Track warehouse shipments and transfers."
+            href="/operations/fulfillment"
+            icon={Package}
           />
 
           <QuickActionCard
             title="Alerts Hub"
-            description="Review operational alerts across all restaurants."
-            href="/regional/alerts"
+            description="Review warehouse alerts and stock updates."
+            href="/operations/notifications"
             icon={Bell}
           />
         </div>
@@ -161,27 +133,22 @@ export default function OperationsControlScreen() {
               </p>
 
               <p className="text-lg font-bold text-white">
-                ₹{totalRevenue.toLocaleString("en-IN")}
+                {today === null ? "—" : money.format(today)}
               </p>
             </div>
           </div>
 
-          <div className="mt-8 flex h-[340px] items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-[#070914]">
-            <div className="text-center">
-              <TrendingUp className="mx-auto mb-4 h-10 w-10 text-emerald-400" />
-
-              <h3 className="text-lg font-semibold text-white">
-                Revenue Trend
-              </h3>
-
-              <p className="mt-2 text-sm text-zinc-500">
-                Recharts AreaChart will be placed here.
+          <div className="mt-8">
+            {allOrdersLoaded && revenue.length > 0 ? (
+              <RevenueChart revenue={revenue} currency={currency} />
+            ) : (
+              <p className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-[#070914] px-4 text-center text-sm text-zinc-400">
+                {orders === undefined ? "Loading revenue…" : allOrdersLoaded ? "No restaurant payments to display." : "Revenue is unavailable for one or more restaurants."}
               </p>
-            </div>
+            )}
           </div>
         </div>
-
-        {/* System Health */}
+        {/* Data Sources */}
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
           <div>
@@ -190,50 +157,19 @@ export default function OperationsControlScreen() {
             </p>
 
             <h2 className="mt-1 text-xl font-semibold text-white">
-              System Health
+              Data Sources
             </h2>
           </div>
 
           <div className="mt-6 space-y-4">
-            {[
-              {
-                service: "API Gateway",
-                status: "Healthy",
-                color: "bg-emerald-500",
-              },
-              {
-                service: "Authentication",
-                status: "Healthy",
-                color: "bg-emerald-500",
-              },
-              {
-                service: "Order Service",
-                status: "Healthy",
-                color: "bg-emerald-500",
-              },
-              {
-                service: "Inventory Service",
-                status: "Warning",
-                color: "bg-yellow-500",
-              },
-              {
-                service: "Payment Gateway",
-                status: "Healthy",
-                color: "bg-emerald-500",
-              },
-              {
-                service: "Notification Queue",
-                status: "Healthy",
-                color: "bg-emerald-500",
-              },
-            ].map((service) => (
+            {sources.map((service) => (
               <div
                 key={service.service}
                 className="flex items-center justify-between rounded-xl border border-zinc-800 bg-[#070914] px-4 py-3"
               >
                 <div className="flex items-center gap-3">
                   <div
-                    className={`h-2.5 w-2.5 rounded-full ${service.color}`}
+                    className={`h-2.5 w-2.5 rounded-full ${service.state === "Available" ? "bg-emerald-500" : service.state === "Loading" ? "bg-zinc-500" : "bg-yellow-500"}`}
                   />
 
                   <span className="text-sm text-zinc-200">
@@ -241,7 +177,7 @@ export default function OperationsControlScreen() {
                   </span>
                 </div>
 
-                <span className="text-xs text-zinc-500">{service.status}</span>
+                <span className="text-xs text-zinc-500">{service.state}</span>
               </div>
             ))}
           </div>
@@ -263,50 +199,34 @@ export default function OperationsControlScreen() {
           </div>
 
           <span className="rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-400">
-            4 Active
+            {alerts ? `${criticalAlerts.length} shown` : "—"}
           </span>
         </div>
 
         <div className="mt-6 divide-y divide-zinc-800">
-          {[
-            {
-              title: "Low Inventory",
-              location: "Koramangala Outlet",
-              time: "5 min ago",
-            },
-            {
-              title: "Kitchen Delay",
-              location: "Indiranagar Outlet",
-              time: "11 min ago",
-            },
-            {
-              title: "POS Offline",
-              location: "Electronic City",
-              time: "18 min ago",
-            },
-            {
-              title: "Staff Shortage",
-              location: "Whitefield",
-              time: "31 min ago",
-            },
-          ].map((alert) => (
+          {criticalAlerts.length === 0 && (
+            <p className="py-4 text-sm text-zinc-400">
+              {alerts ? "No critical alerts among recent unread warehouse notifications." : alerts === null || (!locationId && accountReady) ? "Warehouse alerts are unavailable." : "Loading warehouse alerts…"}
+            </p>
+          )}
+          {criticalAlerts.map((alert) => (
             <div
-              key={alert.title}
+              key={alert.id}
               className="flex items-center justify-between py-4"
             >
               <div>
                 <h4 className="font-medium text-white">{alert.title}</h4>
 
-                <p className="mt-1 text-sm text-zinc-500">{alert.location}</p>
+                <p className="mt-1 text-sm text-zinc-500">{alert.message}</p>
               </div>
 
-              <span className="text-xs text-zinc-600">{alert.time}</span>
+              <span className="text-xs text-zinc-600">{time.format(new Date(alert.createdAt))}</span>
             </div>
           ))}
         </div>
       </section>
 
-      {/* Regional Performance */}
+      {/* Restaurant Performance */}
 
       <section className="space-y-6">
         <div className="flex items-center justify-between">
@@ -316,42 +236,33 @@ export default function OperationsControlScreen() {
             </p>
 
             <h2 className="mt-1 text-xl font-semibold text-white">
-              Regional Performance
+              Restaurant Performance
             </h2>
           </div>
 
-          <button className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-300 transition hover:border-emerald-500/30 hover:text-white">
-            View All Regions
-          </button>
+          <Link href="/operations/restaurants" className="rounded-xl border border-zinc-800 bg-zinc-900/40 px-4 py-2 text-sm text-zinc-300 transition hover:border-emerald-500/30 hover:text-white">
+            View All Restaurants
+          </Link>
         </div>
 
         <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-          <RegionPerformanceCard
-            region="Bengaluru North"
-            stores={12}
-            revenue={3845000}
-            growth={12.4}
-            activeOrders={241}
-            status="healthy"
-          />
-
-          <RegionPerformanceCard
-            region="Bengaluru South"
-            stores={9}
-            revenue={2910000}
-            growth={6.2}
-            activeOrders={184}
-            status="warning"
-          />
-
-          <RegionPerformanceCard
-            region="Mysuru Region"
-            stores={5}
-            revenue={1485000}
-            growth={-2.3}
-            activeOrders={69}
-            status="critical"
-          />
+          {!restaurants?.length && (
+            <p className="rounded-xl border border-zinc-800 bg-zinc-950/75 p-4 text-sm text-zinc-400">
+              {restaurants ? "No restaurants in this franchise." : accountReady ? "The restaurant directory is unavailable." : "Loading restaurants…"}
+            </p>
+          )}
+          {(restaurants ?? []).map((restaurant) => {
+            const dashboard = orders?.find((item) => item.restaurant.id === restaurant.id)?.dashboard;
+            const amount = dashboard?.revenue.find((entry) => entry.day === day)?.amount;
+            return (
+              <RegionPerformanceCard
+                key={restaurant.id}
+                restaurant={restaurant}
+                revenue={amount === undefined ? "—" : money.format(amount)}
+                activeOrders={dashboard?.queueTotal}
+              />
+            );
+          })}
         </div>
       </section>
 
@@ -376,40 +287,19 @@ export default function OperationsControlScreen() {
           </div>
 
           <div className="mt-6 grid grid-cols-2 gap-5 md:grid-cols-4">
-            <div className="rounded-xl border border-zinc-800 bg-[#070914] p-5">
-              <p className="text-xs text-zinc-500">Today Orders</p>
-              <h3 className="mt-2 text-3xl font-bold text-white">2,481</h3>
-              <span className="mt-2 inline-block text-xs text-emerald-400">
-                +8.4%
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-zinc-800 bg-[#070914] p-5">
-              <p className="text-xs text-zinc-500">Customers</p>
-              <h3 className="mt-2 text-3xl font-bold text-white">1,927</h3>
-              <span className="mt-2 inline-block text-xs text-emerald-400">
-                +5.8%
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-zinc-800 bg-[#070914] p-5">
-              <p className="text-xs text-zinc-500">Avg Ticket</p>
-              <h3 className="mt-2 text-3xl font-bold text-white">₹486</h3>
-              <span className="mt-2 inline-block text-xs text-emerald-400">
-                +3.1%
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-zinc-800 bg-[#070914] p-5">
-              <p className="text-xs text-zinc-500">Satisfaction</p>
-              <h3 className="mt-2 text-3xl font-bold text-white">4.8★</h3>
-              <span className="mt-2 inline-block text-xs text-emerald-400">
-                +0.2
-              </span>
-            </div>
+            {[
+              { label: "Restaurants", value: restaurants?.length },
+              { label: "Active locations", value: activeRestaurants },
+              { label: "Unread warehouse alerts", value: alerts?.pagination.total },
+              { label: "Locations reporting orders", value: orders?.filter(({ dashboard }) => dashboard !== null).length },
+            ].map(({ label, value }) => (
+              <div key={label} className="rounded-xl border border-zinc-800 bg-[#070914] p-5">
+                <p className="text-xs text-zinc-500">{label}</p>
+                <h3 className="mt-2 text-3xl font-bold text-white">{value ?? "—"}</h3>
+              </div>
+            ))}
           </div>
         </div>
-
         {/* Recent Activity */}
 
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
@@ -424,29 +314,13 @@ export default function OperationsControlScreen() {
           </div>
 
           <div className="mt-6 space-y-5">
-            {[
-              {
-                title: "New franchise onboarded",
-                desc: "Rajajinagar • 2 min ago",
-              },
-              {
-                title: "Purchase Order Approved",
-                desc: "Central Warehouse • 12 min ago",
-              },
-              {
-                title: "Inventory Sync Completed",
-                desc: "All Regions • 25 min ago",
-              },
-              {
-                title: "Regional Audit Completed",
-                desc: "Bengaluru South • 38 min ago",
-              },
-              {
-                title: "Payroll Generated",
-                desc: "Head Office • 1 hour ago",
-              },
-            ].map((activity) => (
-              <div key={activity.title} className="flex items-start gap-4">
+            {activity.length === 0 && (
+              <p className="text-sm text-zinc-400">
+                {activityError || (!locationId && accountReady) ? "Warehouse activity is unavailable." : activityLoading || !locationId ? "Loading activity…" : "No warehouse notifications yet."}
+              </p>
+            )}
+            {activity.map((activity) => (
+              <div key={activity.id} className="flex items-start gap-4">
                 <div className="mt-1 h-2.5 w-2.5 rounded-full bg-emerald-500" />
 
                 <div>
@@ -454,7 +328,7 @@ export default function OperationsControlScreen() {
                     {activity.title}
                   </h4>
 
-                  <p className="mt-1 text-xs text-zinc-500">{activity.desc}</p>
+                  <p className="mt-1 text-xs text-zinc-500">{activity.message} · {time.format(new Date(activity.createdAt))}</p>
                 </div>
               </div>
             ))}

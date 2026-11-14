@@ -1,172 +1,54 @@
-"use client";
+import { CalendarClock, CalendarDays, ClipboardList, Plus, RefreshCw } from "lucide-react";
 
-import { Activity, AlertCircle, Calendar, UserCheck } from "lucide-react";
+const tabs = [
+  { id: "roster", label: "Daily roster", icon: ClipboardList },
+  { id: "monthly-tracker", label: "Monthly tracker", icon: CalendarDays },
+  { id: "add-shift", label: "Add shift", icon: Plus },
+] as const;
 
-interface AttendanceOverviewProps {
-  stats: {
-    activePunches: number;
-    totalShifts: number;
-    latePunches: number;
-    completedPunches: number;
-  };
-
-  activeTab: "roster" | "monthly-tracker" | "add-shift";
-
-  setActiveTab: (tab: "roster" | "monthly-tracker" | "add-shift") => void;
-}
+export type AttendanceTab = (typeof tabs)[number]["id"];
 
 export default function AttendanceOverview({
-  stats,
-  activeTab,
-  setActiveTab,
-}: AttendanceOverviewProps) {
-  const fulfillmentRate =
-    stats.totalShifts > 0
-      ? Math.round((stats.completedPunches / stats.totalShifts) * 100)
-      : 0;
-
-  const lateRatio =
-    stats.completedPunches + stats.activePunches > 0
-      ? Math.round(
-          (stats.latePunches / (stats.completedPunches + stats.activePunches)) *
-            100,
-        )
-      : 0;
-
-  return (
-    <>
-      {/* KPI CARDS */}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="Active On-Shift"
-          value={`${stats.activePunches} staff`}
-          subtitle="Currently punched in"
-          icon={<Activity className="w-5 h-5" />}
-          color="emerald"
-        />
-
-        <MetricCard
-          title="Today's Schedule"
-          value={`${stats.totalShifts} blocks`}
-          subtitle="Total shifts registered"
-          icon={<Calendar className="w-5 h-5" />}
-          color="zinc"
-        />
-
-        <MetricCard
-          title="Late Punch Ratio"
-          value={`${lateRatio}%`}
-          subtitle={`${stats.latePunches} delayed arrivals`}
-          icon={<AlertCircle className="w-5 h-5" />}
-          color="amber"
-        />
-
-        <MetricCard
-          title="Fulfillment Rate"
-          value={`${fulfillmentRate}%`}
-          subtitle="Shift completion"
-          icon={<UserCheck className="w-5 h-5" />}
-          color="cyan"
-        />
-      </div>
-
-      {/* TABS */}
-
-      <div className="flex gap-5 border-b border-zinc-800">
-        <TabButton
-          label="Shift Schedules"
-          active={activeTab === "roster"}
-          onClick={() => setActiveTab("roster")}
-        />
-
-        <TabButton
-          label="Monthly Tracker"
-          active={activeTab === "monthly-tracker"}
-          onClick={() => setActiveTab("monthly-tracker")}
-        />
-
-        <TabButton
-          label="Plan New Shift"
-          active={activeTab === "add-shift"}
-          onClick={() => setActiveTab("add-shift")}
-        />
-      </div>
-    </>
-  );
-}
-
-function MetricCard({
-  title,
-  value,
-  subtitle,
-  icon,
-  color,
+  restaurantName, tab, onTabChange, savingSchedule, refreshing, onRefresh,
 }: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  color: "emerald" | "amber" | "cyan" | "zinc";
-}) {
-  const colors = {
-    emerald: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20",
-
-    amber: "text-amber-400 bg-amber-500/10 border-amber-500/20",
-
-    cyan: "text-cyan-400 bg-cyan-500/10 border-cyan-500/20",
-
-    zinc: "text-zinc-400 bg-zinc-800/60 border-zinc-700",
-  };
-
-  return (
-    <div className="bg-zinc-950/80 border border-zinc-800 p-4 rounded-2xl flex items-center justify-between">
-      <div className="space-y-1">
-        <span className="text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-bold">
-          {title}
-        </span>
-
-        <div className="text-xl font-bold font-mono text-white">{value}</div>
-
-        <p className="text-[10px] text-zinc-400">{subtitle}</p>
-      </div>
-
-      <div className={`p-3 rounded-xl border ${colors[color]}`}>{icon}</div>
-    </div>
-  );
-}
-
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
+  restaurantName: string;
+  tab: AttendanceTab;
+  onTabChange: (tab: AttendanceTab) => void;
+  savingSchedule: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
 }) {
   return (
-    <button
-      onClick={onClick}
-      className={`
-        pb-3
-        text-xs
-        font-bold
-        uppercase
-        font-mono
-        tracking-wider
-        transition
-        relative
-        cursor-pointer
-
-        ${
-          active
-            ? "text-emerald-400 border-b-2 border-emerald-500"
-            : "text-zinc-500 hover:text-zinc-300"
-        }
-      `}
-    >
-      {label}
-    </button>
+    <header className="overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950 shadow-lg shadow-black/20">
+      <div className="flex items-center justify-between gap-3 border-b border-emerald-400/20 bg-linear-to-r from-teal-800 to-slate-800 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-300 text-emerald-950"><CalendarClock size={19} aria-hidden /></span>
+          <div className="min-w-0">
+            <h1 className="text-sm font-semibold tracking-tight text-white">Attendance Reports</h1>
+            <p className="mt-0.5 break-words text-xs text-teal-100">{restaurantName}</p>
+          </div>
+        </div>
+        {tab !== "add-shift" && (
+          <button
+            type="button" onClick={onRefresh} disabled={refreshing}
+            aria-label="Refresh attendance report" title="Refresh attendance report"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-white/20 bg-white/5 text-white enabled:hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50"
+          >
+            <RefreshCw size={15} className={refreshing ? "motion-safe:animate-spin" : ""} aria-hidden />
+          </button>
+        )}
+      </div>
+      <nav aria-label="Attendance views" className="flex flex-wrap gap-1 bg-[#18191d] p-2">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id} type="button" onClick={() => onTabChange(id)} aria-pressed={tab === id}
+            disabled={savingSchedule && tab !== id}
+            className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${tab === id ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : "border-transparent text-zinc-300 hover:bg-white/8"}`}
+          >
+            <Icon size={15} aria-hidden />{label}
+          </button>
+        ))}
+      </nav>
+    </header>
   );
 }

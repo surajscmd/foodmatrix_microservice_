@@ -10,7 +10,7 @@ import {
 interface MetricCardProps {
   title: string;
   value: string | number;
-  change: number;
+  change?: number;
   description: string;
 }
 
@@ -20,8 +20,8 @@ export default function MetricCard({
   change,
   description,
 }: MetricCardProps) {
-  const positive = change > 0;
-  const negative = change < 0;
+  const positive = change !== undefined && change > 0;
+  const negative = change !== undefined && change < 0;
 
   const accentClass = positive
     ? "text-emerald-400"
@@ -83,7 +83,7 @@ export default function MetricCard({
                 ? "w-[72%] bg-emerald-400"
                 : negative
                   ? "w-[34%] bg-red-400"
-                  : "w-1/2 bg-zinc-500"
+                  : change === undefined ? "w-0" : "w-1/2 bg-zinc-500"
             }`}
           />
         </div>
@@ -95,13 +95,12 @@ export default function MetricCard({
           <Activity className="h-3 w-3 text-zinc-600" />
 
           <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-600">
-            Network signal
+            {change === undefined ? "Current value" : "Network signal"}
           </span>
         </div>
 
         <span className={`text-xs font-semibold ${accentClass}`}>
-          {positive && "+"}
-          {change}%
+          {change === undefined ? "" : `${positive ? "+" : ""}${change}%`}
         </span>
       </div>
     </div>

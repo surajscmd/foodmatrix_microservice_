@@ -22,6 +22,9 @@ export class NotificationGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   private readonly logger = new Logger(NotificationGateway.name);
+  private readonly organizationUrl = (
+    process.env.ORGANIZATION_SERVICE_URL ?? 'http://localhost:3001'
+  ).replace(/\/+$/, '');
 
   @WebSocketServer()
   private readonly server!: Server;
@@ -59,13 +62,47 @@ export class NotificationGateway
   async joinRestaurant(
     @ConnectedSocket() client: Socket,
     @MessageBody()
-    body: { restaurantId: string },
-  ): Promise<void> {
-    const room = `restaurant:${body.restaurantId}`;
+    body: { restaurantId?: string } | null,
+  ): Promise<{ joined: boolean }> {
+    const cookie = client.handshake.headers.cookie;
+    const restaurantId = body?.restaurantId;
+    if (!cookie || typeof restaurantId !== 'string' || !restaurantId) {
+      return { joined: false };
+    }
 
-    await client.join(room);
+    try {
+      const response = await fetch(`${this.organizationUrl}/auth/me`, {
+        headers: { Cookie: cookie, Accept: 'application/json' },
+        redirect: 'error',
+        signal: AbortSignal.timeout(5_000),
+      });
+      if (!response.ok) return { joined: false };
 
-    this.logger.log(`Socket ${client.id} joined ${room}`);
+      const session = (await response.json()) as {
+        data?: {
+          systemUser?: {
+            isActive: boolean;
+            role: string;
+            managedRestaurantId: string | null;
+          };
+        };
+      };
+      const user = session.data?.systemUser;
+      if (
+        !client.connected ||
+        !user?.isActive ||
+        (user.role !== 'RESTAURANT_ADMIN' && user.role !== 'STAFF') ||
+        user.managedRestaurantId !== restaurantId
+      ) {
+        return { joined: false };
+      }
+
+      await client.join(`restaurant:${restaurantId}`);
+      return { joined: true };
+    } catch {
+      this.logger.warn('Could not verify a restaurant notification session');
+      return { joined: false };
+    }
   }
 
   // ============================================================
@@ -132,10 +169,12 @@ export class NotificationGateway
    * Send a new notification to all clients
    * connected to a restaurant room.
    */
-  emitToRestaurant(restaurantId: string, notification: unknown): void {
-    this.server
-      .to(`restaurant:${restaurantId}`)
-      .emit('notification:new', notification);
+  emitToRestaurant(restaurantId: string, notification: { id: string }): void {
+    this.server.to(`restaurant:${restaurantId}`).emit('notification:new', {
+      id: notification.id,
+      scope: 'RESTAURANT',
+      restaurantId,
+    });
   }
 
   // ============================================================

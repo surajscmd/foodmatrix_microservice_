@@ -74,7 +74,6 @@ export default function LoginScreen() {
             </div>
           </div>
           {/* Bottom Status */}
-          {/* <Buttomstats /> */}
         </div>
       </div>
     </div>

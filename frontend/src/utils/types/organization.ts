@@ -158,7 +158,7 @@ export interface UpdateRestaurantData {
   name?: string;
   address?: string;
   city?: string;
-  state?: string;
+  state?: string | null;
   country?: string;
   timezone?: string;
   status?: RestaurantStatus;

@@ -172,7 +172,7 @@ function RestaurantPunchClock({
   const blocked = loading || !!loadError || pendingId !== null;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-4">
+    <div className="@container space-y-4">
       <AttendanceHeader
         restaurantName={restaurantName}
         now={now}
@@ -186,12 +186,12 @@ function RestaurantPunchClock({
         busy={pendingId !== null}
       />
 
-      {loadError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-950 px-4 py-3 text-sm text-rose-100">{loadError}</p>}
-      {punchError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-950 px-4 py-3 text-sm text-rose-100">{punchError}</p>}
-      {notice && <p role="status" className="rounded-xl border border-teal-400/25 bg-teal-950 px-4 py-3 text-sm text-teal-100">{notice}</p>}
+      {loadError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100">{loadError}</p>}
+      {punchError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100">{punchError}</p>}
+      {notice && <p role="status" className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100">{notice}</p>}
 
       {data ? (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,0.88fr)_minmax(0,1.12fr)]">
+        <div className="grid items-start gap-4 @3xl:grid-cols-2">
           <PunchStation
             schedules={available}
             timeZone={timeZone}
@@ -215,7 +215,7 @@ function RestaurantPunchClock({
           />
         </div>
       ) : loading && (
-        <p role="status" className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-300">
+        <p role="status" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
           Loading staff, roster and attendance…
         </p>
       )}
@@ -232,7 +232,7 @@ export default function AttendancePunchScreen() {
   const restaurantId = user?.managedRestaurantId ?? restaurant?.id;
   if (!hydrated || !restaurantId || !user) {
     return (
-      <p role="status" className="rounded-2xl border border-slate-800 bg-slate-900 p-5 text-sm text-slate-200">
+      <p role="status" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-200">
         {hydrated ? error || "No restaurant is assigned or selected for this account." : "Loading restaurant…"}
       </p>
     );

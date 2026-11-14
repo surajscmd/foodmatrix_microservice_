@@ -62,6 +62,8 @@ export interface NotificationQuery {
   page?: number;
   limit?: number;
   isRead?: boolean;
+  priority?: NotificationPriority;
+  search?: string;
 }
 
 export interface NotificationRequestOptions {

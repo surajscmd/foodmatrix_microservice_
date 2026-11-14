@@ -41,6 +41,8 @@ function queryString(query: NotificationQuery): string {
   if (query.isRead !== undefined) {
     params.set("isRead", String(query.isRead));
   }
+  if (query.priority) params.set("priority", query.priority);
+  if (query.search?.trim()) params.set("search", query.search.trim());
 
   return `?${params.toString()}`;
 }

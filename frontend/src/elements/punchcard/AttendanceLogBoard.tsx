@@ -25,10 +25,10 @@ export default function AttendanceLogBoard({ onDuty, completed, timeZone, blocke
   ];
 
   return (
-    <section aria-labelledby="attendance-log" className="min-w-0 overflow-hidden rounded-2xl border border-violet-300/25 bg-slate-900">
-      <div className="flex items-center gap-3 bg-linear-to-r from-indigo-950 to-slate-900 p-4">
+    <section aria-labelledby="attendance-log" className="min-w-0 overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950 shadow-lg shadow-black/20">
+      <div className="flex items-center gap-3 bg-linear-to-r from-violet-950 to-zinc-900 px-4 py-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-violet-300/20 text-violet-200"><ClipboardList size={18} aria-hidden /></span>
-        <h2 id="attendance-log" className="text-base font-semibold text-white">Attendance log</h2>
+        <h2 id="attendance-log" className="text-sm font-semibold text-white">Attendance log</h2>
       </div>
       {groups.map(({ label, shifts, empty, color }) => (
         <div key={label}>
@@ -38,10 +38,10 @@ export default function AttendanceLogBoard({ onDuty, completed, timeZone, blocke
               {shifts.map((shift) => {
                 const name = `${shift.staff.firstName} ${shift.staff.lastName}`;
                 return (
-                  <li key={shift.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 hover:bg-white/5">
+                  <li key={shift.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-2.5 hover:bg-zinc-900">
                     <div>
-                      <p className="text-sm font-semibold text-slate-100">{name}</p>
-                      <p className="mt-0.5 text-xs text-slate-300">
+                      <p className="text-sm font-semibold text-zinc-100">{name}</p>
+                      <p className="mt-0.5 text-xs text-zinc-400">
                         {shift.staff.employeeCode} · In <time dateTime={shift.clockInAt}>{dateTime.format(new Date(shift.clockInAt))}</time>
                         {shift.clockOutAt && <> · Out <time dateTime={shift.clockOutAt}>{dateTime.format(new Date(shift.clockOutAt))}</time></>}
                       </p>
@@ -49,7 +49,7 @@ export default function AttendanceLogBoard({ onDuty, completed, timeZone, blocke
                     {!shift.clockOutAt && (
                       <button type="button" disabled={blocked} onClick={() => onPunchOut(shift.id)}
                         aria-label={`Clock out ${name}`}
-                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-semibold text-amber-200 hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-50">
+                        className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-300/10 px-3 text-xs font-semibold text-amber-200 enabled:hover:bg-amber-300/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-300 disabled:opacity-50">
                         <LogOut size={14} aria-hidden />{pendingId === shift.id ? "Saving…" : "Clock out"}
                       </button>
                     )}
@@ -60,7 +60,7 @@ export default function AttendanceLogBoard({ onDuty, completed, timeZone, blocke
                 );
               })}
             </ul>
-          ) : <p className="px-4 py-4 text-sm text-slate-300">{empty}</p>}
+          ) : <p className="px-4 py-4 text-sm text-zinc-400">{empty}</p>}
         </div>
       ))}
     </section>

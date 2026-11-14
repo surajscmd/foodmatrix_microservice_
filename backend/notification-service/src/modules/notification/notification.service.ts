@@ -4,7 +4,11 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { NotificationScope, Prisma } from '@prisma/client';
+import {
+  NotificationScope,
+  Prisma,
+  type NotificationPriority,
+} from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
@@ -24,8 +28,11 @@ export class NotificationService {
     page: number,
     limit: number,
     isRead?: string,
+    priority?: NotificationPriority,
+    search?: string,
   ) {
     const readFilter = this.parseIsRead(isRead);
+    const term = search?.trim();
 
     const skip = (page - 1) * limit;
 
@@ -33,6 +40,15 @@ export class NotificationService {
       scope: NotificationScope.RESTAURANT,
 
       restaurantId,
+      priority,
+      ...(term
+        ? {
+            OR: [
+              { title: { contains: term, mode: 'insensitive' } },
+              { message: { contains: term, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
 
       ...(readFilter !== undefined
         ? {
@@ -45,9 +61,7 @@ export class NotificationService {
       this.prisma.notification.findMany({
         where,
 
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
 
         skip,
 

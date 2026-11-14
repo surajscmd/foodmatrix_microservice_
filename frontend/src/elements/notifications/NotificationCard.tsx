@@ -68,8 +68,12 @@ export default function NotificationCard({
           : Bell;
 
   const target =
-    notification.scope !== "WAREHOUSE"
-      ? null
+    notification.scope === "RESTAURANT"
+      ? isStock
+        ? { href: "/restaurant/inventory", label: "Open inventory" }
+        : isEmployee
+          ? { href: "/restaurant/attendancereports", label: "Open attendance reports" }
+          : null
       : notification.referenceType === "StockRequest"
         ? {
             href: "/operations/stockrequests",

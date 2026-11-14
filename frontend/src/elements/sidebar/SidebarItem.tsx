@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SidebarNavItem   as SidebarItemType } from "../../utils/types";
+import { useNotifications } from "@/providers/NotificationProvider";
 
 interface SidebarItemProps {
   item: SidebarItemType;
@@ -10,6 +11,11 @@ interface SidebarItemProps {
 
 export default function SidebarItem({ item }: SidebarItemProps) {
   const pathname = usePathname();
+  const notifications = useNotifications();
+  const badge = notifications?.scope === "RESTAURANT" &&
+      item.href === notifications.notificationsHref
+    ? notifications.unreadCount
+    : item.badge;
 
   const Icon = item.icon;
 
@@ -42,9 +48,9 @@ export default function SidebarItem({ item }: SidebarItemProps) {
         <span className="text-xs font-medium">{item.title}</span>
       </div>
 
-      {item.badge !== undefined && item.badge > 0 && (
-        <span className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-950">
-          {item.badge}
+      {badge !== undefined && badge > 0 && (
+        <span aria-label={`${badge} unread`} className="rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-zinc-950">
+          {badge}
         </span>
       )}
     </Link>

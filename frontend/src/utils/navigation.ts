@@ -113,7 +113,6 @@ export const navigation: SidebarNavSection[] = [
         title: "Alerts",
         href: "/restaurant/alerts",
         icon: Bell,
-        badge: 3,
         header: {
           title: "Alerts Hub",
           subtitle: "Notifications & Incidents",

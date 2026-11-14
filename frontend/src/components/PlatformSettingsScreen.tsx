@@ -59,7 +59,7 @@ const TIMEZONES = [
 
 const EXAMPLE_TIMESTAMP = "2026-10-26T10:45:00.000Z";
 
-export default function PlatformSettingsScreen() {
+export default function PlatformSettingsScreen({ embedded = false }: { embedded?: boolean }) {
   const saved = usePlatformPreferences();
   const ready = usePlatformPreferencesReady();
 
@@ -67,14 +67,14 @@ export default function PlatformSettingsScreen() {
 
   return (
     <div className="space-y-6">
-      <header className="px-6 pt-4">
+      <header className={embedded ? "rounded-2xl border border-zinc-700/75 bg-zinc-950 px-4 py-3" : "px-6 pt-4"}>
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-4 w-1 rounded-full bg-emerald-400" />
 
             <div>
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
-                Platform Settings
+                {embedded ? "Browser preferences" : "Platform Settings"}
               </p>
 
               <p className="mt-0.5 text-[10px] text-zinc-600">
@@ -90,7 +90,7 @@ export default function PlatformSettingsScreen() {
         </div>
       </header>
 
-      <div className="space-y-5 px-6 pb-6">
+      <div className={embedded ? "space-y-4" : "space-y-5 px-6 pb-6"}>
         {message && (
           <div
             role="status"

@@ -1,4 +1,13 @@
-import axios from "axios";
+import axios, { isAxiosError } from "axios";
+
+export function attendanceError(error: unknown, fallback: string) {
+  const message: unknown = isAxiosError(error) ? error.response?.data?.message : undefined;
+  if (typeof message === "string") return message;
+  if (Array.isArray(message)) {
+    return message.filter((part) => typeof part === "string").join(" ") || fallback;
+  }
+  return fallback;
+}
 
 /* =========================================================
    HR API CLIENT
@@ -392,6 +401,25 @@ export async function clockOut(shiftId: string): Promise<AttendanceResponse> {
 /* =========================================================
    SHIFT SCHEDULES
    ========================================================= */
+
+export interface ShiftTemplate {
+  id: string;
+  name: string;
+  type: string;
+  segments: {
+    sequence: number;
+    startTime: string;
+    endTime: string;
+    crossesMidnight: boolean;
+  }[];
+}
+
+export async function getActiveShiftTemplates(restaurantId: string) {
+  const response = await hrApi.get<{ data: ShiftTemplate[] }>("/shift-templates", {
+    params: { restaurantId, status: "ACTIVE" },
+  });
+  return response.data.data;
+}
 
 export interface ShiftSchedule {
   id: string;
