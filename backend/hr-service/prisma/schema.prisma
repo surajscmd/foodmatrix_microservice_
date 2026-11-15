@@ -29,6 +29,7 @@ enum LeaveStatus {
   PENDING
   APPROVED
   REJECTED
+  REVOKED
 }
 
 enum PayrollStatus {
@@ -66,18 +67,32 @@ model Staff {
   pinHash      String
   status       EmployeeStatus @default(ACTIVE)
 
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+  terminatedAt DateTime?
 
   leaves         Leave[]
   payslips       Payslip[]
   shifts         Shift[]
   wageHistories  WageHistory[]
   shiftSchedules ShiftSchedule[]
+  assignments    StaffAssignment[]
 
   @@unique([restaurantId, employeeCode])
   @@index([restaurantId])
+}
+
+model StaffAssignment {
+  id           String    @id @default(uuid())
+  staffId      String
+  staff        Staff     @relation(fields: [staffId], references: [id], onDelete: Restrict)
+  restaurantId String
+  startsOn     DateTime  @db.Date
+  endsBefore   DateTime? @db.Date
+
+  @@index([staffId, startsOn])
+  @@index([restaurantId, startsOn])
 }
 
 model WageHistory {
@@ -107,8 +122,11 @@ model Shift {
   restaurantId String
   shiftType    ShiftType
 
-  clockInAt  DateTime  @default(now())
-  clockOutAt DateTime?
+  clockInAt       DateTime       @default(now())
+  clockOutAt      DateTime?
+  voidedAt        DateTime?
+  shiftScheduleId String?        @unique
+  shiftSchedule   ShiftSchedule? @relation(fields: [shiftScheduleId], references: [id], onDelete: Restrict)
 
   totalHours    Decimal? @db.Decimal(5, 2)
   regularHours  Decimal? @db.Decimal(5, 2)
@@ -117,7 +135,9 @@ model Shift {
   hourlyWageAtShift   Decimal? @db.Decimal(8, 2)
   overtimeRateAtShift Decimal? @db.Decimal(8, 2)
 
-  isProcessedForPay Boolean @default(false)
+  isProcessedForPay Boolean     @default(false)
+  payrollRunId      String?
+  payrollRun        PayrollRun? @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -125,6 +145,7 @@ model Shift {
   @@index([restaurantId, isProcessedForPay])
   @@index([staffId])
   @@index([clockInAt])
+  @@index([payrollRunId])
 }
 
 model ShiftTemplate {
@@ -172,6 +193,7 @@ model ShiftSchedule {
 
   staff         Staff         @relation(fields: [staffId], references: [id])
   shiftTemplate ShiftTemplate @relation(fields: [shiftTemplateId], references: [id])
+  punch         Shift?
 
   scheduledStart DateTime
   scheduledEnd   DateTime
@@ -190,6 +212,7 @@ model Leave {
   id           String      @id @default(uuid())
   staffId      String
   staff        Staff       @relation(fields: [staffId], references: [id])
+  restaurantId String
   type         String
   isPaidLeave  Boolean     @default(false)
   startDate    DateTime    @db.Date
@@ -199,30 +222,54 @@ model Leave {
   status       LeaveStatus @default(PENDING)
   approvedById String?
   approvedAt   DateTime?
+  revokedById  String?
+  revokedAt    DateTime?
+  revokeReason String?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 
   @@index([staffId])
+  @@index([restaurantId])
 }
 
 model PayrollRun {
-  id              String        @id @default(uuid())
-  restaurantId    String
-  periodStartDate DateTime      @db.Date
-  periodEndDate   DateTime      @db.Date
-  status          PayrollStatus @default(DRAFT)
-  processedById   String
+  id               String        @id @default(uuid())
+  restaurantId     String
+  restaurantName   String?
+  timezone         String?
+  currency         String?
+  periodStartDate  DateTime      @db.Date
+  periodEndDate    DateTime      @db.Date
+  status           PayrollStatus @default(DRAFT)
+  processedById    String
+  paidAt           DateTime?
+  paidById         String?
+  paymentReference String?
+  reopenedAt       DateTime?
+  reopenedById     String?
+  reopenReason     String?
 
   totalGrossPay Decimal @default(0) @db.Decimal(12, 2)
   totalTaxes    Decimal @default(0) @db.Decimal(12, 2)
   totalNetPay   Decimal @default(0) @db.Decimal(12, 2)
 
   payslips Payslip[]
+  shifts   Shift[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([restaurantId, periodStartDate])
+}
+
+model HrEventOutbox {
+  id          String   @id @default(uuid())
+  topic       String
+  payload     Json
+  createdAt   DateTime @default(now())
+  availableAt DateTime @default(now())
+
+  @@index([availableAt, createdAt])
 }
 
 model Payslip {

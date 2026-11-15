@@ -1,18 +1,15 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { FranchiseService } from './franchise.service';
+import { expect, it, jest } from '@jest/globals';
+import { FranchiseService } from './franchise.service.js';
+import type { PrismaService } from '../../lib/prisma/prisma.service.js';
 
-describe('FranchiseService', () => {
-  let service: FranchiseService;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [FranchiseService],
-    }).compile();
-
-    service = module.get<FranchiseService>(FranchiseService);
-  });
-
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
+it('reads the requested franchise and returns 404 when it is absent', async () => {
+  const findUnique = jest.fn(async ({ where }: { where: { id: string } }) =>
+    where.id === 'assigned' ? { id: where.id } : null,
+  );
+  const service = new FranchiseService({
+    franchise: { findUnique },
+  } as unknown as PrismaService);
+  await expect(service.find('assigned')).resolves.toEqual({ id: 'assigned' });
+  await expect(service.find('absent')).rejects.toThrow('Franchise not found');
+  expect(findUnique).toHaveBeenCalledWith({ where: { id: 'assigned' } });
 });

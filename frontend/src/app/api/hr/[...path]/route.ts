@@ -1,8 +1,9 @@
 import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL =
-  process.env.FOODMATRIX_API_URL ?? "http://localhost:8000";
+const API_URL = (
+  process.env.FOODMATRIX_API_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
 
 type RouteContext = {
   params: Promise<{
@@ -46,7 +47,7 @@ async function proxyRequest(
     // 2. Exchange session cookie for JWT
     // ---------------------------------------------
 
-    const tokenResponse = await axios.get(
+    const tokenResponse = await axios.get<{ token?: unknown }>(
       `${API_URL}/api/auth/token`,
       {
         headers: {
@@ -59,15 +60,16 @@ async function proxyRequest(
       },
     );
 
+    const token = tokenResponse.data?.token;
     if (
       tokenResponse.status < 200 ||
       tokenResponse.status >= 300 ||
-      !tokenResponse.data?.token
+      typeof token !== "string" ||
+      !token.trim()
     ) {
       console.error(
         "JWT generation failed:",
         tokenResponse.status,
-        tokenResponse.data,
       );
 
       return NextResponse.json(
@@ -79,8 +81,6 @@ async function proxyRequest(
         },
       );
     }
-
-    const token = tokenResponse.data.token;
 
     // ---------------------------------------------
     // 3. Prepare headers for HR request
@@ -130,24 +130,22 @@ async function proxyRequest(
       },
     );
 
-    const responseBody =
-      await response.text();
+    const headersToBrowser = new Headers({
+      "cache-control": "private, no-store",
+      "content-type": response.headers.get("content-type") ?? "application/json",
+    });
+    const disposition = response.headers.get("content-disposition");
+    if (disposition) headersToBrowser.set("content-disposition", disposition);
 
     // ---------------------------------------------
     // 6. Return HR response to browser
     // ---------------------------------------------
 
     return new NextResponse(
-      responseBody,
+      response.body,
       {
         status: response.status,
-        headers: {
-          "content-type":
-            response.headers.get(
-              "content-type",
-            ) ??
-            "application/json",
-        },
+        headers: headersToBrowser,
       },
     );
   } catch (error) {

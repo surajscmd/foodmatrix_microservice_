@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { IsOptional, IsString, Length, ValidateIf } from 'class-validator';
+import { IsSupportedCurrency } from '../../organization-settings.validation.js';
 
 export class UpdateFranchiseDto {
   @IsOptional()
@@ -10,7 +11,7 @@ export class UpdateFranchiseDto {
   @IsString()
   taxId?: string;
 
-  @IsOptional()
-  @IsString()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsSupportedCurrency()
   defaultCurrency?: string;
 }

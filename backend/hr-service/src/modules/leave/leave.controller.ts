@@ -3,28 +3,39 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import { LeaveService } from './leave.service.js';
 
 import { CreateLeaveDto } from './dto/create-leave.dto.js';
 import { UpdateLeaveDto } from './dto/update-leave.dto.js';
+import { RevokeLeaveDto } from './dto/revoke-leave.dto.js';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import { HrUser, restaurantScope } from '../../auth/hr-access.js';
+import type { AuthenticatedUser } from '../../auth/auth.types.js';
+import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 @Controller('leaves')
+@UseGuards(JwtAuthGuard)
 export class LeaveController {
-  constructor(private readonly leaveService: LeaveService) {}
+  constructor(
+    private readonly leaveService: LeaveService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * Create a new leave request.
    */
   @Post()
-  async create(@Body() dto: CreateLeaveDto) {
-    return this.leaveService.create(dto);
+  async create(@HrUser() user: AuthenticatedUser, @Body() dto: CreateLeaveDto) {
+    return this.leaveService.create(dto, user);
   }
 
   /**
@@ -37,6 +48,7 @@ export class LeaveController {
    */
   @Get()
   async findAll(
+    @HrUser() user: AuthenticatedUser,
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
     @Query('status') status?: string,
@@ -44,7 +56,7 @@ export class LeaveController {
     @Query('endDate') endDate?: string,
   ) {
     return this.leaveService.findAll(
-      restaurantId,
+      restaurantScope(user, restaurantId),
       staffId,
       status,
       startDate,
@@ -56,8 +68,13 @@ export class LeaveController {
    * Get one leave request by ID.
    */
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.leaveService.findOne(id);
+  async findOne(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.leaveService.findOne(id);
+    restaurantScope(user, result.data.restaurantId);
+    return result;
   }
 
   /**
@@ -65,9 +82,12 @@ export class LeaveController {
    */
   @Patch(':id')
   async update(
+    @HrUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateLeaveDto,
   ) {
+    await this.findOne(user, id);
+    if (dto.staffId) await this.checkStaff(user, dto.staffId);
     return this.leaveService.update(id, dto);
   }
 
@@ -76,26 +96,54 @@ export class LeaveController {
    */
   @Patch(':id/approve')
   async approve(
+    @HrUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('approvedById', ParseUUIDPipe) approvedById: string,
   ) {
-    return this.leaveService.approve(id, approvedById);
+    await this.findOne(user, id);
+    return this.leaveService.approve(id, user.systemUserId ?? user.id);
   }
 
   /**
    * Reject a pending leave request.
    */
   @Patch(':id/reject')
-  async reject(@Param('id', ParseUUIDPipe) id: string) {
+  async reject(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.findOne(user, id);
     return this.leaveService.reject(id);
   }
 
   /**
-   * Delete a pending leave request.
+   * Revoke pending or approved leave while preserving its history.
    */
+  @Patch(':id/revoke')
+  async revoke(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RevokeLeaveDto,
+  ) {
+    return this.leaveService.revoke(id, dto, user);
+  }
+
+  /** Delete a pending leave request through the legacy API. */
   @Delete(':id')
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
+  async remove(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.findOne(user, id);
     return this.leaveService.remove(id);
+  }
+
+  private async checkStaff(user: AuthenticatedUser, id: string) {
+    const staff = await this.prisma.staff.findUnique({
+      where: { id },
+      select: { restaurantId: true },
+    });
+    if (!staff) throw new NotFoundException('Staff not found');
+    restaurantScope(user, staff.restaurantId);
   }
 }
 

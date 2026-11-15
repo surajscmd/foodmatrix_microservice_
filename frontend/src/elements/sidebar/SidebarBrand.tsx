@@ -1,6 +1,7 @@
 "use client";
 
 import { PanelLeftClose } from "lucide-react";
+import FoodMatrixMark from "@/elements/branding/FoodMatrixMark";
 
 interface SidebarBrandProps {
   portal?: "edge" | "regional";
@@ -15,9 +16,7 @@ export default function SidebarBrand({
     <div className="flex items-center justify-between border-b border-zinc-800 px-6 py-5">
       {/* Logo */}
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500 text-lg font-black italic text-zinc-950 shadow-[0_0_20px_rgba(16,185,129,.35)]">
-          FM
-        </div>
+        <FoodMatrixMark size={40} className="rounded-xl" />
 
         <div>
           <h1 className="text-sm font-semibold tracking-tight text-white">

@@ -29,6 +29,7 @@ import { EmployeeLateHandler } from './handlers/employee-late.handler.js';
 import { EmployeeClockedOutEarlyHandler } from './handlers/employee-clocked-out-early.handler.js';
 
 import { LeaveAppliedHandler } from './handlers/leave-applied.handler.js';
+import { LeaveDecisionHandler } from './handlers/leave-decision.handler.js';
 import { SocketModule } from '../socket/socket.module.js';
 
 @Module({
@@ -66,6 +67,7 @@ import { SocketModule } from '../socket/socket.module.js';
     EmployeeClockedOutEarlyHandler,
 
     LeaveAppliedHandler,
+    LeaveDecisionHandler,
   ],
 })
 export class KafkaModule {}

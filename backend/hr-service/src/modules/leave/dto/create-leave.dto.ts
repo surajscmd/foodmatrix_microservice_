@@ -17,10 +17,10 @@ export class CreateLeaveDto {
   @IsBoolean()
   isPaidLeave!: boolean;
 
-  @IsDateString()
+  @IsDateString({ strict: true })
   startDate!: string;
 
-  @IsDateString()
+  @IsDateString({ strict: true })
   endDate!: string;
 
   @IsString()

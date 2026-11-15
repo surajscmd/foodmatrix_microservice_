@@ -13,8 +13,15 @@ import { UpdateFranchiseDto } from './dto/update-franchise.dto.js';
 export class FranchiseService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async find(): Promise<Franchise> {
-    const franchise = await this.prisma.franchise.findFirst();
+  listOptions() {
+    return this.prisma.franchise.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  async find(id: string): Promise<Franchise> {
+    const franchise = await this.prisma.franchise.findUnique({ where: { id } });
 
     if (!franchise) {
       throw new NotFoundException('Franchise not found');
@@ -23,17 +30,21 @@ export class FranchiseService {
     return franchise;
   }
 
-  async update(dto: UpdateFranchiseDto): Promise<Franchise> {
-    const franchise = await this.find();
-
+  async update(id: string, dto: UpdateFranchiseDto): Promise<Franchise> {
     try {
       return await this.prisma.franchise.update({
         where: {
-          id: franchise.id,
+          id,
         },
         data: dto,
       });
     } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Franchise not found');
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'

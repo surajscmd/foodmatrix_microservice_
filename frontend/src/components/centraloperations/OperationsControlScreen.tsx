@@ -5,6 +5,7 @@ import { BarChart3, Bell, Package, ShoppingBag, Store, Users } from "lucide-reac
 
 import RevenueChart from "@/elements/edgedashboard/RevenueChart";
 import CreateSystemUser from "@/elements/operations/CreateSystemUser";
+import ManageSystemLogins from "@/elements/operations/ManageSystemLogins";
 import FranchiseOverview from "@/elements/operations/FranchiseOverview";
 import MetricCard from "@/elements/operations/MetricCard";
 import QuickActionCard from "@/elements/operations/QuickActionCard";
@@ -42,6 +43,7 @@ export default function OperationsControlScreen() {
 
       <FranchiseOverview />
       <CreateSystemUser/>
+      <ManageSystemLogins />
       {/* KPI */}
 
       <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">

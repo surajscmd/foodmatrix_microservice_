@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import {
   BadRequestException,
   ConflictException,
@@ -11,6 +12,7 @@ import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 import { CreateWageDto } from './dto/create-wage.dto.js';
 import { UpdateWageDto } from './dto/update-wage.dto.js';
+import { addDays, dateInRestaurant } from '../payroll/hr-dates.js';
 
 @Injectable()
 export class WageService {
@@ -121,10 +123,26 @@ export class WageService {
   // FIND ALL
   // ======================================================
 
-  async findAll(staffId?: string, page = 1, limit = 10) {
+  async findAll(
+    staffId?: string,
+    page = 1,
+    limit = 10,
+    restaurantId?: RestaurantFilter,
+  ) {
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 1 ||
+      !Number.isSafeInteger(limit) ||
+      limit < 1 ||
+      limit > 100
+    ) {
+      throw new BadRequestException('Invalid wage pagination');
+    }
     const skip = (page - 1) * limit;
 
-    const where: Prisma.WageHistoryWhereInput = {};
+    const where: Prisma.WageHistoryWhereInput = {
+      ...(restaurantId ? { staff: { restaurantId } } : {}),
+    };
 
     if (staffId) {
       where.staffId = staffId;
@@ -193,7 +211,7 @@ export class WageService {
   // CURRENT WAGE
   // ======================================================
 
-  async getCurrentWage(staffId: string) {
+  async getCurrentWage(staffId: string, timeZone?: string) {
     const staff = await this.prisma.staff.findFirst({
       where: {
         id: staffId,
@@ -205,7 +223,7 @@ export class WageService {
       throw new NotFoundException('Staff not found');
     }
 
-    const today = new Date();
+    const today = dateInRestaurant(new Date(), timeZone);
 
     const wage = await this.prisma.wageHistory.findFirst({
       where: {
@@ -237,6 +255,127 @@ export class WageService {
     }
 
     return wage;
+  }
+
+  async scheduleChange(dto: CreateWageDto, timeZone?: string) {
+    this.validatePayType(dto.payType, dto.hourlyWage, dto.salaryAmount);
+    if (dto.payType === PayType.SALARY && dto.overtimeRate !== undefined) {
+      throw new BadRequestException('Overtime rate applies to hourly pay');
+    }
+    const start = new Date(dto.effectiveStartDate);
+    const today = dateInRestaurant(new Date(), timeZone);
+    if (
+      Number.isNaN(start.getTime()) ||
+      dto.effectiveStartDate !== start.toISOString().slice(0, 10) ||
+      start <= today ||
+      dto.effectiveEndDate
+    ) {
+      throw new BadRequestException('Choose an effective date after today');
+    }
+
+    return this.prisma
+      .$transaction(
+        async (tx) => {
+          const staff = await tx.staff.findFirst({
+            where: {
+              id: dto.staffId,
+              deletedAt: null,
+              status: { not: 'TERMINATED' },
+            },
+            select: { restaurantId: true },
+          });
+          if (!staff)
+            throw new NotFoundException(
+              'Staff member is unavailable for wage changes',
+            );
+          const latest = await tx.wageHistory.findFirst({
+            where: { staffId: dto.staffId },
+            orderBy: { effectiveStartDate: 'desc' },
+          });
+          if (
+            latest &&
+            (latest.effectiveStartDate >= start ||
+              (latest.effectiveEndDate && latest.effectiveEndDate >= start))
+          ) {
+            throw new ConflictException(
+              'Choose a date after the latest wage period, or cancel the scheduled change first',
+            );
+          }
+          if (latest && !latest.effectiveEndDate) {
+            await tx.wageHistory.update({
+              where: { id: latest.id },
+              data: { effectiveEndDate: addDays(start, -1) },
+            });
+          }
+          return tx.wageHistory.create({
+            data: {
+              staffId: dto.staffId,
+              payType: dto.payType,
+              hourlyWage: dto.hourlyWage,
+              overtimeRate: dto.overtimeRate,
+              salaryAmount: dto.salaryAmount,
+              effectiveStartDate: start,
+              approvedById: dto.approvedById,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'The wage history changed. Refresh and try again.',
+          );
+        }
+        throw error;
+      });
+  }
+
+  async cancelChange(id: string, timeZone?: string) {
+    await this.prisma
+      .$transaction(
+        async (tx) => {
+          const wage = await tx.wageHistory.findUnique({ where: { id } });
+          if (!wage) throw new NotFoundException('Wage history not found');
+          if (
+            wage.effectiveEndDate ||
+            wage.effectiveStartDate <= dateInRestaurant(new Date(), timeZone)
+          ) {
+            throw new ConflictException(
+              'Only the latest upcoming wage change can be cancelled',
+            );
+          }
+          const previous = await tx.wageHistory.findFirst({
+            where: {
+              staffId: wage.staffId,
+              effectiveEndDate: addDays(wage.effectiveStartDate, -1),
+            },
+            orderBy: { effectiveStartDate: 'desc' },
+          });
+          await tx.wageHistory.delete({ where: { id } });
+          if (previous) {
+            await tx.wageHistory.update({
+              where: { id: previous.id },
+              data: { effectiveEndDate: null },
+            });
+          }
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'The wage history changed. Refresh and try again.',
+          );
+        }
+        throw error;
+      });
   }
 
   // ======================================================

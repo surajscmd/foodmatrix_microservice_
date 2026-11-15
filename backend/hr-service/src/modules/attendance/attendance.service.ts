@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import {
   BadRequestException,
   ConflictException,
@@ -12,6 +13,17 @@ import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { ClockInDto } from './dto/clock-in.dto.js';
 import { ClockOutDto } from './dto/clock-out.dto.js';
 import { KafkaProducerService } from '../kafka/kafka-producer.service.js';
+import { dateInRestaurant } from '../payroll/hr-dates.js';
+
+const staffSummary = {
+  select: {
+    id: true,
+    employeeCode: true,
+    firstName: true,
+    lastName: true,
+    role: true,
+  },
+};
 
 @Injectable()
 export class AttendanceService {
@@ -20,448 +32,213 @@ export class AttendanceService {
     private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
-  // ============================================================
-  // CLOCK IN
-  // ============================================================
-
-  /**
-   * Clock a staff member into a scheduled shift.
-   *
-   * Validation:
-   * - Staff must belong to the restaurant.
-   * - Staff must be active.
-   * - Staff must not be soft deleted.
-   * - Schedule must belong to the staff member and restaurant.
-   * - Schedule must not be cancelled.
-   * - Staff cannot already have an active shift.
-   * - Staff must have an active wage configuration.
-   */
-  // ============================================================
-  // CLOCK IN
-  // ============================================================
-
-  /**
-  
-   * Kafka events:
-   * - hr.employee-signed-in
-   * - hr.employee-late
-   */
-  async clockIn(dto: ClockInDto) {
+  async clockIn(dto: ClockInDto, timeZone: string) {
     const { staffId, restaurantId, shiftScheduleId } = dto;
-
-    // ----------------------------------------------------------
-    // Current time
-    // ----------------------------------------------------------
-
     const now = new Date();
-
-    // ----------------------------------------------------------
-    // Validate staff
-    // ----------------------------------------------------------
-
-    const staff = await this.prisma.staff.findFirst({
-      where: {
-        id: staffId,
-        restaurantId,
-        status: EmployeeStatus.ACTIVE,
-        deletedAt: null,
-      },
-
-      select: {
-        id: true,
-        restaurantId: true,
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException('Active staff member not found');
-    }
-
-    // ----------------------------------------------------------
-    // Validate schedule
-    // ----------------------------------------------------------
-
-    const schedule = await this.prisma.shiftSchedule.findFirst({
-      where: {
-        id: shiftScheduleId,
-        staffId,
-        restaurantId,
-
-        // Cancelled schedules cannot be clocked into.
-        status: {
-          not: ShiftScheduleStatus.CANCELLED,
-        },
-      },
-
-      include: {
-        shiftTemplate: {
-          select: {
-            type: true,
-
-            segments: {
-              orderBy: {
-                sequence: 'asc',
-              },
+    const wageDate = dateInRestaurant(now, timeZone);
+    return this.prisma
+      .$transaction(
+        async (tx) => {
+          const staff = await tx.staff.findFirst({
+            where: {
+              id: staffId,
+              restaurantId,
+              status: EmployeeStatus.ACTIVE,
+              deletedAt: null,
             },
-          },
-        },
-      },
-    });
+            select: { id: true },
+          });
+          if (!staff)
+            throw new NotFoundException('Active staff member not found');
 
-    if (!schedule) {
-      throw new NotFoundException(
-        'Shift schedule not found for this staff member',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // Prevent duplicate active clock-in
-    // ----------------------------------------------------------
-
-    const activeShift = await this.prisma.shift.findFirst({
-      where: {
-        staffId,
-        restaurantId,
-        clockOutAt: null,
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (activeShift) {
-      throw new ConflictException('Staff member already has an active shift');
-    }
-
-    // ----------------------------------------------------------
-    // Find current wage
-    // ----------------------------------------------------------
-
-    const wage = await this.prisma.wageHistory.findFirst({
-      where: {
-        staffId,
-
-        effectiveStartDate: {
-          lte: now,
-        },
-
-        OR: [
-          {
-            effectiveEndDate: null,
-          },
-          {
-            effectiveEndDate: {
-              gte: now,
+          const schedule = await tx.shiftSchedule.findFirst({
+            where: {
+              id: shiftScheduleId,
+              staffId,
+              restaurantId,
+              status: ShiftScheduleStatus.SCHEDULED,
             },
-          },
-        ],
-      },
+            select: {
+              scheduledStart: true,
+              scheduledEnd: true,
+              shiftTemplate: { select: { type: true } },
+            },
+          });
+          if (!schedule)
+            throw new NotFoundException(
+              'Active shift schedule not found for this staff member',
+            );
+          if (now < schedule.scheduledStart || now >= schedule.scheduledEnd) {
+            throw new ConflictException(
+              'Clock-in is only available during the scheduled shift',
+            );
+          }
 
-      orderBy: {
-        effectiveStartDate: 'desc',
-      },
-    });
+          const wage = await tx.wageHistory.findFirst({
+            where: {
+              staffId,
+              effectiveStartDate: { lte: wageDate },
+              OR: [
+                { effectiveEndDate: null },
+                { effectiveEndDate: { gte: wageDate } },
+              ],
+            },
+            orderBy: { effectiveStartDate: 'desc' },
+          });
+          if (!wage)
+            throw new ConflictException(
+              'No active wage configuration found for staff member',
+            );
 
-    if (!wage) {
-      throw new ConflictException(
-        'No active wage configuration found for staff member',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // Create actual attendance record
-    // ----------------------------------------------------------
-
-    const shift = await this.prisma.shift.create({
-      data: {
-        staffId,
-        restaurantId,
-
-        shiftType: schedule.shiftTemplate.type,
-
-        clockInAt: now,
-
-        // Salary employees do not use hourly wage fields.
-        hourlyWageAtShift: wage.payType === 'HOURLY' ? wage.hourlyWage : null,
-
-        overtimeRateAtShift:
-          wage.payType === 'HOURLY' ? wage.overtimeRate : null,
-      },
-
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
+          const shift = await tx.shift.create({
+            data: {
+              staffId,
+              restaurantId,
+              shiftScheduleId,
+              shiftType: schedule.shiftTemplate.type,
+              clockInAt: now,
+              hourlyWageAtShift:
+                wage.payType === 'HOURLY' ? wage.hourlyWage : null,
+              overtimeRateAtShift:
+                wage.payType === 'HOURLY' ? wage.overtimeRate : null,
+            },
+            include: { staff: staffSummary },
+          });
+          const event = {
+            staffId,
+            restaurantId,
+            shiftId: shift.id,
+            shiftScheduleId,
+            clockInAt: now.toISOString(),
+          };
+          await this.kafkaProducer.enqueue(tx, 'hr.employee-signed-in', event);
+          const lateMinutes = Math.floor(
+            (now.getTime() - schedule.scheduledStart.getTime()) / 60_000,
+          );
+          if (lateMinutes > 0) {
+            await this.kafkaProducer.enqueue(tx, 'hr.employee-late', {
+              ...event,
+              lateMinutes,
+              scheduledStart: schedule.scheduledStart.toISOString(),
+            });
+          }
+          return { message: 'Staff clocked in successfully', data: shift };
         },
-      },
-    });
-
-    // ==========================================================
-    // KAFKA EVENTS
-    // ==========================================================
-
-    /*
-     * The database operation has succeeded at this point,
-     * so the employee signed-in event can be published.
-     */
-    await this.kafkaProducer.publish('hr.employee-signed-in', {
-      staffId,
-      restaurantId,
-      shiftId: shift.id,
-      shiftScheduleId,
-      clockInAt: now.toISOString(),
-    });
-
-    // ----------------------------------------------------------
-    // Late detection
-    // ----------------------------------------------------------
-
-    /*
-     * Compare actual clock-in time with the scheduled start.
-     *
-     * Example:
-     * Scheduled: 08:00
-     * Actual:    08:12
-     * Result:    12 minutes late
-     */
-    if (now.getTime() > schedule.scheduledStart.getTime()) {
-      const lateMilliseconds =
-        now.getTime() - schedule.scheduledStart.getTime();
-
-      const lateMinutes = Math.floor(lateMilliseconds / (1000 * 60));
-
-      await this.kafkaProducer.publish('hr.employee-late', {
-        staffId,
-        restaurantId,
-        shiftId: shift.id,
-        shiftScheduleId,
-        scheduledStart: schedule.scheduledStart.toISOString(),
-        clockInAt: now.toISOString(),
-        lateMinutes,
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2002'
+        ) {
+          throw new ConflictException(
+            'Staff member already has an active shift, or this scheduled shift already has a punch',
+          );
+        }
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'Attendance changed while saving. Refresh and try again.',
+          );
+        }
+        throw error;
       });
-    }
-
-    return {
-      message: 'Staff clocked in successfully',
-      data: shift,
-    };
-  }
-  // ============================================================
-  // CLOCK OUT
-  // ============================================================
-
-  /**
-   * Clock a staff member out of an active shift.
-   *
-   * Calculates:
-   * - Total hours
-   * - Regular hours
-   * - Overtime hours
-   *
-   * Kafka event:
-   * - hr.employee-clocked-out-early
-   */
-  async clockOut(dto: ClockOutDto) {
-    const { shiftId } = dto;
-
-    // ----------------------------------------------------------
-    // Find active shift
-    // ----------------------------------------------------------
-
-    const shift = await this.prisma.shift.findUnique({
-      where: {
-        id: shiftId,
-      },
-
-      select: {
-        id: true,
-        staffId: true,
-        restaurantId: true,
-        clockInAt: true,
-        clockOutAt: true,
-      },
-    });
-
-    if (!shift) {
-      throw new NotFoundException('Shift record not found');
-    }
-
-    // ----------------------------------------------------------
-    // Prevent duplicate clock-out
-    // ----------------------------------------------------------
-
-    if (shift.clockOutAt) {
-      throw new ConflictException('Staff member has already clocked out');
-    }
-
-    // ----------------------------------------------------------
-    // Current clock-out time
-    // ----------------------------------------------------------
-
-    const clockOutAt = new Date();
-
-    // ----------------------------------------------------------
-    // Calculate worked hours
-    // ----------------------------------------------------------
-
-    const milliseconds = clockOutAt.getTime() - shift.clockInAt.getTime();
-
-    const totalHours = milliseconds / (1000 * 60 * 60);
-
-    if (totalHours <= 0) {
-      throw new BadRequestException(
-        'Clock-out time must be after clock-in time',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // Calculate regular and overtime hours
-    // ----------------------------------------------------------
-
-    const regularHours = Math.min(totalHours, 8);
-
-    const overtimeHours = Math.max(totalHours - 8, 0);
-
-    // ----------------------------------------------------------
-    // Find schedule
-    // ----------------------------------------------------------
-
-    /*
-     * Shift currently does not contain shiftScheduleId.
-     *
-     * We therefore resolve the schedule using the employee,
-     * restaurant, and clock-in time.
-     */
-    const schedule = await this.prisma.shiftSchedule.findFirst({
-      where: {
-        staffId: shift.staffId,
-        restaurantId: shift.restaurantId,
-
-        status: {
-          not: ShiftScheduleStatus.CANCELLED,
-        },
-
-        /*
-         * The employee's clock-in should correspond to
-         * the scheduled shift window.
-         */
-        scheduledStart: {
-          lte: shift.clockInAt,
-        },
-
-        scheduledEnd: {
-          gte: shift.clockInAt,
-        },
-      },
-
-      orderBy: {
-        scheduledStart: 'asc',
-      },
-
-      select: {
-        id: true,
-        scheduledStart: true,
-        scheduledEnd: true,
-      },
-    });
-
-    // ----------------------------------------------------------
-    // Update attendance record
-    // ----------------------------------------------------------
-
-    const updatedShift = await this.prisma.shift.update({
-      where: {
-        id: shiftId,
-      },
-
-      data: {
-        clockOutAt,
-
-        totalHours: new Prisma.Decimal(totalHours.toFixed(2)),
-
-        regularHours: new Prisma.Decimal(regularHours.toFixed(2)),
-
-        overtimeHours: new Prisma.Decimal(overtimeHours.toFixed(2)),
-      },
-
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    // ==========================================================
-    // EARLY CLOCK-OUT DETECTION
-    // ==========================================================
-
-    /*
-     * Only publish the early clock-out event when:
-     *
-     * actual clock-out < scheduled end
-     */
-    if (schedule && clockOutAt.getTime() < schedule.scheduledEnd.getTime()) {
-      const earlyMilliseconds =
-        schedule.scheduledEnd.getTime() - clockOutAt.getTime();
-
-      const earlyMinutes = Math.floor(earlyMilliseconds / (1000 * 60));
-
-      await this.kafkaProducer.publish('hr.employee-clocked-out-early', {
-        staffId: shift.staffId,
-        restaurantId: shift.restaurantId,
-
-        shiftId: shift.id,
-
-        shiftScheduleId: schedule.id,
-
-        scheduledEnd: schedule.scheduledEnd.toISOString(),
-
-        clockOutAt: clockOutAt.toISOString(),
-
-        earlyMinutes,
-      });
-    }
-
-    return {
-      message: 'Staff clocked out successfully',
-      data: updatedShift,
-    };
   }
 
-  // ============================================================
-  // FIND ALL
-  // ============================================================
+  async clockOut({ shiftId }: ClockOutDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const shift = await tx.shift.findUnique({
+        where: { id: shiftId, voidedAt: null },
+        include: {
+          shiftSchedule: { select: { id: true, scheduledEnd: true } },
+        },
+      });
+      if (!shift) throw new NotFoundException('Shift record not found');
+      if (shift.clockOutAt)
+        throw new ConflictException('Staff member has already clocked out');
 
-  /**
-   * Get attendance records.
-   *
-   * Optional filters:
-   * - restaurantId
-   * - staffId
-   */
-  // ============================================================
-  // FIND ALL
-  // ============================================================
+      const clockOutAt = new Date();
+      const totalHours =
+        (clockOutAt.getTime() - shift.clockInAt.getTime()) / 3_600_000;
+      if (totalHours <= 0)
+        throw new BadRequestException(
+          'Clock-out time must be after clock-in time',
+        );
+
+      const updated = await tx.shift.updateMany({
+        where: {
+          id: shiftId,
+          clockOutAt: null,
+          voidedAt: null,
+          isProcessedForPay: false,
+        },
+        data: {
+          clockOutAt,
+          totalHours: new Prisma.Decimal(totalHours.toFixed(2)),
+          regularHours: new Prisma.Decimal(Math.min(totalHours, 8).toFixed(2)),
+          overtimeHours: new Prisma.Decimal(
+            Math.max(totalHours - 8, 0).toFixed(2),
+          ),
+        },
+      });
+      if (!updated.count)
+        throw new ConflictException(
+          'This punch has already been closed or processed',
+        );
+      if (shift.shiftScheduleId) {
+        await tx.shiftSchedule.updateMany({
+          where: {
+            id: shift.shiftScheduleId,
+            status: ShiftScheduleStatus.SCHEDULED,
+          },
+          data: { status: ShiftScheduleStatus.COMPLETED },
+        });
+      }
+
+      const schedule =
+        shift.shiftSchedule ??
+        (await tx.shiftSchedule.findFirst({
+          where: {
+            staffId: shift.staffId,
+            restaurantId: shift.restaurantId,
+            status: { not: ShiftScheduleStatus.CANCELLED },
+            scheduledStart: { lte: shift.clockInAt },
+            scheduledEnd: { gte: shift.clockInAt },
+          },
+          orderBy: { scheduledStart: 'asc' },
+          select: { id: true, scheduledEnd: true },
+        }));
+      if (schedule && clockOutAt < schedule.scheduledEnd) {
+        await this.kafkaProducer.enqueue(tx, 'hr.employee-clocked-out-early', {
+          staffId: shift.staffId,
+          restaurantId: shift.restaurantId,
+          shiftId,
+          shiftScheduleId: schedule.id,
+          scheduledEnd: schedule.scheduledEnd.toISOString(),
+          clockOutAt: clockOutAt.toISOString(),
+          earlyMinutes: Math.floor(
+            (schedule.scheduledEnd.getTime() - clockOutAt.getTime()) / 60_000,
+          ),
+        });
+      }
+      const data = await tx.shift.findUniqueOrThrow({
+        where: { id: shiftId },
+        include: { staff: staffSummary },
+      });
+      return { message: 'Staff clocked out successfully', data };
+    });
+  }
 
   async findAll(
-    restaurantId?: string,
+    restaurantId?: RestaurantFilter,
     staffId?: string,
     startDate?: string,
     endDate?: string,
   ) {
     const where: Prisma.ShiftWhereInput = {
+      voidedAt: null,
       ...(restaurantId ? { restaurantId } : {}),
       ...(staffId ? { staffId } : {}),
     };
@@ -499,17 +276,7 @@ export class AttendanceService {
         clockInAt: 'desc',
       },
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
+      include: { staff: staffSummary },
     });
 
     return {
@@ -527,21 +294,9 @@ export class AttendanceService {
    */
   async findOne(id: string) {
     const shift = await this.prisma.shift.findUnique({
-      where: {
-        id,
-      },
+      where: { id, voidedAt: null },
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
+      include: { staff: staffSummary },
     });
 
     if (!shift) {

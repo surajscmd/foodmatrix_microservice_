@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import {
   BadRequestException,
   ConflictException,
@@ -10,8 +11,12 @@ import { LeaveStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 import { CreateLeaveDto } from './dto/create-leave.dto.js';
+import type { RevokeLeaveDto } from './dto/revoke-leave.dto.js';
+import type { AuthenticatedUser } from '../../auth/auth.types.js';
+import { restaurantScope } from '../../auth/hr-access.js';
 import { UpdateLeaveDto } from './dto/update-leave.dto.js';
 import { KafkaProducerService } from '../kafka/kafka-producer.service.js';
+import { inclusiveDays } from '../payroll/hr-dates.js';
 
 @Injectable()
 export class LeaveService {
@@ -20,175 +25,83 @@ export class LeaveService {
     private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
-  // =========================================================
-  // CREATE
-  // =========================================================
-
-  /**
-   * Create a new leave request.
-   *
-   * Validation:
-   * - Staff must exist and must not be deleted.
-   * - Start date must not be after end date.
-   * - Staff cannot have overlapping pending/approved leave.
-   */
-  // =========================================================
-  // CREATE
-  // =========================================================
-
-  /**
-   * Create a new leave request.
-   *
-   * Validation:
-   * - Staff must exist and must not be deleted.
-   * - Start date must not be after end date.
-   * - Staff cannot have overlapping pending/approved leave.
-   *
-   * After the leave is successfully created, a Kafka event
-   * is published for the Notification Service.
-   */
-  async create(dto: CreateLeaveDto) {
+  async create(dto: CreateLeaveDto, user: AuthenticatedUser) {
     const { staffId, type, isPaidLeave, startDate, endDate, reason } = dto;
-
-    // -------------------------------------------------------
-    // Validate dates
-    // -------------------------------------------------------
-
-    const start = this.parseDate(startDate);
-
-    const end = this.parseDate(endDate);
-
+    const start = this.parseLeaveDay(startDate);
+    const end = this.parseLeaveDay(endDate);
     this.validateDateRange(start, end);
 
-    // -------------------------------------------------------
-    // Validate staff
-    // -------------------------------------------------------
+    return this.prisma
+      .$transaction(
+        async (tx) => {
+          const staff = await tx.staff.findFirst({
+            where: {
+              id: staffId,
+              deletedAt: null,
+              status: { not: 'TERMINATED' },
+            },
+            select: { restaurantId: true },
+          });
+          if (!staff)
+            throw new NotFoundException('Active staff member not found');
+          restaurantScope(user, staff.restaurantId);
 
-    /*
-     * Leave does not have restaurantId in the current schema,
-     * so the restaurant is obtained from the staff record.
-     */
-    const staff = await this.prisma.staff.findFirst({
-      where: {
-        id: staffId,
-        deletedAt: null,
-      },
+          const overlap = await tx.leave.findFirst({
+            where: {
+              staffId,
+              status: { in: [LeaveStatus.PENDING, LeaveStatus.APPROVED] },
+              startDate: { lte: end },
+              endDate: { gte: start },
+            },
+            select: { id: true },
+          });
+          if (overlap)
+            throw new ConflictException(
+              'Staff already has a leave during this period',
+            );
 
-      select: {
-        id: true,
-        restaurantId: true,
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException('Active staff member not found');
-    }
-
-    // -------------------------------------------------------
-    // Check overlapping leave
-    // -------------------------------------------------------
-
-    const overlappingLeave = await this.prisma.leave.findFirst({
-      where: {
-        staffId,
-
-        status: {
-          in: [LeaveStatus.PENDING, LeaveStatus.APPROVED],
+          const leave = await tx.leave.create({
+            data: {
+              staffId,
+              restaurantId: staff.restaurantId,
+              type,
+              isPaidLeave,
+              startDate: start,
+              endDate: end,
+              totalDays: inclusiveDays(start, end),
+              reason,
+            },
+            include: {
+              staff: {
+                select: {
+                  id: true,
+                  employeeCode: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                },
+              },
+            },
+          });
+          await this.kafkaProducer.enqueue(tx, 'hr.leave-applied', {
+            leaveId: leave.id,
+            staffId,
+            restaurantId: leave.restaurantId,
+            type: leave.type,
+            isPaidLeave: leave.isPaidLeave,
+            startDate: leave.startDate.toISOString(),
+            endDate: leave.endDate.toISOString(),
+            totalDays: leave.totalDays?.toString() ?? '0',
+          });
+          return { message: 'Leave request created successfully', data: leave };
         },
-
-        startDate: {
-          lte: end,
-        },
-
-        endDate: {
-          gte: start,
-        },
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (overlappingLeave) {
-      throw new ConflictException(
-        'Staff already has a leave during this period',
-      );
-    }
-
-    // -------------------------------------------------------
-    // Calculate leave duration
-    // -------------------------------------------------------
-
-    const totalDays = this.calculateTotalDays(start, end);
-
-    // -------------------------------------------------------
-    // Create leave
-    // -------------------------------------------------------
-
-    const leave = await this.prisma.leave.create({
-      data: {
-        staffId,
-        type,
-        isPaidLeave,
-        startDate: start,
-        endDate: end,
-        totalDays,
-        reason,
-      },
-
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
-    });
-
-    // -------------------------------------------------------
-    // Publish Kafka event
-    // -------------------------------------------------------
-
-    /*
-     * Publish only after the database operation succeeds.
-     *
-     * This event is consumed by the Notification Service.
-     */
-    await this.kafkaProducer.publish('hr.leave-applied', {
-      leaveId: leave.id,
-      staffId: leave.staffId,
-      restaurantId: staff.restaurantId,
-
-      type: leave.type,
-      isPaidLeave: leave.isPaidLeave,
-
-      startDate: leave.startDate.toISOString(),
-
-      endDate: leave.endDate.toISOString(),
-
-      totalDays: leave.totalDays?.toString() ?? '0',
-    });
-
-    return {
-      message: 'Leave request created successfully',
-      data: leave,
-    };
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch(this.handleConcurrentChange);
   }
 
-  // =========================================================
-  // FIND ALL
-  // =========================================================
-
-  /**
-   * Get leave requests with optional filters.
-   */
   async findAll(
-    restaurantId?: string,
+    restaurantId?: RestaurantFilter,
     staffId?: string,
     status?: string,
     startDate?: string,
@@ -205,13 +118,7 @@ export class LeaveService {
           }
         : {}),
 
-      ...(restaurantId
-        ? {
-            staff: {
-              restaurantId,
-            },
-          }
-        : {}),
+      ...(restaurantId ? { restaurantId } : {}),
 
       /*
        * Return leave records that overlap the requested period.
@@ -335,11 +242,11 @@ export class LeaveService {
     const staffId = dto.staffId ?? existing.staffId;
 
     const startDate = dto.startDate
-      ? this.parseDate(dto.startDate)
+      ? this.parseLeaveDay(dto.startDate)
       : existing.startDate;
 
     const endDate = dto.endDate
-      ? this.parseDate(dto.endDate)
+      ? this.parseLeaveDay(dto.endDate)
       : existing.endDate;
 
     this.validateDateRange(startDate, endDate);
@@ -351,6 +258,7 @@ export class LeaveService {
     const staff = await this.prisma.staff.findFirst({
       where: {
         id: staffId,
+        restaurantId: existing.restaurantId,
         deletedAt: null,
       },
 
@@ -403,58 +311,62 @@ export class LeaveService {
     // Calculate duration
     // -------------------------------------------------------
 
-    const totalDays = this.calculateTotalDays(startDate, endDate);
+    const totalDays = inclusiveDays(startDate, endDate);
 
     // -------------------------------------------------------
     // Update leave
     // -------------------------------------------------------
 
-    const leave = await this.prisma.leave.update({
-      where: {
-        id,
-      },
+    const leave = await this.prisma.leave
+      .update({
+        where: {
+          id,
+          status: LeaveStatus.PENDING,
+          updatedAt: existing.updatedAt,
+        },
 
-      data: {
-        ...(dto.staffId !== undefined && {
-          staffId: dto.staffId,
-        }),
+        data: {
+          ...(dto.staffId !== undefined && {
+            staffId: dto.staffId,
+          }),
 
-        ...(dto.type !== undefined && {
-          type: dto.type,
-        }),
+          ...(dto.type !== undefined && {
+            type: dto.type,
+          }),
 
-        ...(dto.isPaidLeave !== undefined && {
-          isPaidLeave: dto.isPaidLeave,
-        }),
+          ...(dto.isPaidLeave !== undefined && {
+            isPaidLeave: dto.isPaidLeave,
+          }),
 
-        ...(dto.startDate !== undefined && {
-          startDate: startDate,
-        }),
+          ...(dto.startDate !== undefined && {
+            startDate: startDate,
+          }),
 
-        ...(dto.endDate !== undefined && {
-          endDate: endDate,
-        }),
+          ...(dto.endDate !== undefined && {
+            endDate: endDate,
+          }),
 
-        ...(dto.reason !== undefined && {
-          reason: dto.reason,
-        }),
+          ...(dto.reason !== undefined && {
+            reason: dto.reason,
+          }),
 
-        totalDays,
-      },
+          totalDays,
+        },
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
+        include: {
+          staff: {
+            select: {
+              id: true,
+              employeeCode: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+              restaurantId: true,
+            },
           },
         },
-      },
-    });
+      })
+      .catch(this.handleConcurrentChange);
 
     return {
       message: 'Leave updated successfully',
@@ -470,57 +382,89 @@ export class LeaveService {
    * Approve a pending leave request.
    */
   async approve(id: string, approvedById: string) {
-    const leave = await this.prisma.leave.findUnique({
-      where: {
-        id,
-      },
+    const approvedLeave = await this.prisma
+      .$transaction(
+        async (tx) => {
+          const leave = await tx.leave.findUnique({
+            where: {
+              id,
+            },
 
-      select: {
-        id: true,
-        staffId: true,
-        status: true,
-      },
-    });
+            select: {
+              id: true,
+              staffId: true,
+              status: true,
+              isPaidLeave: true,
+              startDate: true,
+              endDate: true,
+              restaurantId: true,
+            },
+          });
 
-    if (!leave) {
-      throw new NotFoundException('Leave not found');
-    }
+          if (!leave) {
+            throw new NotFoundException('Leave not found');
+          }
 
-    if (leave.status !== LeaveStatus.PENDING) {
-      throw new ConflictException(
-        'Only pending leave requests can be approved',
-      );
-    }
+          if (leave.status !== LeaveStatus.PENDING) {
+            throw new ConflictException(
+              'Only pending leave requests can be approved',
+            );
+          }
 
-    // -------------------------------------------------------
-    // Approve leave
-    // -------------------------------------------------------
+          // -------------------------------------------------------
+          // Approve leave
+          // -------------------------------------------------------
 
-    const approvedLeave = await this.prisma.leave.update({
-      where: {
-        id,
-      },
+          if (leave.isPaidLeave) {
+            const run = await tx.payrollRun.findFirst({
+              where: {
+                restaurantId: leave.restaurantId,
+                periodStartDate: { lte: leave.endDate },
+                periodEndDate: { gte: leave.startDate },
+                payslips: { some: {} },
+              },
+              select: { status: true },
+              orderBy: { status: 'desc' },
+            });
+            if (run) {
+              throw new ConflictException(
+                run.status === 'PAID'
+                  ? 'This paid leave overlaps a paid payroll run. Its payroll records are locked.'
+                  : 'Reopen the unpaid payroll run before approving this paid leave, then calculate payroll again.',
+              );
+            }
+          }
+          const updated = await tx.leave.update({
+            where: {
+              id,
+              status: LeaveStatus.PENDING,
+            },
 
-      data: {
-        status: LeaveStatus.APPROVED,
-        approvedById,
-        approvedAt: new Date(),
-      },
+            data: {
+              status: LeaveStatus.APPROVED,
+              approvedById,
+              approvedAt: new Date(),
+            },
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
-          },
+            include: {
+              staff: {
+                select: {
+                  id: true,
+                  employeeCode: true,
+                  firstName: true,
+                  lastName: true,
+                  role: true,
+                  restaurantId: true,
+                },
+              },
+            },
+          });
+          await this.enqueueDecision(tx, updated, 'APPROVED');
+          return updated;
         },
-      },
-    });
-
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch(this.handleConcurrentChange);
     return {
       message: 'Leave approved successfully',
       data: approvedLeave,
@@ -556,29 +500,28 @@ export class LeaveService {
       );
     }
 
-    const rejectedLeave = await this.prisma.leave.update({
-      where: {
-        id,
-      },
-
-      data: {
-        status: LeaveStatus.REJECTED,
-      },
-
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-            restaurantId: true,
+    const rejectedLeave = await this.prisma
+      .$transaction(async (tx) => {
+        const updated = await tx.leave.update({
+          where: { id, status: LeaveStatus.PENDING },
+          data: { status: LeaveStatus.REJECTED },
+          include: {
+            staff: {
+              select: {
+                id: true,
+                employeeCode: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+                restaurantId: true,
+              },
+            },
           },
-        },
-      },
-    });
-
+        });
+        await this.enqueueDecision(tx, updated, 'REJECTED');
+        return updated;
+      })
+      .catch(this.handleConcurrentChange);
     return {
       message: 'Leave rejected successfully',
       data: rejectedLeave,
@@ -589,9 +532,88 @@ export class LeaveService {
   // DELETE
   // =========================================================
 
-  /**
-   * Delete a pending leave request.
-   */
+  async revoke(id: string, dto: RevokeLeaveDto, user: AuthenticatedUser) {
+    const result = await this.prisma
+      .$transaction(
+        async (tx) => {
+          const leave = await tx.leave.findUnique({
+            where: { id },
+          });
+          if (!leave) throw new NotFoundException('Leave not found');
+          restaurantScope(user, leave.restaurantId);
+
+          if (leave.status === LeaveStatus.REVOKED) {
+            return { message: 'Leave has already been revoked' };
+          }
+          if (
+            leave.status !== dto.expectedStatus ||
+            leave.updatedAt.getTime() !==
+              new Date(dto.expectedUpdatedAt).getTime()
+          ) {
+            throw new ConflictException(
+              'The leave request changed. Review the latest details before revoking it.',
+            );
+          }
+
+          if (leave.status === LeaveStatus.APPROVED && leave.isPaidLeave) {
+            const payslip = await tx.payslip.findFirst({
+              where: {
+                staffId: leave.staffId,
+                payrollRun: {
+                  restaurantId: leave.restaurantId,
+                  periodStartDate: { lte: leave.endDate },
+                  periodEndDate: { gte: leave.startDate },
+                },
+              },
+              select: { payrollRun: { select: { status: true } } },
+              orderBy: { payrollRun: { status: 'desc' } },
+            });
+            if (payslip) {
+              throw new ConflictException(
+                payslip.payrollRun.status === 'PAID'
+                  ? 'This paid leave overlaps a paid payroll run. Its payroll records are locked.'
+                  : 'Reopen the unpaid payroll run before revoking this paid leave, then calculate payroll again.',
+              );
+            }
+          }
+
+          await tx.leave.update({
+            where: {
+              id,
+              status: dto.expectedStatus,
+              updatedAt: leave.updatedAt,
+            },
+            data: {
+              status: LeaveStatus.REVOKED,
+              revokedById: user.systemUserId ?? user.id,
+              revokedAt: new Date(),
+              revokeReason: dto.reason,
+            },
+          });
+          await this.enqueueDecision(tx, leave, 'REVOKED');
+          return { message: 'Leave revoked' };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch(this.handleConcurrentChange);
+    return result;
+  }
+
+  private async enqueueDecision(
+    tx: Prisma.TransactionClient,
+    leave: { id: string; restaurantId: string; startDate: Date; endDate: Date },
+    status: 'APPROVED' | 'REJECTED' | 'REVOKED',
+  ) {
+    await this.kafkaProducer.enqueue(tx, 'hr.leave-decision', {
+      leaveId: leave.id,
+      restaurantId: leave.restaurantId,
+      status,
+      startDate: leave.startDate.toISOString().slice(0, 10),
+      endDate: leave.endDate.toISOString().slice(0, 10),
+    });
+  }
+
+  /** Delete a pending leave request. */
   async remove(id: string) {
     const leave = await this.prisma.leave.findUnique({
       where: {
@@ -613,15 +635,33 @@ export class LeaveService {
       throw new ConflictException('Only pending leave requests can be deleted');
     }
 
-    await this.prisma.leave.delete({
+    const removed = await this.prisma.leave.deleteMany({
       where: {
         id,
+        status: LeaveStatus.PENDING,
       },
     });
+    if (!removed.count) {
+      throw new ConflictException(
+        'The leave request was already updated. Refresh and try again.',
+      );
+    }
 
     return {
       message: 'Leave deleted successfully',
     };
+  }
+
+  private handleConcurrentChange(this: void, error: unknown): never {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === 'P2025' || error.code === 'P2034')
+    ) {
+      throw new ConflictException(
+        'The leave request changed. Refresh and try again.',
+      );
+    }
+    throw error;
   }
 
   // =========================================================
@@ -641,6 +681,12 @@ export class LeaveService {
     return date;
   }
 
+  private parseLeaveDay(value: string): Date {
+    const date = this.parseDate(value);
+    date.setUTCHours(0, 0, 0, 0);
+    return date;
+  }
+
   /**
    * Validate that the leave date range is valid.
    */
@@ -648,36 +694,6 @@ export class LeaveService {
     if (startDate.getTime() > endDate.getTime()) {
       throw new BadRequestException('Start date cannot be after end date');
     }
-  }
-
-  /**
-   * Calculate inclusive leave days.
-   *
-   * Example:
-   * 10th → 10th = 1 day
-   * 10th → 12th = 3 days
-   */
-  private calculateTotalDays(startDate: Date, endDate: Date): number {
-    const start = this.startOfDay(startDate);
-    const end = this.startOfDay(endDate);
-
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-    return (
-      Math.floor((end.getTime() - start.getTime()) / millisecondsPerDay) + 1
-    );
-  }
-
-  /**
-   * Normalize a date to the beginning of its day
-   * before calculating calendar-day differences.
-   */
-  private startOfDay(date: Date): Date {
-    const result = new Date(date);
-
-    result.setHours(0, 0, 0, 0);
-
-    return result;
   }
 
   /**

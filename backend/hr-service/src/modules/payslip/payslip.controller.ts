@@ -5,13 +5,22 @@ import {
   ParseUUIDPipe,
   Query,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 
 import type { Response } from 'express';
 
 import { PayslipService } from './payslip.service.js';
+import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import {
+  HrUser,
+  restaurantDetails,
+  restaurantScope,
+} from '../../auth/hr-access.js';
+import type { AuthenticatedUser } from '../../auth/auth.types.js';
 
 @Controller('payslips')
+@UseGuards(JwtAuthGuard)
 export class PayslipController {
   constructor(private readonly payslipService: PayslipService) {}
 
@@ -29,11 +38,16 @@ export class PayslipController {
    */
   @Get()
   async findAll(
+    @HrUser() user: AuthenticatedUser,
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
     @Query('payrollRunId') payrollRunId?: string,
   ) {
-    return this.payslipService.findAll(restaurantId, staffId, payrollRunId);
+    return this.payslipService.findAll(
+      restaurantScope(user, restaurantId),
+      staffId,
+      payrollRunId,
+    );
   }
 
   // ============================================================
@@ -44,8 +58,11 @@ export class PayslipController {
    * Get all payslips belonging to a staff member.
    */
   @Get('staff/:staffId')
-  async findByStaff(@Param('staffId', ParseUUIDPipe) staffId: string) {
-    return this.payslipService.findByStaff(staffId);
+  async findByStaff(
+    @HrUser() user: AuthenticatedUser,
+    @Param('staffId', ParseUUIDPipe) staffId: string,
+  ) {
+    return this.payslipService.findAll(restaurantScope(user), staffId);
   }
 
   // ============================================================
@@ -56,8 +73,13 @@ export class PayslipController {
    * Get a single payslip by ID.
    */
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.payslipService.findOne(id);
+  async findOne(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.payslipService.findOne(id);
+    restaurantScope(user, result.data.payrollRun.restaurantId);
+    return result;
   }
 
   // ============================================================
@@ -68,8 +90,23 @@ export class PayslipController {
    * Generate and download a payslip as a PDF.
    */
   @Get(':id/download')
-  async download(@Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
-    return this.payslipService.download(id, res);
+  async download(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res() res: Response,
+  ) {
+    const { data } = await this.findOne(user, id);
+    const { restaurantId, restaurantName, currency } = data.payrollRun;
+    const restaurant =
+      restaurantName && currency
+        ? undefined
+        : restaurantDetails(user, restaurantId);
+    return this.payslipService.download(
+      id,
+      res,
+      restaurantName ?? restaurant?.name,
+      currency ?? restaurant?.currency,
+    );
   }
 }
 // Your Payslip flow is now

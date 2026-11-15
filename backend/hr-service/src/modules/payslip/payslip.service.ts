@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import type { Response } from 'express';
@@ -21,7 +22,7 @@ export class PayslipService {
    * Payslip does not directly contain restaurantId.
    */
   async findAll(
-    restaurantId?: string,
+    restaurantId?: RestaurantFilter,
     staffId?: string,
     payrollRunId?: string,
   ) {
@@ -159,7 +160,12 @@ export class PayslipService {
   /**
    * Generate a PDF payslip and stream it to the client.
    */
-  async download(id: string, res: Response): Promise<void> {
+  async download(
+    id: string,
+    res: Response,
+    restaurantName?: string,
+    currency = 'INR',
+  ): Promise<void> {
     // ----------------------------------------------------------
     // Get payslip
     // ----------------------------------------------------------
@@ -227,9 +233,12 @@ export class PayslipService {
 
     document.moveDown();
 
-    document.fontSize(10).font('Helvetica').text('Employee Payroll Statement', {
-      align: 'center',
-    });
+    document
+      .fontSize(10)
+      .font('Helvetica')
+      .text(restaurantName || 'Employee Payroll Statement', {
+        align: 'center',
+      });
 
     document.moveDown(2);
 
@@ -299,11 +308,13 @@ export class PayslipService {
     document
       .fontSize(11)
       .font('Helvetica')
-      .text(`Regular Pay: INR ${formatMoney(payslip.regularPay)}`);
+      .text(`Regular Pay: ${currency} ${formatMoney(payslip.regularPay)}`);
 
-    document.text(`Overtime Pay: INR ${formatMoney(payslip.overtimePay)}`);
+    document.text(
+      `Overtime Pay: ${currency} ${formatMoney(payslip.overtimePay)}`,
+    );
 
-    document.text(`Gross Pay: INR ${formatMoney(payslip.grossPay)}`);
+    document.text(`Gross Pay: ${currency} ${formatMoney(payslip.grossPay)}`);
 
     document.moveDown();
 
@@ -318,10 +329,12 @@ export class PayslipService {
     document
       .fontSize(11)
       .font('Helvetica')
-      .text(`Tax Deductions: INR ${formatMoney(payslip.taxDeductions)}`);
+      .text(
+        `Tax Deductions: ${currency} ${formatMoney(payslip.taxDeductions)}`,
+      );
 
     document.text(
-      `Other Deductions: INR ${formatMoney(payslip.otherDeductions)}`,
+      `Other Deductions: ${currency} ${formatMoney(payslip.otherDeductions)}`,
     );
 
     document.moveDown();
@@ -333,16 +346,11 @@ export class PayslipService {
     document
       .fontSize(18)
       .font('Helvetica-Bold')
-      .text(`NET PAY: INR ${formatMoney(payslip.netPay)}`);
+      .text(`NET PAY: ${currency} ${formatMoney(payslip.netPay)}`);
 
     document.moveDown();
 
-    document
-      .fontSize(11)
-      .font('Helvetica')
-      .text(`Payment Method: ${payslip.paymentMethod}`);
-
-    document.text(`Status: ${payslip.status}`);
+    document.fontSize(11).font('Helvetica').text(`Status: ${payslip.status}`);
 
     document.moveDown(3);
 
@@ -371,6 +379,7 @@ export class PayslipService {
  */
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('en-IN', {
+    timeZone: 'UTC',
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',

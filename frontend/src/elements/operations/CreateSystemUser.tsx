@@ -38,7 +38,9 @@ export default function CreateSystemUser() {
 
   const franchise = useOrganizationStore((state) => state.franchise);
 
-  const restaurants = useOrganizationStore((state) => state.restaurants);
+  const allRestaurants = useOrganizationStore((state) => state.restaurants);
+  const creatorRole = useOrganizationStore((state) => state.currentUser?.systemUser.role);
+  const restaurants = allRestaurants.filter((item) => item.franchiseId === franchise?.id);
 
   // ============================================================
   // UI STATE
@@ -64,6 +66,8 @@ export default function CreateSystemUser() {
   // ============================================================
   // ROLE LOGIC
   // ============================================================
+
+  if (creatorRole !== "SUPER_ADMIN" && creatorRole !== "FRANCHISE_ADMIN") return null;
 
   const restaurantRequired = [
     "RESTAURANT_ADMIN",
@@ -135,7 +139,7 @@ export default function CreateSystemUser() {
       return;
     }
 
-    if (restaurantRequired && !managedRestaurantId.trim()) {
+    if (restaurantRequired && !selectedRestaurant) {
       setCreateUserError("Restaurant is required for this role.");
       return;
     }
@@ -189,6 +193,7 @@ export default function CreateSystemUser() {
         <button
           type="button"
           onClick={handleOpen}
+          disabled={!franchise}
           className="group flex w-full items-center justify-between rounded-xl border border-zinc-800/80 bg-zinc-950/40 px-4 py-3.5 text-left transition-all duration-200 hover:border-emerald-400/30 hover:bg-zinc-900/50"
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -470,20 +475,12 @@ export default function CreateSystemUser() {
                   <option value="OPERATIONS" className="bg-zinc-950 text-white">
                     Operations
                   </option>
-
-                  <option
-                    value="FRANCHISE_ADMIN"
-                    className="bg-zinc-950 text-white"
-                  >
-                    Franchise Admin
-                  </option>
-
-                  <option
-                    value="SUPER_ADMIN"
-                    className="bg-zinc-950 text-white"
-                  >
-                    Super Admin
-                  </option>
+                  {creatorRole === "SUPER_ADMIN" && (
+                    <>
+                      <option value="FRANCHISE_ADMIN">Franchise Admin</option>
+                      <option value="SUPER_ADMIN">Super Admin</option>
+                    </>
+                  )}
                 </select>
 
                 <div className="mt-3 flex items-center gap-2">

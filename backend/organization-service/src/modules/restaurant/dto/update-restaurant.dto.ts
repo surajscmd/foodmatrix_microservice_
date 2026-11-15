@@ -1,6 +1,13 @@
-import { IsEnum, IsOptional, IsString, Length } from 'class-validator';
+import {
+  IsEnum,
+  IsOptional,
+  IsString,
+  Length,
+  ValidateIf,
+} from 'class-validator';
 
 import { RestaurantStatus } from '@prisma/client';
+import { IsSupportedTimeZone } from '../../organization-settings.validation.js';
 
 export class UpdateRestaurantDto {
   @IsOptional()
@@ -28,8 +35,8 @@ export class UpdateRestaurantDto {
   @Length(2, 100)
   country?: string;
 
-  @IsOptional()
-  @IsString()
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsSupportedTimeZone()
   timezone?: string;
 
   @IsOptional()

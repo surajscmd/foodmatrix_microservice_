@@ -9,6 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import { regionalNavigation } from "@/utils/navigation";
 
 import NotificationProvider from "@/providers/NotificationProvider";
+import OrganizationBootstrap from "@/utils/OrganizationBootstrap";
 
 export default function DashboardShell({
   children,
@@ -49,7 +50,7 @@ export default function DashboardShell({
           />
 
           <main className="flex-1 overflow-y-auto bg-[#070914] p-6">
-            {children}
+            <OrganizationBootstrap>{children}</OrganizationBootstrap>
           </main>
 
           <footer className="border-t border-zinc-800 bg-[#070914] px-6 py-4 text-[10px] font-mono text-zinc-600 flex justify-between">

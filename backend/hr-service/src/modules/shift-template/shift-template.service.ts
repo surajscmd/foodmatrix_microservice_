@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import {
   BadRequestException,
   ConflictException,
@@ -80,7 +81,7 @@ export class ShiftTemplateService {
   /**
    * Get shift templates with optional restaurant and status filters.
    */
-  async findAll(restaurantId?: string, status?: string) {
+  async findAll(restaurantId?: RestaurantFilter, status?: string) {
     let parsedStatus: ShiftTemplateStatus | undefined;
 
     // Convert and validate the incoming query-string status.
@@ -358,7 +359,11 @@ export class ShiftTemplateService {
       }
     });
 
-    for (const segment of segments) {
+    let previousEnd = '';
+    let nextDay = false;
+    for (const segment of [...segments].sort(
+      (a, b) => a.sequence - b.sequence,
+    )) {
       if (!Number.isInteger(segment.sequence) || segment.sequence < 1) {
         throw new BadRequestException(
           'Segment sequence must be a positive integer',
@@ -386,6 +391,17 @@ export class ShiftTemplateService {
           'Segment startTime and endTime cannot be the same',
         );
       }
+      if (
+        segment.crossesMidnight !== segment.endTime < segment.startTime ||
+        (previousEnd && segment.startTime < previousEnd) ||
+        (nextDay && segment.crossesMidnight)
+      ) {
+        throw new BadRequestException(
+          'Use ordered, non-overlapping time blocks with at most one midnight crossover',
+        );
+      }
+      previousEnd = segment.endTime;
+      nextDay ||= segment.crossesMidnight;
     }
   }
 

@@ -88,6 +88,15 @@ export const navigation: SidebarNavSection[] = [
           subtitle: "Workforce Management",
         },
       },
+      {
+        title: "Staff & Payroll",
+        href: "/restaurant/staff",
+        icon: Users,
+        header: {
+          title: "Staff & Payroll",
+          subtitle: "Workforce Management",
+        },
+      },
     ],
   },
 

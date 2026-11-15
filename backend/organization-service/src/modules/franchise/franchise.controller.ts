@@ -1,33 +1,58 @@
-import { Body, Controller, Get, Patch, UseGuards } from '@nestjs/common';
-
+import {
+  Body,
+  Controller,
+  Get,
+  ParseUUIDPipe,
+  Patch,
+  Query,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
+import { SystemUserRole } from '@prisma/client';
+import { AuthGuard, Roles } from '../../auth/auth.guard.js';
+import type { AuthenticatedRequest } from '../../auth/auth.guard.js';
+import { requiredFranchise } from '../../auth/organization-scope.js';
 import { FranchiseService } from './franchise.service.js';
 import { UpdateFranchiseDto } from './dto/update-franchise.dto.js';
-import { AuthGuard, Roles } from '../../auth/auth.guard.js';
-import { SystemUserRole } from '@prisma/client';
 
 @Controller('franchise')
 @UseGuards(AuthGuard)
-@Roles(SystemUserRole.SUPER_ADMIN, SystemUserRole.FRANCHISE_ADMIN)
 export class FranchiseController {
   constructor(private readonly franchiseService: FranchiseService) {}
 
-  @Get()
-  async find() {
-    const data = await this.franchiseService.find();
+  @Get('options')
+  @Roles(SystemUserRole.SUPER_ADMIN)
+  async options() {
+    return { data: await this.franchiseService.listOptions() };
+  }
 
-    return {
-      message: 'Franchise fetched successfully',
-      data,
-    };
+  @Get()
+  @Roles(
+    SystemUserRole.SUPER_ADMIN,
+    SystemUserRole.FRANCHISE_ADMIN,
+    SystemUserRole.OPERATIONS,
+  )
+  async find(
+    @Req() req: AuthenticatedRequest,
+    @Query('franchiseId', new ParseUUIDPipe({ optional: true })) id?: string,
+  ) {
+    const data = await this.franchiseService.find(
+      requiredFranchise(req.user!, id),
+    );
+    return { message: 'Franchise fetched successfully', data };
   }
 
   @Patch()
-  async update(@Body() dto: UpdateFranchiseDto) {
-    const data = await this.franchiseService.update(dto);
-
-    return {
-      message: 'Franchise updated successfully',
-      data,
-    };
+  @Roles(SystemUserRole.SUPER_ADMIN, SystemUserRole.FRANCHISE_ADMIN)
+  async update(
+    @Req() req: AuthenticatedRequest,
+    @Body() dto: UpdateFranchiseDto,
+    @Query('franchiseId', new ParseUUIDPipe({ optional: true })) id?: string,
+  ) {
+    const data = await this.franchiseService.update(
+      requiredFranchise(req.user!, id),
+      dto,
+    );
+    return { message: 'Franchise updated successfully', data };
   }
 }

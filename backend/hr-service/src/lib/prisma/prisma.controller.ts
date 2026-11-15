@@ -7,11 +7,10 @@ export class PrismaController {
 
   @Get('test')
   async test() {
-    const staffCount = await this.prisma.staff.count();
+    await this.prisma.$queryRaw`SELECT 1`;
 
     return {
       message: 'HR database connection successful',
-      staffCount,
     };
   }
 }

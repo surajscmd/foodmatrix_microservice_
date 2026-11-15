@@ -1,12 +1,16 @@
 import {
+  ArrayNotEmpty,
+  IsArray,
   IsBoolean,
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsObject,
   IsString,
   IsUUID,
   Matches,
   Min,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -47,9 +51,13 @@ export class CreateShiftTemplateDto {
   @IsEnum(ShiftType)
   type!: ShiftType;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(ShiftTemplateStatus)
   status?: ShiftTemplateStatus;
 
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsObject({ each: true })
   @ValidateNested({ each: true })
   @Type(() => ShiftTemplateSegmentDto)
   segments!: ShiftTemplateSegmentDto[];

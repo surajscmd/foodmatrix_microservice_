@@ -1,9 +1,12 @@
 import {
   Controller,
+  Body,
   ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -17,6 +20,12 @@ import {
 } from '../../auth/auth.guard.js';
 
 import { SystemUserService } from './system-user.service.js';
+import { IsBoolean } from 'class-validator';
+
+class UpdateLoginStatusDto {
+  @IsBoolean()
+  isActive!: boolean;
+}
 
 type SystemUserResponse = {
   message: string;
@@ -32,6 +41,32 @@ type SystemUserResponse = {
 )
 export class SystemUserController {
   constructor(private readonly systemUserService: SystemUserService) {}
+
+  @Get()
+  @Roles(SystemUserRole.SUPER_ADMIN, SystemUserRole.FRANCHISE_ADMIN)
+  async list(
+    @Req() req: AuthenticatedRequest,
+    @Query('search') search?: string,
+  ) {
+    return {
+      data: await this.systemUserService.listManageable(
+        req.user!,
+        typeof search === 'string' ? search : '',
+      ),
+    };
+  }
+
+  @Patch(':id/status')
+  @Roles(SystemUserRole.SUPER_ADMIN, SystemUserRole.FRANCHISE_ADMIN)
+  async setActive(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLoginStatusDto,
+  ) {
+    return {
+      data: await this.systemUserService.setActive(req.user!, id, dto.isActive),
+    };
+  }
 
   /**
    * Get SystemUser by Better Auth user ID.

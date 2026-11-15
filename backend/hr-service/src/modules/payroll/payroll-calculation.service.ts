@@ -1,69 +1,145 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
+import { addDays, dateInRestaurant, inclusiveDays } from './hr-dates.js';
 
-import { LeaveStatus, PayType, Prisma } from '@prisma/client';
+const zero = new Prisma.Decimal(0);
 
 @Injectable()
 export class PayrollCalculationService {
-  /**
-   * Calculate payroll for one staff member for a payroll period.
-   *
-   * The calculation uses:
-   * - Completed shifts within the payroll period
-   * - Wage configuration applicable to the payroll period
-   * - Approved paid leave
-   *
-   * Salary employees are treated as monthly salaried employees.
-   */
   async calculateStaffPayroll(
     tx: Prisma.TransactionClient,
     input: {
-      staffId: string;
+      employee: {
+        id: string;
+        firstName: string;
+        lastName: string;
+        terminatedAt: Date | null;
+        assignments: { startsOn: Date; endsBefore: Date | null }[];
+      };
       restaurantId: string;
       periodStartDate: Date;
       periodEndDate: Date;
+      start: Date;
+      end: Date;
+      timeZone: string;
     },
   ) {
-    const { staffId, restaurantId, periodStartDate, periodEndDate } = input;
+    const {
+      employee,
+      restaurantId,
+      periodStartDate,
+      periodEndDate,
+      start,
+      end,
+      timeZone,
+    } = input;
+    const separation = employee.terminatedAt
+      ? dateInRestaurant(employee.terminatedAt, timeZone)
+      : null;
+    const [shifts, wages, leaves] = await this.fetchRecords(
+      tx,
+      employee.id,
+      restaurantId,
+      periodStartDate,
+      periodEndDate,
+      start,
+      end,
+    );
+    let regularHours = zero;
+    let overtimeHours = zero;
+    let regularPay = zero;
+    let overtimePay = zero;
+    let paidLeaveHours = zero;
+    let leavePay = zero;
+    let salary = zero;
 
-    // Normalize payroll boundaries because PayrollRun uses @db.Date.
-    const periodStart = this.startOfDay(periodStartDate);
+    for (const shift of shifts) {
+      regularHours = regularHours.add(shift.regularHours ?? zero);
+      overtimeHours = overtimeHours.add(shift.overtimeHours ?? zero);
+      regularPay = regularPay.add(
+        (shift.hourlyWageAtShift ?? zero).mul(shift.regularHours ?? zero),
+      );
+      overtimePay = overtimePay.add(
+        (shift.overtimeRateAtShift ?? shift.hourlyWageAtShift ?? zero).mul(
+          shift.overtimeHours ?? zero,
+        ),
+      );
+    }
 
-    const periodEnd = this.endOfDay(periodEndDate);
+    for (
+      let date = periodStartDate;
+      date <= periodEndDate && (!separation || date <= separation);
+      date = addDays(date, 1)
+    ) {
+      const assignedHere = employee.assignments.some(
+        ({ startsOn, endsBefore }) =>
+          startsOn <= date && (!endsBefore || date < endsBefore),
+      );
+      if (!assignedHere) continue;
+      const wage = wages.find(
+        ({ effectiveStartDate, effectiveEndDate }) =>
+          effectiveStartDate <= date &&
+          (!effectiveEndDate || effectiveEndDate >= date),
+      );
+      if (!wage) {
+        throw new ConflictException(
+          `Missing wage for ${employee.firstName} ${employee.lastName} on ${date.toISOString().slice(0, 10)}`,
+        );
+      }
+      const paidLeave = leaves.some(
+        ({ startDate, endDate }) => startDate <= date && endDate >= date,
+      );
+      if (paidLeave) paidLeaveHours = paidLeaveHours.add(8);
+      if (wage.payType === 'SALARY') {
+        const monthStart = new Date(date);
+        monthStart.setUTCDate(1);
+        const nextMonth = new Date(monthStart);
+        nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
+        salary = salary.add(
+          (wage.salaryAmount ?? zero).div(
+            inclusiveDays(monthStart, addDays(nextMonth, -1)),
+          ),
+        );
+      } else if (paidLeave) {
+        leavePay = leavePay.add((wage.hourlyWage ?? zero).mul(8));
+      }
+    }
+    regularPay = regularPay.add(salary).add(leavePay).toDecimalPlaces(2);
+    overtimePay = overtimePay.toDecimalPlaces(2);
+    const gross = regularPay.add(overtimePay);
+    return {
+      shiftIds: shifts.map(({ id }) => id),
+      regularHours,
+      overtimeHours,
+      paidLeaveHours,
+      regularPay,
+      overtimePay,
+      grossPay: gross,
+      netPay: gross,
+      taxDeductions: zero,
+      otherDeductions: zero,
+    };
+  }
 
-    // ============================================================
-    // GET SHIFTS
-    // ============================================================
-
-    /*
-     * Only completed and unprocessed shifts are included.
-     *
-     * isProcessedForPay prevents the same attendance record
-     * from being included in another payroll run.
-     */
+  private async fetchRecords(
+    tx: Prisma.TransactionClient,
+    staffId: string,
+    restaurantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+    start: Date,
+    end: Date,
+  ) {
     const shifts = await tx.shift.findMany({
       where: {
         staffId,
         restaurantId,
-
-        // Shift must be completed.
-        clockOutAt: {
-          not: null,
-        },
-
-        // Shift must not already belong to payroll.
+        clockInAt: { gte: start, lt: end },
+        clockOutAt: { not: null },
+        voidedAt: null,
         isProcessedForPay: false,
-
-        // Shift must fall inside the payroll period.
-        clockInAt: {
-          gte: periodStart,
-          lte: periodEnd,
-        },
+        payrollRunId: null,
       },
-
-      orderBy: {
-        clockInAt: 'asc',
-      },
-
       select: {
         id: true,
         regularHours: true,
@@ -72,357 +148,28 @@ export class PayrollCalculationService {
         overtimeRateAtShift: true,
       },
     });
-
-    // ============================================================
-    // CALCULATE HOURS
-    // ============================================================
-
-    let regularHours = 0;
-    let overtimeHours = 0;
-
-    let regularPay = 0;
-    let overtimePay = 0;
-
-    for (const shift of shifts) {
-      const regular = Number(shift.regularHours ?? 0);
-
-      const overtime = Number(shift.overtimeHours ?? 0);
-
-      const hourlyWage = Number(shift.hourlyWageAtShift ?? 0);
-
-      const overtimeRate = Number(
-        shift.overtimeRateAtShift ?? shift.hourlyWageAtShift ?? 0,
-      );
-
-      regularHours += regular;
-      overtimeHours += overtime;
-
-      /*
-       * Salary employees do not have an hourly wage
-       * snapshot, so shift-based regular/overtime pay
-       * is only calculated when hourly wage exists.
-       */
-      if (shift.hourlyWageAtShift !== null) {
-        regularPay += regular * hourlyWage;
-
-        overtimePay += overtime * overtimeRate;
-      }
-    }
-
-    // ============================================================
-    // GET APPLICABLE WAGE
-    // ============================================================
-
-    /*
-     * Used for:
-     * - Salary calculation
-     * - Paid leave calculation
-     *
-     * Hourly shift pay continues to use the wage snapshot
-     * stored on each Shift.
-     */
-    const wage = await tx.wageHistory.findFirst({
+    const wages = await tx.wageHistory.findMany({
       where: {
         staffId,
-
-        effectiveStartDate: {
-          lte: periodEnd,
-        },
-
+        effectiveStartDate: { lte: periodEnd },
         OR: [
-          {
-            effectiveEndDate: null,
-          },
-          {
-            effectiveEndDate: {
-              gte: periodStart,
-            },
-          },
+          { effectiveEndDate: null },
+          { effectiveEndDate: { gte: periodStart } },
         ],
       },
-
-      orderBy: {
-        effectiveStartDate: 'desc',
-      },
+      orderBy: { effectiveStartDate: 'desc' },
     });
-
-    if (!wage) {
-      throw new Error(
-        `No applicable wage configuration found for staff ${staffId}`,
-      );
-    }
-
-    // ============================================================
-    // SALARY PAY
-    // ============================================================
-
-    let salaryPay = 0;
-
-    if (wage.payType === PayType.SALARY) {
-      salaryPay = this.calculateSalaryForPeriod(
-        wage.salaryAmount,
-        periodStart,
-        periodEnd,
-      );
-    }
-
-    // ============================================================
-    // PAID LEAVE
-    // ============================================================
-
-    const paidLeave = await tx.leave.findMany({
+    const leaves = await tx.leave.findMany({
       where: {
         staffId,
-
-        status: LeaveStatus.APPROVED,
-
+        restaurantId,
+        status: 'APPROVED',
         isPaidLeave: true,
-
-        /*
-         * Leave overlaps the payroll period when:
-         *
-         * leave.start <= payroll.end
-         * AND
-         * leave.end >= payroll.start
-         */
-        startDate: {
-          lte: periodEnd,
-        },
-
-        endDate: {
-          gte: periodStart,
-        },
+        startDate: { lte: periodEnd },
+        endDate: { gte: periodStart },
       },
-
-      select: {
-        startDate: true,
-        endDate: true,
-      },
+      select: { startDate: true, endDate: true },
     });
-
-    let paidLeaveDays = 0;
-
-    for (const leave of paidLeave) {
-      paidLeaveDays += this.calculateOverlappingLeaveDays(
-        leave.startDate,
-        leave.endDate,
-        periodStart,
-        periodEnd,
-      );
-    }
-
-    /*
-     * Standard workday = 8 hours.
-     */
-    const paidLeaveHours = paidLeaveDays * 8;
-
-    // ============================================================
-    // PAID LEAVE PAY
-    // ============================================================
-
-    let paidLeavePay = 0;
-
-    if (wage.payType === PayType.HOURLY) {
-      const leaveHourlyRate = Number(wage.hourlyWage ?? 0);
-
-      paidLeavePay = paidLeaveHours * leaveHourlyRate;
-    }
-
-    /*
-     * Salary employees are already paid through salaryPay,
-     * so paid leave is recorded as hours only.
-     */
-
-    // ============================================================
-    // PAY CALCULATION
-    // ============================================================
-
-    const grossPay = regularPay + overtimePay + salaryPay + paidLeavePay;
-
-    // ============================================================
-    // DEDUCTIONS
-    // ============================================================
-
-    /*
-     * Tax and other deduction rules are not present in the
-     * current schema, so these remain zero.
-     */
-    const taxDeductions = 0;
-
-    const otherDeductions = 0;
-
-    const netPay = grossPay - taxDeductions - otherDeductions;
-
-    // ============================================================
-    // RETURN CALCULATION
-    // ============================================================
-
-    return {
-      /*
-       * These are the exact shifts used for this calculation.
-       *
-       * PayrollService will mark these IDs as processed after
-       * the payslip is successfully created.
-       */
-      shiftIds: shifts.map((shift) => shift.id),
-
-      regularHours: this.round(regularHours),
-
-      overtimeHours: this.round(overtimeHours),
-
-      paidLeaveHours: this.round(paidLeaveHours),
-
-      regularPay: this.round(regularPay),
-
-      overtimePay: this.round(overtimePay),
-
-      grossPay: this.round(grossPay),
-
-      taxDeductions: this.round(taxDeductions),
-
-      otherDeductions: this.round(otherDeductions),
-
-      netPay: this.round(netPay),
-    };
-  }
-
-  // ============================================================
-  // SALARY CALCULATION
-  // ============================================================
-
-  /**
-   * Calculate monthly salary for the requested payroll period.
-   */
-  private calculateSalaryForPeriod(
-    salaryAmount: Prisma.Decimal | null,
-    periodStart: Date,
-    periodEnd: Date,
-  ): number {
-    const monthlySalary = Number(salaryAmount ?? 0);
-
-    if (monthlySalary <= 0) {
-      return 0;
-    }
-
-    let totalSalary = 0;
-
-    let currentMonth = new Date(periodStart);
-
-    while (currentMonth <= periodEnd) {
-      const monthStart = this.startOfMonth(currentMonth);
-
-      const monthEnd = this.endOfMonth(currentMonth);
-
-      const applicableStart =
-        periodStart > monthStart ? periodStart : monthStart;
-
-      const applicableEnd = periodEnd < monthEnd ? periodEnd : monthEnd;
-
-      if (applicableStart <= applicableEnd) {
-        const payableDays = this.calendarDaysInclusive(
-          applicableStart,
-          applicableEnd,
-        );
-
-        const daysInMonth = this.calendarDaysInclusive(monthStart, monthEnd);
-
-        totalSalary += (monthlySalary / daysInMonth) * payableDays;
-      }
-
-      currentMonth = new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth() + 1,
-        1,
-      );
-    }
-
-    return totalSalary;
-  }
-
-  // ============================================================
-  // PAID LEAVE DAYS
-  // ============================================================
-
-  /**
-   * Calculate the leave days that overlap the payroll period.
-   */
-  private calculateOverlappingLeaveDays(
-    leaveStart: Date,
-    leaveEnd: Date,
-    periodStart: Date,
-    periodEnd: Date,
-  ): number {
-    const start = leaveStart > periodStart ? leaveStart : periodStart;
-
-    const end = leaveEnd < periodEnd ? leaveEnd : periodEnd;
-
-    if (start > end) {
-      return 0;
-    }
-
-    return this.calendarDaysInclusive(start, end);
-  }
-
-  // ============================================================
-  // DATE HELPERS
-  // ============================================================
-
-  /**
-   * Normalize a date to the start of the day.
-   */
-  private startOfDay(date: Date): Date {
-    const result = new Date(date);
-
-    result.setHours(0, 0, 0, 0);
-
-    return result;
-  }
-
-  /**
-   * Normalize a date to the end of the day.
-   */
-  private endOfDay(date: Date): Date {
-    const result = new Date(date);
-
-    result.setHours(23, 59, 59, 999);
-
-    return result;
-  }
-
-  /**
-   * Get the first day of a month.
-   */
-  private startOfMonth(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth(), 1);
-  }
-
-  /**
-   * Get the last day of a month.
-   */
-  private endOfMonth(date: Date): Date {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0);
-  }
-
-  /**
-   * Calculate inclusive calendar days.
-   */
-  private calendarDaysInclusive(start: Date, end: Date): number {
-    const startDay = this.startOfDay(start);
-
-    const endDay = this.startOfDay(end);
-
-    const millisecondsPerDay = 1000 * 60 * 60 * 24;
-
-    return (
-      Math.floor((endDay.getTime() - startDay.getTime()) / millisecondsPerDay) +
-      1
-    );
-  }
-
-  /**
-   * Round monetary and hour values to two decimals.
-   */
-  private round(value: number): number {
-    return Number(value.toFixed(2));
+    return [shifts, wages, leaves] as const;
   }
 }

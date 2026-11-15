@@ -314,6 +314,7 @@ export interface AttendanceShift {
 
   staffId: string;
   restaurantId: string;
+  shiftScheduleId?: string | null;
 
   shiftType: string;
 
@@ -405,7 +406,8 @@ export async function clockOut(shiftId: string): Promise<AttendanceResponse> {
 export interface ShiftTemplate {
   id: string;
   name: string;
-  type: string;
+  type: "MORNING" | "EVENING" | "NIGHT" | "SPLIT";
+  status: "ACTIVE" | "INACTIVE";
   segments: {
     sequence: number;
     startTime: string;
@@ -415,10 +417,25 @@ export interface ShiftTemplate {
 }
 
 export async function getActiveShiftTemplates(restaurantId: string) {
+  return getShiftTemplates(restaurantId, "ACTIVE");
+}
+
+export async function getShiftTemplates(restaurantId: string, status?: ShiftTemplate["status"]) {
   const response = await hrApi.get<{ data: ShiftTemplate[] }>("/shift-templates", {
-    params: { restaurantId, status: "ACTIVE" },
+    params: { restaurantId, status },
   });
   return response.data.data;
+}
+
+export async function saveShiftTemplate(restaurantId: string, payload: Omit<ShiftTemplate, "id">, id?: string) {
+  const response = id
+    ? await hrApi.patch<{ message: string; data: ShiftTemplate }>(`/shift-templates/${id}`, payload)
+    : await hrApi.post<{ message: string; data: ShiftTemplate }>("/shift-templates", { ...payload, restaurantId });
+  return response.data;
+}
+
+export async function deleteShiftTemplate(id: string) {
+  return (await hrApi.delete<{ message: string }>(`/shift-templates/${id}`)).data;
 }
 
 export interface ShiftSchedule {
@@ -477,7 +494,6 @@ export interface UpdateShiftSchedulePayload {
   scheduledStart?: string;
   scheduledEnd?: string;
 
-  status?: string;
 }
 
 export async function getShiftSchedules(params?: {
@@ -531,12 +547,14 @@ export async function getStaffByRestaurant(
   restaurantId: string,
   page = 1,
   limit = 20,
+  filters?: { search?: string; status?: EmployeeStatus; directory?: boolean },
 ): Promise<StaffListResponse> {
   const response = await hrApi.get<StaffListResponse>("/staff", {
     params: {
       restaurantId,
       page,
       limit,
+      ...filters,
     },
   });
 
@@ -569,9 +587,12 @@ export interface LeaveRecord {
   endDate: string;
   totalDays?: number | string | null;
   reason?: string | null;
-  status: "PENDING" | "APPROVED" | "REJECTED";
+  status: "PENDING" | "APPROVED" | "REJECTED" | "REVOKED";
   approvedById?: string | null;
+  revokedAt?: string | null;
+  revokeReason?: string | null;
   createdAt: string;
+  updatedAt: string;
 
   staff?: {
     id: string;
@@ -586,6 +607,29 @@ export interface LeaveRecord {
 export interface LeaveListResponse {
   message: string;
   data: LeaveRecord[];
+}
+
+export type LeavePayload = Pick<LeaveRecord, "staffId" | "type" | "isPaidLeave" | "startDate" | "endDate"> & { reason: string };
+
+export async function saveLeave(payload: LeavePayload, id?: string) {
+  const response = id
+    ? await hrApi.patch<{ message: string; data: LeaveRecord }>(`/leaves/${id}`, payload)
+    : await hrApi.post<{ message: string; data: LeaveRecord }>("/leaves", payload);
+  return response.data;
+}
+
+export async function reviewLeave(id: string, action: "approve" | "reject") {
+  const response = await hrApi.patch<{ message: string }>(`/leaves/${id}/${action}`);
+  return response.data;
+}
+
+export async function revokeLeave(leave: LeaveRecord, reason: string) {
+  const response = await hrApi.patch<{ message: string }>(`/leaves/${leave.id}/revoke`, {
+    expectedStatus: leave.status,
+    expectedUpdatedAt: leave.updatedAt,
+    reason,
+  });
+  return response.data;
 }
 
 export async function getLeaves(params?: {
@@ -633,6 +677,8 @@ export interface Payslip {
 
   createdAt?: string;
   updatedAt?: string;
+  staff?: Pick<Staff, "firstName" | "lastName" | "employeeCode">;
+  payrollRun?: Pick<PayrollRun, "periodStartDate" | "periodEndDate">;
 }
 
 export interface PayslipResponse {
@@ -689,6 +735,10 @@ export interface PayrollRun {
   status: string;
 
   processedById?: string | null;
+  paidAt?: string | null;
+  paymentReference?: string | null;
+  reopenedAt?: string | null;
+  reopenReason?: string | null;
 
   totalGrossPay: number | string;
   totalTaxes: number | string;
@@ -735,10 +785,64 @@ export async function getPayrollRunById(
   return response.data;
 }
 
+export async function scheduleWageChange(payload: CreateWagePayload) {
+  return (await hrApi.post<WageResponse>("/wages/changes", payload)).data;
+}
+
+export async function cancelWageChange(id: string) {
+  return (await hrApi.delete<{ message: string }>(`/wages/changes/${id}`)).data;
+}
+
+export async function createPayrollRun(payload: {
+  restaurantId: string;
+  periodStartDate: string;
+  periodEndDate: string;
+}) {
+  return (await hrApi.post<PayrollRunResponse>("/payroll-runs", payload)).data;
+}
+
+export type PayrollPaymentMethod = "DIRECT_DEPOSIT" | "CASH" | "CHECK";
+
+export async function savePayrollStep(id: string, action: "process" | "approve", expectedUpdatedAt: string) {
+  return (await hrApi.request<PayrollRunResponse>({
+    method: action === "process" ? "post" : "patch",
+    url: `/payroll-runs/${id}/${action}`,
+    data: action === "approve" ? { expectedUpdatedAt } : undefined,
+  })).data;
+}
+
+export async function reopenPayroll(run: PayrollRun, reason: string) {
+  return (await hrApi.patch<PayrollRunResponse>(`/payroll-runs/${run.id}/reopen`, { reason, expectedUpdatedAt: run.updatedAt })).data;
+}
+
+export async function recordPayrollPayment(run: PayrollRun, method: PayrollPaymentMethod, reference: string) {
+  return (await hrApi.patch<PayrollRunResponse>(`/payroll-runs/${run.id}/pay`, { method, reference, expectedUpdatedAt: run.updatedAt })).data;
+}
+
+export async function savePayrollDeductions(run: PayrollRun, slipId: string, taxDeductions: number, otherDeductions: number) {
+  return (await hrApi.patch<PayrollRunResponse>(`/payroll-runs/${run.id}/payslips/${slipId}/deductions`, {
+    taxDeductions, otherDeductions, expectedUpdatedAt: run.updatedAt,
+  })).data;
+}
+
+export async function discardPayrollDraft(id: string) {
+  return (await hrApi.delete<{ message: string }>(`/payroll-runs/${id}`)).data;
+}
+
+export async function downloadPayslip(id: string) {
+  const response = await hrApi.get<Blob>(`/payslips/${id}/download`, { responseType: "blob" });
+  const url = URL.createObjectURL(response.data);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `payslip-${id}.pdf`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 export async function deleteShiftSchedule(
   scheduleId: string,
-): Promise<ShiftScheduleResponse> {
-  const response = await hrApi.delete<ShiftScheduleResponse>(
+): Promise<{ message: string }> {
+  const response = await hrApi.delete<{ message: string }>(
     `/shift-schedules/${scheduleId}`,
   );
 

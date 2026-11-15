@@ -16,8 +16,15 @@ import { ShiftScheduleService } from './shift-schedule.service.js';
 import { CreateShiftScheduleDto } from './dto/create-shift-schedule.dto.js';
 import { UpdateShiftScheduleDto } from './dto/update-shift-schedule.dto.js';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
+import {
+  HrUser,
+  restaurantDetails,
+  restaurantScope,
+} from '../../auth/hr-access.js';
+import type { AuthenticatedUser } from '../../auth/auth.types.js';
 
 @Controller('shift-schedules')
+@UseGuards(JwtAuthGuard)
 export class ShiftScheduleController {
   constructor(private readonly shiftScheduleService: ShiftScheduleService) {}
 
@@ -25,8 +32,15 @@ export class ShiftScheduleController {
    * Create a new shift schedule for a staff member.
    */
   @Post()
-  async create(@Body() dto: CreateShiftScheduleDto) {
-    return this.shiftScheduleService.create(dto);
+  async create(
+    @HrUser() user: AuthenticatedUser,
+    @Body() dto: CreateShiftScheduleDto,
+  ) {
+    restaurantScope(user, dto.restaurantId);
+    return this.shiftScheduleService.create(
+      dto,
+      restaurantDetails(user, dto.restaurantId).timezone,
+    );
   }
 
   /**
@@ -37,15 +51,15 @@ export class ShiftScheduleController {
    * - staffId
    */
   @Get()
-  @UseGuards(JwtAuthGuard)
   async findAll(
+    @HrUser() user: AuthenticatedUser,
     @Query('restaurantId') restaurantId?: string,
     @Query('staffId') staffId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
     return this.shiftScheduleService.findAll(
-      restaurantId,
+      restaurantScope(user, restaurantId, true),
       staffId,
       startDate,
       endDate,
@@ -56,8 +70,13 @@ export class ShiftScheduleController {
    * Get a single shift schedule by ID.
    */
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shiftScheduleService.findOne(id);
+  async findOne(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const result = await this.shiftScheduleService.findOne(id);
+    restaurantScope(user, result.data.restaurantId, true);
+    return result;
   }
 
   /**
@@ -65,18 +84,32 @@ export class ShiftScheduleController {
    */
   @Patch(':id')
   async update(
+    @HrUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateShiftScheduleDto,
   ) {
-    return this.shiftScheduleService.update(id, dto);
+    const { data } = await this.findOne(user, id);
+    restaurantScope(user, data.restaurantId);
+    if (dto.restaurantId) restaurantScope(user, dto.restaurantId);
+    return this.shiftScheduleService.update(
+      id,
+      dto,
+      restaurantDetails(user, dto.restaurantId ?? data.restaurantId).timezone,
+      data.restaurantId,
+    );
   }
 
   /**
    * Delete a shift schedule.
    */
   @Delete(':id')
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.shiftScheduleService.remove(id);
+  async remove(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const { data } = await this.findOne(user, id);
+    restaurantScope(user, data.restaurantId);
+    return this.shiftScheduleService.remove(id, data.restaurantId);
   }
 }
 

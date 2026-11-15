@@ -16,9 +16,9 @@ import {
   X,
 } from "lucide-react";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-import { updateFranchise } from "@/lib/organization-api";
+import { getFranchise, getFranchiseOptions, updateFranchise } from "@/lib/organization-api";
 import { useOrganizationStore } from "@/store/organization-store";
 import type { UpdateFranchiseData } from "@/utils/types/organization";
 
@@ -49,6 +49,38 @@ export default function FranchiseOverview() {
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const roleId = currentUser?.systemUser.role;
+  const canSelect = roleId === "SUPER_ADMIN";
+  const canEdit = canSelect || roleId === "FRANCHISE_ADMIN";
+  const [options, setOptions] = useState<Awaited<ReturnType<typeof getFranchiseOptions>>>([]);
+  const [selectionError, setSelectionError] = useState<string | null>(null);
+  const [isSwitching, setIsSwitching] = useState(false);
+
+  useEffect(() => {
+    if (!canSelect) return;
+
+    let active = true;
+    void getFranchiseOptions().then(
+      (items) => { if (active) setOptions(items); },
+      () => { if (active) setSelectionError("Unable to load franchises."); },
+    );
+    return () => { active = false; };
+  }, [canSelect]);
+
+  const selectFranchise = async (id: string) => {
+    if (!id || isSwitching) return;
+    setIsSwitching(true);
+    setSelectionError(null);
+    try {
+      setFranchise(await getFranchise(id));
+      setError(null);
+      setSuccess(false);
+    } catch {
+      setSelectionError("Unable to open that franchise.");
+    } finally {
+      setIsSwitching(false);
+    }
+  };
 
   // ============================================================
   // EDIT FRANCHISE
@@ -91,7 +123,7 @@ export default function FranchiseOverview() {
 
     const trimmedName = name.trim();
     const trimmedTaxId = taxId.trim();
-    const trimmedCurrency = defaultCurrency.trim();
+    const trimmedCurrency = defaultCurrency.trim().toUpperCase();
 
     if (!trimmedName) {
       setError("Franchise name is required.");
@@ -114,9 +146,10 @@ export default function FranchiseOverview() {
       setError(null);
       setSuccess(false);
 
-      const updated = await updateFranchise(payload);
+      const updated = await updateFranchise(payload, franchise.id);
 
       setFranchise(updated);
+      setOptions((items) => items.map((item) => item.id === updated.id ? { id: updated.id, name: updated.name } : item));
 
       setName(updated.name);
       setTaxId(updated.taxId ?? "");
@@ -217,7 +250,7 @@ export default function FranchiseOverview() {
             </div>
           )}
 
-          {!loading && franchise && !isEditing && (
+          {!loading && canEdit && franchise && !isEditing && !isSwitching && (
             <button
               type="button"
               onClick={handleEdit}
@@ -229,6 +262,25 @@ export default function FranchiseOverview() {
           )}
         </div>
       </div>
+
+      {canSelect && !loading && (
+        <div className="relative flex flex-wrap items-center gap-3 border-b border-zinc-800/80 px-5 py-3 sm:px-7">
+          <label htmlFor="operations-franchise" className="text-xs font-semibold text-zinc-300">Franchise workspace</label>
+          <select
+            id="operations-franchise"
+            value={franchise?.id ?? ""}
+            disabled={isEditing || isSaving || isSwitching}
+            onChange={(event) => void selectFranchise(event.target.value)}
+            className="rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-white focus-visible:outline-emerald-400 disabled:opacity-60"
+          >
+            <option value="" disabled>Select franchise</option>
+            {franchise && !options.some((item) => item.id === franchise.id) && <option value={franchise.id}>{franchise.name}</option>}
+            {options.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+          </select>
+          {isSwitching && <span role="status" className="text-xs text-zinc-400">Opening franchise…</span>}
+          {selectionError && <span role="alert" className="text-xs text-red-400">{selectionError}</span>}
+        </div>
+      )}
 
       {/* LOADING */}
 

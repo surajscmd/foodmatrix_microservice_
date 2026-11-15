@@ -1,0 +1,487 @@
+.page {
+  --page-inset: clamp(0.75rem, 1.65vw, 1.75rem);
+  min-height: 100dvh;
+  display: grid;
+  align-items: center;
+  padding: var(--page-inset);
+  background: #070914;
+  color: var(--color-zinc-100);
+  font-family: var(--font-sans);
+  color-scheme: dark;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-areas: "preview sign-in";
+  align-items: center;
+  gap: clamp(2rem, 5vw, 4.5rem);
+  width: 100%;
+  max-width: 70rem;
+  margin-inline: auto;
+}
+
+.showcase {
+  grid-area: preview;
+  display: flex;
+  flex-direction: column;
+  gap: 1.125rem;
+  min-width: 0;
+  padding: clamp(1.25rem, 2.1vw, 2rem);
+  border: 1px solid var(--color-zinc-700);
+  border-radius: 1.5rem;
+  background:
+    radial-gradient(
+      ellipse at 0 0,
+      color-mix(in oklab, var(--color-emerald-400) 13%, transparent),
+      transparent 72%
+    ),
+    linear-gradient(155deg, #222429, #191b20 62%, #101219);
+}
+
+.showcaseHeading h2 {
+  max-width: 17ch;
+  margin: 0;
+  font-size: clamp(1.75rem, 2.45vw, 2.25rem);
+  font-weight: 600;
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+.showcaseHeading h2 span {
+  color: var(--color-emerald-300);
+}
+
+.showcaseHeading p {
+  max-width: 41ch;
+  margin-top: 0.65rem;
+  color: var(--color-zinc-300);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.servicePreview {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: clamp(17rem, 34vh, 21rem);
+  padding: clamp(0.75rem, 1.2vw, 1rem);
+  overflow: hidden;
+  border: 1px solid var(--color-zinc-700);
+  border-radius: 1rem;
+  background: #101219;
+}
+
+.servicePhoto {
+  z-index: -2;
+  object-fit: cover;
+  object-position: 50% 41%;
+}
+
+.servicePreview::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 55%, rgb(7 9 20 / 64%));
+  content: "";
+}
+
+.orderCard {
+  align-self: flex-end;
+  width: min(100%, 22rem);
+  padding: 0.6rem 0.75rem 0.65rem;
+  border: 1px solid var(--color-zinc-700);
+  border-radius: 0.85rem;
+  background: rgb(16 18 25 / 94%);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 32%);
+  backdrop-filter: blur(12px);
+}
+
+.orderHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--color-zinc-700);
+}
+
+.orderHeading span:first-child {
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.orderHeading span:last-child {
+  color: var(--color-zinc-400);
+  font-family: var(--font-mono);
+  font-size: 0.69rem;
+  letter-spacing: 0.04em;
+}
+
+.orderSteps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.4rem;
+  padding-top: 0.65rem;
+}
+
+.orderStep {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  min-width: 0;
+  text-align: center;
+}
+
+.stepIcon {
+  display: grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-bottom: 0.32rem;
+  place-items: center;
+  border-radius: 0.45rem;
+  background: #263542;
+  color: var(--color-sky-200);
+}
+
+.orderStep:nth-child(2) .stepIcon {
+  background: #363027;
+  color: var(--color-amber-200);
+}
+
+.orderStep:nth-child(3) .stepIcon {
+  background: #26372f;
+  color: var(--color-emerald-200);
+}
+
+.stepLabel {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.stepStatus {
+  color: var(--color-zinc-400);
+  font-size: 0.7rem;
+}
+
+.stepArrow {
+  position: absolute;
+  top: 0.5rem;
+  right: -0.6rem;
+  color: var(--color-zinc-400);
+}
+
+.workspaceAreas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem clamp(1rem, 2vw, 2rem);
+  padding-top: 0.02rem;
+}
+
+.workspaceAreas li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-zinc-300);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.workspaceAreas svg {
+  flex: none;
+  color: var(--color-emerald-300);
+}
+
+.signIn {
+  grid-area: sign-in;
+  display: grid;
+  min-width: 0;
+  place-items: center;
+  padding: 1.5rem 0;
+}
+
+.signInContent {
+  width: 100%;
+  max-width: 22.5rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: fit-content;
+  margin-bottom: 1.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+.brand img {
+  border-radius: 0.55rem;
+}
+
+.formHeading {
+  margin-bottom: 1.3rem;
+}
+
+.formHeading h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.05vw, 1.875rem);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.formHeading p {
+  margin-top: 0.45rem;
+  color: var(--color-zinc-400);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.form {
+  display: grid;
+  gap: 1rem;
+}
+
+.field {
+  display: grid;
+  gap: 0.375rem;
+}
+
+.fieldHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.fieldLabel {
+  color: var(--color-zinc-200);
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.inputGroup {
+  position: relative;
+}
+
+.inputIcon {
+  position: absolute;
+  top: 50%;
+  left: 0.9rem;
+  color: var(--color-zinc-400);
+  pointer-events: none;
+  translate: 0 -50%;
+}
+
+.input {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.55rem 2.7rem;
+  border: 1px solid var(--color-zinc-700);
+  border-radius: 0.65rem;
+  background: #101219;
+  color: var(--color-zinc-100);
+  font-size: 0.875rem;
+  transition: border-color 150ms, box-shadow 150ms;
+}
+
+.input::placeholder {
+  color: var(--color-zinc-400);
+  opacity: 1;
+}
+
+.input:focus {
+  border-color: var(--color-emerald-400);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-emerald-400) 16%, transparent);
+}
+
+.revealPassword {
+  position: absolute;
+  inset: 0 0.15rem 0 auto;
+  display: grid;
+  width: 2.65rem;
+  place-items: center;
+  border-radius: 0.55rem;
+  color: var(--color-zinc-400);
+  cursor: pointer;
+}
+
+.resetPassword {
+  color: var(--color-emerald-300);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.resetPassword:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
+
+.revealPassword:hover {
+  color: var(--color-zinc-100);
+}
+
+.remember {
+  display: flex;
+  width: fit-content;
+  min-height: 1.5rem;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--color-zinc-300);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+
+.remember input {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--color-emerald-400);
+}
+
+.submit {
+  position: relative;
+  display: grid;
+  min-height: 2.75rem;
+  place-items: center;
+  padding: 0.55rem 2.75rem;
+  border: 1px solid var(--color-emerald-400);
+  border-radius: 0.65rem;
+  background: var(--color-emerald-400);
+  color: var(--color-zinc-950);
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background-color 150ms;
+}
+
+.submit:enabled:hover {
+  background: var(--color-emerald-300);
+}
+
+.submit svg {
+  position: absolute;
+  right: 1rem;
+}
+
+.form :is(button, input[type="checkbox"]):focus-visible {
+  outline: 2px solid var(--color-emerald-400);
+  outline-offset: 3px;
+}
+
+.form :is(button, input):disabled {
+  opacity: 0.66;
+  cursor: wait;
+}
+
+.error {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid color-mix(in oklab, var(--color-rose-400) 32%, transparent);
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--color-rose-400) 10%, transparent);
+  color: var(--color-rose-300);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.accountHelp {
+  margin-top: 1.4rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--color-zinc-800);
+  color: var(--color-zinc-400);
+  font-size: 0.77rem;
+  line-height: 1.5;
+}
+
+@media (max-width: 899px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "sign-in" "preview";
+    max-width: 36rem;
+    gap: 1rem;
+  }
+
+  .signIn {
+    padding: clamp(1rem, 3vw, 1.8rem) clamp(0.5rem, 3vw, 1.5rem) 0.9rem;
+  }
+
+  .showcase {
+    border-radius: 1.15rem;
+  }
+
+  .showcaseHeading h2 {
+    max-width: 20ch;
+    font-size: clamp(1.35rem, 5vw, 1.875rem);
+  }
+
+  .servicePreview {
+    min-height: clamp(14rem, 50vw, 19rem);
+  }
+
+  .input {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 430px) {
+  .showcase {
+    gap: 0.85rem;
+    padding: 0.8rem;
+  }
+
+  .showcaseHeading {
+    padding: 0.25rem;
+  }
+
+  .showcaseHeading p {
+    font-size: 0.82rem;
+  }
+
+  .servicePreview {
+    padding: 0.45rem;
+  }
+
+  .orderCard {
+    padding: 0.5rem;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .showcaseHeading,
+  .formHeading,
+  .form,
+  .orderCard {
+    animation: enter 520ms cubic-bezier(0.2, 0.65, 0.3, 1) backwards;
+  }
+
+  .orderCard {
+    animation-delay: 130ms;
+  }
+
+  .form {
+    animation-delay: 65ms;
+  }
+
+  .submit:enabled svg {
+    transition: translate 160ms ease-out;
+  }
+
+  .submit:enabled:hover svg {
+    translate: 3px 0;
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}

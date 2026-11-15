@@ -17,6 +17,10 @@ import { EmployeeSignedInHandler } from './handlers/employee-signed-in.handler.j
 import { EmployeeLateHandler } from './handlers/employee-late.handler.js';
 import { EmployeeClockedOutEarlyHandler } from './handlers/employee-clocked-out-early.handler.js';
 import { LeaveAppliedHandler } from './handlers/leave-applied.handler.js';
+import {
+  isLeaveDecision,
+  LeaveDecisionHandler,
+} from './handlers/leave-decision.handler.js';
 
 import type {
   LowStockEvent,
@@ -73,6 +77,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     private readonly employeeClockedOutEarlyHandler: EmployeeClockedOutEarlyHandler,
 
     private readonly leaveAppliedHandler: LeaveAppliedHandler,
+    private readonly leaveDecisionHandler: LeaveDecisionHandler,
   ) {}
 
   // ============================================================
@@ -284,6 +289,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
       'hr.employee-late',
       'hr.employee-clocked-out-early',
       'hr.leave-applied',
+      'hr.leave-decision',
     ];
 
     for (const topic of topics) {
@@ -419,6 +425,15 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
 
               await this.leaveAppliedHandler.handle(event);
 
+              break;
+            }
+
+            case 'hr.leave-decision': {
+              if (!isLeaveDecision(event)) {
+                this.logger.warn('Invalid hr.leave-decision event received');
+                return;
+              }
+              await this.leaveDecisionHandler.handle(event);
               break;
             }
 

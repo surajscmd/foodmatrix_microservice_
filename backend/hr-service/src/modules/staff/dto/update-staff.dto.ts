@@ -1,31 +1,31 @@
-import { IsOptional, IsString, IsUUID, Length, Matches } from 'class-validator';
+import { IsString, IsUUID, Length, Matches, ValidateIf } from 'class-validator';
 
 export class UpdateStaffDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsUUID('4')
   restaurantId?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(1, 50)
   employeeCode?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(1, 100)
   firstName?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(1, 100)
   lastName?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(1, 100)
   role?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Matches(/^\d{4,6}$/, {
     message: 'PIN must be 4 to 6 digits',

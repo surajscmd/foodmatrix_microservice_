@@ -3,9 +3,11 @@ import axios from "axios";
 import type {
   CurrentUserResponse,
   FranchiseResponse,
+  Franchise,
   RestaurantsResponse,
   RestaurantResponse,
   SystemUserResponse,
+  SystemUser,
   CreateRestaurantData,
   UpdateRestaurantData,
   UpdateFranchiseData,
@@ -37,16 +39,22 @@ export async function getCurrentUser() {
 // FRANCHISE
 // ============================================================
 
-export async function getFranchise() {
-  const response = await organizationApi.get<FranchiseResponse>("/franchise");
+export async function getFranchise(franchiseId?: string) {
+  const response = await organizationApi.get<FranchiseResponse>("/franchise", { params: { franchiseId } });
 
   return response.data.data;
 }
 
-export async function updateFranchise(data: UpdateFranchiseData) {
+export async function getFranchiseOptions() {
+  const response = await organizationApi.get<{ data: Pick<Franchise, "id" | "name">[] }>("/franchise/options");
+  return response.data.data;
+}
+
+export async function updateFranchise(data: UpdateFranchiseData, franchiseId?: string) {
   const response = await organizationApi.patch<FranchiseResponse>(
     "/franchise",
     data,
+    { params: { franchiseId } },
   );
 
   return response.data.data;
@@ -117,5 +125,14 @@ export async function getSystemUserByAuthId(authUserId: string) {
     `/system-users/auth/${authUserId}`,
   );
 
+  return response.data.data;
+}
+export async function getManageableSystemUsers(search: string) {
+  const response = await organizationApi.get<{ data: SystemUser[] }>("/system-users", { params: { search } });
+  return response.data.data;
+}
+
+export async function setSystemUserActive(id: string, isActive: boolean) {
+  const response = await organizationApi.patch<SystemUserResponse>(`/system-users/${id}/status`, { isActive });
   return response.data.data;
 }

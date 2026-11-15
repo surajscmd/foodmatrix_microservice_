@@ -32,7 +32,7 @@ export class CreateWageDto {
   @IsOptional()
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  @Max(9999999999.99)
+  @Max(99999999.99)
   salaryAmount?: number;
 
   @IsDateString()

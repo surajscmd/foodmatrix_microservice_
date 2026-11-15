@@ -55,22 +55,18 @@ export class RestaurantService {
     });
   }
 
-  async findAll(restaurantId?: string): Promise<Restaurant[]> {
+  async findAll(scope: Prisma.RestaurantWhereInput): Promise<Restaurant[]> {
     return this.prisma.restaurant.findMany({
-      where: restaurantId
-        ? {
-            id: restaurantId,
-          }
-        : undefined,
+      where: scope,
       orderBy: {
         createdAt: 'desc',
       },
     });
   }
 
-  async findOne(id: string) {
-    const restaurant = await this.prisma.restaurant.findUnique({
-      where: { id },
+  async findOne(id: string, scope: Prisma.RestaurantWhereInput = {}) {
+    const restaurant = await this.prisma.restaurant.findFirst({
+      where: { AND: [scope, { id }] },
       include: {
         franchise: {
           select: { defaultCurrency: true },
@@ -90,17 +86,26 @@ export class RestaurantService {
     };
   }
 
-  async update(id: string, dto: UpdateRestaurantDto): Promise<Restaurant> {
-    await this.findOne(id);
-
+  async update(
+    id: string,
+    dto: UpdateRestaurantDto,
+    scope: Prisma.RestaurantWhereInput,
+  ): Promise<Restaurant> {
     try {
       return await this.prisma.restaurant.update({
         where: {
           id,
+          AND: [scope],
         },
         data: dto,
       });
     } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2025'
+      ) {
+        throw new NotFoundException('Restaurant not found');
+      }
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'

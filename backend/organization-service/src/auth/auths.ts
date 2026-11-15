@@ -6,6 +6,8 @@ import { jwt } from 'better-auth/plugins';
 
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Logger } from '@nestjs/common';
+import { deliverPasswordReset } from './password-reset-delivery.js';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -20,6 +22,14 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({
   adapter,
 });
+const logger = new Logger('OrganizationAuth');
+const resetDelivery = process.env.PASSWORD_RESET_WEBHOOK_URL;
+const resetToken = process.env.PASSWORD_RESET_WEBHOOK_TOKEN;
+if (Boolean(resetDelivery) !== Boolean(resetToken)) {
+  logger.warn(
+    'Configure both password reset webhook settings to enable reset email',
+  );
+}
 
 export const auth = betterAuth({
   appName: 'FoodMatrix',
@@ -34,15 +44,45 @@ export const auth = betterAuth({
 
   emailAndPassword: {
     enabled: true,
-    autoSignIn: true,
-    sendResetPassword: async ({ user, url }) => {
-      await Promise.resolve();
-
-      console.log(`Password reset URL for ${user.email}: ${url}`);
-    },
+    autoSignIn: false,
+    revokeSessionsOnPasswordReset: true,
+    ...(resetDelivery &&
+      resetToken && {
+        sendResetPassword: async ({ user, url }) => {
+          try {
+            await deliverPasswordReset(
+              resetDelivery,
+              resetToken,
+              user.email,
+              url,
+            );
+          } catch {
+            logger.error('Password reset delivery failed');
+          }
+        },
+      }),
   },
 
-  trustedOrigins: ['http://localhost:3000'],
+  disabledPaths: ['/sign-up/email'],
+  trustedOrigins: (
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? 'http://localhost:3000'
+  )
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean),
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => {
+          const systemUser = await prisma.systemUser.findUnique({
+            where: { authUserId: session.userId },
+            select: { isActive: true },
+          });
+          if (!systemUser?.isActive) return false;
+        },
+      },
+    },
+  },
 
   plugins: [
     jwt({
@@ -61,10 +101,19 @@ export const auth = betterAuth({
             where: {
               authUserId: user.id,
             },
+            include: {
+              restaurant: {
+                select: {
+                  timezone: true,
+                  name: true,
+                  franchise: { select: { defaultCurrency: true } },
+                },
+              },
+            },
           });
 
-          if (!systemUser) {
-            throw new Error('FoodMatrix system user not found');
+          if (!systemUser?.isActive) {
+            throw new Error('Active FoodMatrix system user required');
           }
 
           return {
@@ -76,6 +125,11 @@ export const auth = betterAuth({
             role: systemUser.role,
             franchiseId: systemUser.franchiseId,
             managedRestaurantId: systemUser.managedRestaurantId,
+            systemUserId: systemUser.id,
+            restaurantTimezone: systemUser.restaurant?.timezone,
+            restaurantName: systemUser.restaurant?.name,
+            restaurantCurrency:
+              systemUser.restaurant?.franchise.defaultCurrency,
           };
         },
       },

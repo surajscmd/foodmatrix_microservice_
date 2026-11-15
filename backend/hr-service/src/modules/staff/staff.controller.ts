@@ -8,7 +8,6 @@ import {
   Patch,
   Post,
   Query,
-  Req,
   UseGuards,
 } from '@nestjs/common';
 
@@ -18,17 +17,16 @@ import { CreateStaffDto } from './dto/create-staff.dto.js';
 import { UpdateStaffDto } from './dto/update-staff.dto.js';
 import { UpdateStaffStatusDto } from './dto/update-staff-status.dto.js';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard.js';
-interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    name: string;
-    email: string;
-    role?: string;
-    franchiseId?: string | null;
-    managedRestaurantId?: string | null;
-  };
-}
+import {
+  HrUser,
+  restaurantDetails,
+  restaurantScope,
+} from '../../auth/hr-access.js';
+import type { AuthenticatedUser } from '../../auth/auth.types.js';
+import { EmployeeStatus } from '@prisma/client';
+
 @Controller('staff')
+@UseGuards(JwtAuthGuard)
 export class StaffController {
   constructor(private readonly staffService: StaffService) {}
 
@@ -37,8 +35,12 @@ export class StaffController {
   // ======================================================
 
   @Post()
-  async create(@Body() dto: CreateStaffDto) {
-    const data = await this.staffService.create(dto);
+  async create(@HrUser() user: AuthenticatedUser, @Body() dto: CreateStaffDto) {
+    restaurantScope(user, dto.restaurantId);
+    const data = await this.staffService.create(
+      { ...dto, approvedById: user.systemUserId ?? user.id },
+      restaurantDetails(user, dto.restaurantId).timezone,
+    );
 
     return {
       message: 'Staff created successfully',
@@ -51,25 +53,23 @@ export class StaffController {
   // ======================================================
 
   @Get()
-  @UseGuards(JwtAuthGuard)
   async findAll(
-    @Req() req: AuthenticatedRequest,
+    @HrUser() user: AuthenticatedUser,
+    @Query('restaurantId') requestedRestaurant?: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
+    @Query('search') search?: string,
+    @Query('status') status?: EmployeeStatus,
+    @Query('directory') directory?: string,
   ) {
-    const user = req.user!;
-
-    const restaurantId =
-      user.role === 'RESTAURANT_ADMIN' ||
-      user.role === 'STAFF' ||
-      user.role === 'OPERATIONS'
-        ? (user.managedRestaurantId ?? undefined)
-        : undefined;
-
+    const restaurantId = restaurantScope(user, requestedRestaurant, true);
     const data = await this.staffService.findAll(
       restaurantId,
       Number(page),
       Number(limit),
+      search,
+      status,
+      user.role !== 'STAFF' && directory !== 'true',
     );
 
     return {
@@ -83,8 +83,12 @@ export class StaffController {
   // ======================================================
 
   @Get(':id')
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
+  async findOne(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
     const data = await this.staffService.findOne(id);
+    restaurantScope(user, data.restaurantId);
 
     return {
       message: 'Staff fetched successfully',
@@ -98,10 +102,11 @@ export class StaffController {
 
   @Patch(':id')
   async update(
+    @HrUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStaffDto,
   ) {
-    const data = await this.staffService.update(id, dto);
+    const data = await this.staffService.update(id, dto, user);
 
     return {
       message: 'Staff updated successfully',
@@ -115,10 +120,11 @@ export class StaffController {
 
   @Patch(':id/status')
   async updateStatus(
+    @HrUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStaffStatusDto,
   ) {
-    const data = await this.staffService.updateStatus(id, dto.status);
+    const data = await this.staffService.updateStatus(id, dto.status, user);
 
     return {
       message: 'Staff status updated successfully',
@@ -131,8 +137,11 @@ export class StaffController {
   // ======================================================
 
   @Delete(':id')
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    const data = await this.staffService.remove(id);
+  async remove(
+    @HrUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const data = await this.staffService.remove(id, user);
 
     return {
       message: 'Staff removed successfully',

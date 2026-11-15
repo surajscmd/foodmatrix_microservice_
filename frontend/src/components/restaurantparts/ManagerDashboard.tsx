@@ -7,18 +7,15 @@ import {
   Bell,
   CalendarDays,
   ChefHat,
-  CreditCard,
-  MapPin,
   Package,
   RefreshCw,
-  Store,
   Users,
-  Utensils,
   Wallet,
   type LucideIcon,
 } from "lucide-react";
 
 import RevenueChart from "@/elements/edgedashboard/RevenueChart";
+import RestaurantWorkspaceHeader from "@/elements/edgedashboard/RestaurantWorkspaceHeader";
 import usePlatformFormatter from "@/hooks/usePlatformFormatter";
 import { getAttendance, getShiftSchedules } from "@/lib/hr-api";
 import { getRestaurantLowStock } from "@/lib/inventory-api";
@@ -39,12 +36,6 @@ const tones = {
 };
 
 type Tone = keyof typeof tones;
-
-const stations = [
-  { label: "POS", href: "/restaurant/pos", icon: CreditCard },
-  { label: "Waiter", href: "/restaurant/waiter", icon: Utensils },
-  { label: "Kitchen", href: "/restaurant/kitchen", icon: ChefHat },
-];
 
 const orderStatus = {
   PENDING: { label: "Pending", tone: "amber" },
@@ -215,63 +206,13 @@ export default function ManagerDashboard() {
     );
   }
 
-  const active = restaurant.status === "ACTIVE";
-  const location = [restaurant.city, restaurant.state, restaurant.country]
-    .filter(Boolean)
-    .join(", ");
-
   return (
     <div className="mx-auto max-w-[1600px] space-y-5">
-      <header className="relative isolate overflow-hidden rounded-3xl border border-teal-400/25 bg-[#101b23] px-5 py-5 sm:px-7 sm:py-6">
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_top_left,#134e4a,transparent_65%),radial-gradient(ellipse_at_bottom_right,#312e81,transparent_60%)]"
-        />
-        <div className="flex flex-wrap items-center justify-between gap-5">
-          <div className="flex min-w-0 items-start gap-3.5">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-emerald-300/30 bg-emerald-300/15 text-emerald-200">
-              <Store aria-hidden="true" className="h-5 w-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2.5">
-                <h1 className="break-words text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                  {restaurant.name}
-                </h1>
-                <Badge
-                  label={active ? "Active" : "Inactive"}
-                  tone={active ? "emerald" : "neutral"}
-                />
-              </div>
-              {location && (
-                <p className="mt-1.5 flex items-center gap-1.5 text-sm text-zinc-200">
-                  <MapPin aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
-                  {location}
-                </p>
-              )}
-              <p className="mt-1 text-xs text-zinc-300">
-                {user.firstName} {user.lastName} · {isManager ? "Restaurant Manager" : "Staff"}
-              </p>
-            </div>
-          </div>
-
-          <nav aria-label="Restaurant stations" className="flex flex-wrap gap-2">
-            {stations.map(({ label, href, icon: Icon }) => (
-              <Link
-                key={href}
-                href={href}
-                className={`inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 ${
-                  label === "POS"
-                    ? "border-emerald-300 bg-emerald-300 text-emerald-950 hover:bg-emerald-200"
-                    : "border-white/20 bg-zinc-950/55 text-zinc-100 hover:bg-zinc-800"
-                }`}
-              >
-                <Icon aria-hidden="true" className="h-4 w-4" />
-                {label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      </header>
+      <RestaurantWorkspaceHeader
+        restaurant={restaurant}
+        accountName={[user.firstName, user.lastName].filter(Boolean).join(" ")}
+        isManager={isManager}
+      />
 
       {isManager && (
         <RestaurantActivity key={`${user.id}:${restaurant.id}`} restaurant={restaurant} />

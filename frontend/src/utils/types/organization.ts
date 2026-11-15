@@ -74,6 +74,13 @@ export interface CurrentUserData {
   systemUser: SystemUser;
 }
 
+export interface OrganizationWorkspace {
+  currentUser: CurrentUserData;
+  franchise: Franchise | null;
+  restaurants: Restaurant[];
+  selectedRestaurant: Restaurant | null;
+}
+
 // ------------------------------------------------------------
 // FRANCHISE
 // ------------------------------------------------------------

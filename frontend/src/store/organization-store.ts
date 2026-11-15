@@ -3,6 +3,7 @@ import { create } from "zustand";
 import type {
   CurrentUserData,
   Franchise,
+  OrganizationWorkspace,
   Restaurant,
 } from "@/utils/types/organization";
 
@@ -38,6 +39,8 @@ interface OrganizationState {
   isLoading: boolean;
   isHydrated: boolean;
   error: string | null;
+  hydrateWorkspace: (workspace: OrganizationWorkspace) => void;
+  restoreWorkspace: () => Promise<void>;
 
   // ============================================================
   // USER
@@ -96,8 +99,50 @@ const initialState = {
   error: null,
 };
 
-export const useOrganizationStore = create<OrganizationState>((set) => ({
+let restoreRequest: AbortController | null = null;
+
+export const useOrganizationStore = create<OrganizationState>((set, get) => ({
   ...initialState,
+
+  hydrateWorkspace: (workspace) => {
+    restoreRequest?.abort();
+    restoreRequest = null;
+    set({ ...workspace, isLoading: false, isHydrated: true, error: null });
+  },
+
+  restoreWorkspace: async () => {
+    if (restoreRequest || (get().isHydrated && !get().error)) return;
+
+    const pending = new AbortController();
+    restoreRequest = pending;
+    set({ isLoading: true, isHydrated: false, error: null });
+    const fallback = "We couldn’t load your workspace. Please try again.";
+
+    try {
+      const response = await fetch("/api/workspace", {
+        cache: "no-store",
+        signal: pending.signal,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data?.workspace) {
+        throw new Error(typeof data?.message === "string" ? data.message : fallback);
+      }
+      if (restoreRequest === pending) {
+        const workspace: OrganizationWorkspace = data.workspace;
+        set({ ...workspace, isLoading: false, isHydrated: true, error: null });
+      }
+    } catch (error) {
+      if (restoreRequest === pending) {
+        set({
+          ...initialState,
+          isHydrated: true,
+          error: error instanceof Error && error.name !== "TypeError" ? error.message : fallback,
+        });
+      }
+    } finally {
+      if (restoreRequest === pending) restoreRequest = null;
+    }
+  },
 
   // ==========================================================
   // USER
@@ -198,6 +243,8 @@ export const useOrganizationStore = create<OrganizationState>((set) => ({
   // ==========================================================
 
   clearOrganization: () => {
+    restoreRequest?.abort();
+    restoreRequest = null;
     set({
       ...initialState,
     });

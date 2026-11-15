@@ -1,3 +1,4 @@
+import type { RestaurantFilter } from '../../auth/hr-access.js';
 import {
   BadRequestException,
   ConflictException,
@@ -5,12 +6,17 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { ShiftScheduleStatus, ShiftTemplateStatus } from '@prisma/client';
+import {
+  Prisma,
+  ShiftScheduleStatus,
+  ShiftTemplateStatus,
+} from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 import { CreateShiftScheduleDto } from './dto/create-shift-schedule.dto.js';
 import { UpdateShiftScheduleDto } from './dto/update-shift-schedule.dto.js';
+import { dateInRestaurant } from '../payroll/hr-dates.js';
 
 @Injectable()
 export class ShiftScheduleService {
@@ -31,134 +37,145 @@ export class ShiftScheduleService {
    * - Shift template is active
    * - Staff does not have another overlapping shift
    */
-  async create(dto: CreateShiftScheduleDto) {
-    const {
-      restaurantId,
-      staffId,
-      shiftTemplateId,
-      scheduledStart,
-      scheduledEnd,
-    } = dto;
-
-    const start = new Date(scheduledStart);
-    const end = new Date(scheduledEnd);
-
-    // Validate the schedule time range.
-    this.validateScheduleDates(start, end);
-
-    // ----------------------------------------------------------
-    // Validate staff
-    // ----------------------------------------------------------
-
-    const staff = await this.prisma.staff.findFirst({
-      where: {
-        id: staffId,
-        restaurantId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException('Staff not found for this restaurant');
-    }
-
-    // ----------------------------------------------------------
-    // Validate shift template
-    // ----------------------------------------------------------
-
-    const template = await this.prisma.shiftTemplate.findFirst({
-      where: {
-        id: shiftTemplateId,
-        restaurantId,
-        status: ShiftTemplateStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!template) {
-      throw new NotFoundException(
-        'Shift template not found for this restaurant',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // Check overlapping schedule
-    // ----------------------------------------------------------
-
-    const overlapping = await this.prisma.shiftSchedule.findFirst({
-      where: {
-        staffId,
-
-        // Cancelled schedules do not block new schedules.
-        status: {
-          not: ShiftScheduleStatus.CANCELLED,
-        },
-
-        // Existing shift starts before the new shift ends.
-        scheduledStart: {
-          lt: end,
-        },
-
-        // Existing shift ends after the new shift starts.
-        scheduledEnd: {
-          gt: start,
-        },
-      },
-
-      select: {
-        id: true,
-      },
-    });
-
-    if (overlapping) {
-      throw new ConflictException('Staff already has an overlapping shift');
-    }
-
-    // ----------------------------------------------------------
-    // Create schedule
-    // ----------------------------------------------------------
-
-    const schedule = await this.prisma.shiftSchedule.create({
-      data: {
+  async create(dto: CreateShiftScheduleDto, timeZone?: string) {
+    return this.scheduleTransaction(async (tx) => {
+      const {
         restaurantId,
         staffId,
         shiftTemplateId,
-        scheduledStart: start,
-        scheduledEnd: end,
-      },
+        scheduledStart,
+        scheduledEnd,
+      } = dto;
 
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
+      const start = new Date(scheduledStart);
+      const end = new Date(scheduledEnd);
+
+      // Validate the schedule time range.
+      this.validateScheduleDates(start, end);
+
+      // ----------------------------------------------------------
+      // Validate staff
+      // ----------------------------------------------------------
+
+      const staff = await tx.staff.findFirst({
+        where: {
+          id: staffId,
+          restaurantId,
+          deletedAt: null,
+          status: { not: 'TERMINATED' },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!staff) {
+        throw new NotFoundException('Staff not found for this restaurant');
+      }
+      await this.ensureNoApprovedLeave(
+        tx,
+        staffId,
+        restaurantId,
+        start,
+        end,
+        timeZone,
+      );
+
+      // ----------------------------------------------------------
+      // Validate shift template
+      // ----------------------------------------------------------
+
+      const template = await tx.shiftTemplate.findFirst({
+        where: {
+          id: shiftTemplateId,
+          restaurantId,
+          status: ShiftTemplateStatus.ACTIVE,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!template) {
+        throw new NotFoundException(
+          'Shift template not found for this restaurant',
+        );
+      }
+
+      // ----------------------------------------------------------
+      // Check overlapping schedule
+      // ----------------------------------------------------------
+
+      const overlapping = await tx.shiftSchedule.findFirst({
+        where: {
+          staffId,
+
+          // Cancelled schedules do not block new schedules.
+          status: {
+            not: ShiftScheduleStatus.CANCELLED,
+          },
+
+          // Existing shift starts before the new shift ends.
+          scheduledStart: {
+            lt: end,
+          },
+
+          // Existing shift ends after the new shift starts.
+          scheduledEnd: {
+            gt: start,
           },
         },
 
-        shiftTemplate: {
-          include: {
-            segments: {
-              orderBy: {
-                sequence: 'asc',
+        select: {
+          id: true,
+        },
+      });
+
+      if (overlapping) {
+        throw new ConflictException('Staff already has an overlapping shift');
+      }
+
+      // ----------------------------------------------------------
+      // Create schedule
+      // ----------------------------------------------------------
+
+      const schedule = await tx.shiftSchedule.create({
+        data: {
+          restaurantId,
+          staffId,
+          shiftTemplateId,
+          scheduledStart: start,
+          scheduledEnd: end,
+        },
+
+        include: {
+          staff: {
+            select: {
+              id: true,
+              employeeCode: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+
+          shiftTemplate: {
+            include: {
+              segments: {
+                orderBy: {
+                  sequence: 'asc',
+                },
               },
             },
           },
         },
-      },
-    });
+      });
 
-    return {
-      message: 'Shift scheduled successfully',
-      data: schedule,
-    };
+      return {
+        message: 'Shift scheduled successfully',
+        data: schedule,
+      };
+    });
   }
 
   // ============================================================
@@ -173,7 +190,7 @@ export class ShiftScheduleService {
    * - staffId
    */
   async findAll(
-    restaurantId?: string,
+    restaurantId?: RestaurantFilter,
     staffId?: string,
     startDate?: string,
     endDate?: string,
@@ -299,155 +316,189 @@ export class ShiftScheduleService {
    * PATCH requests are resolved against the existing record,
    * then the complete resulting schedule is validated.
    */
-  async update(id: string, dto: UpdateShiftScheduleDto) {
-    const existing = await this.prisma.shiftSchedule.findUnique({
-      where: {
-        id,
-      },
-    });
+  async update(
+    id: string,
+    dto: UpdateShiftScheduleDto,
+    timeZone: string,
+    expectedRestaurantId: string,
+  ) {
+    return this.scheduleTransaction(async (tx) => {
+      const existing = await tx.shiftSchedule.findUnique({
+        where: {
+          id,
+          restaurantId: expectedRestaurantId,
+        },
+      });
 
-    if (!existing) {
-      throw new NotFoundException('Shift schedule not found');
-    }
+      if (!existing) {
+        throw new NotFoundException('Shift schedule not found');
+      }
 
-    // Resolve the final values for the updated schedule.
-    const restaurantId = dto.restaurantId ?? existing.restaurantId;
+      // Resolve the final values for the updated schedule.
+      await this.ensureEditable(tx, existing);
+      const restaurantId = dto.restaurantId ?? existing.restaurantId;
 
-    const staffId = dto.staffId ?? existing.staffId;
+      const staffId = dto.staffId ?? existing.staffId;
 
-    const shiftTemplateId = dto.shiftTemplateId ?? existing.shiftTemplateId;
+      const shiftTemplateId = dto.shiftTemplateId ?? existing.shiftTemplateId;
 
-    const start = dto.scheduledStart
-      ? new Date(dto.scheduledStart)
-      : existing.scheduledStart;
+      const start = dto.scheduledStart
+        ? new Date(dto.scheduledStart)
+        : existing.scheduledStart;
 
-    const end = dto.scheduledEnd
-      ? new Date(dto.scheduledEnd)
-      : existing.scheduledEnd;
+      const end = dto.scheduledEnd
+        ? new Date(dto.scheduledEnd)
+        : existing.scheduledEnd;
 
-    // Validate the resulting date range.
-    this.validateScheduleDates(start, end);
+      // Validate the resulting date range.
+      this.validateScheduleDates(start, end);
 
-    // ----------------------------------------------------------
-    // Validate staff
-    // ----------------------------------------------------------
+      // ----------------------------------------------------------
+      // Validate staff
+      // ----------------------------------------------------------
 
-    const staff = await this.prisma.staff.findFirst({
-      where: {
-        id: staffId,
+      const staff = await tx.staff.findFirst({
+        where: {
+          id: staffId,
+          restaurantId,
+          deletedAt: null,
+          status: { not: 'TERMINATED' },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!staff) {
+        throw new NotFoundException('Staff not found for this restaurant');
+      }
+      await this.ensureNoApprovedLeave(
+        tx,
+        staffId,
         restaurantId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!staff) {
-      throw new NotFoundException('Staff not found for this restaurant');
-    }
-
-    // ----------------------------------------------------------
-    // Validate shift template
-    // ----------------------------------------------------------
-
-    const template = await this.prisma.shiftTemplate.findFirst({
-      where: {
-        id: shiftTemplateId,
-        restaurantId,
-        status: ShiftTemplateStatus.ACTIVE,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!template) {
-      throw new NotFoundException(
-        'Shift template not found for this restaurant',
+        start,
+        end,
+        timeZone,
       );
-    }
 
-    // ----------------------------------------------------------
-    // Check overlapping schedule
-    // ----------------------------------------------------------
+      // ----------------------------------------------------------
+      // Validate shift template
+      // ----------------------------------------------------------
 
-    const overlapping = await this.prisma.shiftSchedule.findFirst({
-      where: {
-        // Do not compare the schedule against itself.
-        id: {
-          not: id,
+      const template = await tx.shiftTemplate.findFirst({
+        where: {
+          id: shiftTemplateId,
+          restaurantId,
+          ...(shiftTemplateId !== existing.shiftTemplateId
+            ? { status: ShiftTemplateStatus.ACTIVE }
+            : {}),
         },
-
-        staffId,
-
-        // Cancelled schedules do not block scheduling.
-        status: {
-          not: ShiftScheduleStatus.CANCELLED,
+        select: {
+          id: true,
         },
+      });
 
-        scheduledStart: {
-          lt: end,
-        },
+      if (!template) {
+        throw new NotFoundException(
+          'Shift template not found for this restaurant',
+        );
+      }
 
-        scheduledEnd: {
-          gt: start,
-        },
-      },
+      // ----------------------------------------------------------
+      // Check overlapping schedule
+      // ----------------------------------------------------------
 
-      select: {
-        id: true,
-      },
-    });
+      const overlapping = await tx.shiftSchedule.findFirst({
+        where: {
+          // Do not compare the schedule against itself.
+          id: {
+            not: id,
+          },
 
-    if (overlapping) {
-      throw new ConflictException('Staff already has an overlapping shift');
-    }
+          staffId,
 
-    // ----------------------------------------------------------
-    // Update schedule
-    // ----------------------------------------------------------
+          // Cancelled schedules do not block scheduling.
+          status: {
+            not: ShiftScheduleStatus.CANCELLED,
+          },
 
-    const schedule = await this.prisma.shiftSchedule.update({
-      where: {
-        id,
-      },
+          scheduledStart: {
+            lt: end,
+          },
 
-      data: {
-        restaurantId,
-        staffId,
-        shiftTemplateId,
-        scheduledStart: start,
-        scheduledEnd: end,
-      },
-
-      include: {
-        staff: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true,
-            role: true,
+          scheduledEnd: {
+            gt: start,
           },
         },
 
-        shiftTemplate: {
+        select: {
+          id: true,
+        },
+      });
+
+      if (overlapping) {
+        throw new ConflictException('Staff already has an overlapping shift');
+      }
+
+      // ----------------------------------------------------------
+      // Update schedule
+      // ----------------------------------------------------------
+
+      const schedule = await tx.shiftSchedule
+        .update({
+          where: {
+            id,
+            status: ShiftScheduleStatus.SCHEDULED,
+            updatedAt: existing.updatedAt,
+          },
+
+          data: {
+            restaurantId,
+            staffId,
+            shiftTemplateId,
+            scheduledStart: start,
+            scheduledEnd: end,
+          },
+
           include: {
-            segments: {
-              orderBy: {
-                sequence: 'asc',
+            staff: {
+              select: {
+                id: true,
+                employeeCode: true,
+                firstName: true,
+                lastName: true,
+                role: true,
+              },
+            },
+
+            shiftTemplate: {
+              include: {
+                segments: {
+                  orderBy: {
+                    sequence: 'asc',
+                  },
+                },
               },
             },
           },
-        },
-      },
-    });
+        })
+        .catch((error: unknown) => {
+          if (
+            error instanceof Prisma.PrismaClientKnownRequestError &&
+            error.code === 'P2025'
+          ) {
+            throw new ConflictException(
+              'The shift changed. Refresh the roster and try again.',
+            );
+          }
+          throw error;
+        });
 
-    return {
-      message: 'Shift schedule updated successfully',
-      data: schedule,
-    };
+      return {
+        message: 'Shift schedule updated successfully',
+        data: schedule,
+      };
+    });
   }
 
   // ============================================================
@@ -457,29 +508,123 @@ export class ShiftScheduleService {
   /**
    * Delete a shift schedule.
    */
-  async remove(id: string) {
-    const existing = await this.prisma.shiftSchedule.findUnique({
-      where: {
-        id,
-      },
-      select: {
-        id: true,
-      },
-    });
+  async remove(id: string, expectedRestaurantId: string) {
+    return this.scheduleTransaction(async (tx) => {
+      const existing = await tx.shiftSchedule.findUnique({
+        where: {
+          id,
+          restaurantId: expectedRestaurantId,
+        },
+      });
 
-    if (!existing) {
-      throw new NotFoundException('Shift schedule not found');
+      if (!existing) {
+        throw new NotFoundException('Shift schedule not found');
+      }
+
+      await this.ensureEditable(tx, existing);
+      const removed = await tx.shiftSchedule.deleteMany({
+        where: {
+          id,
+          status: ShiftScheduleStatus.SCHEDULED,
+          updatedAt: existing.updatedAt,
+        },
+      });
+      if (!removed.count)
+        throw new ConflictException(
+          'The shift changed. Refresh the roster and try again.',
+        );
+
+      return {
+        message: 'Shift schedule deleted successfully',
+      };
+    });
+  }
+
+  private scheduleTransaction<T>(
+    work: (tx: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    return this.prisma
+      .$transaction(work, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          ['P2003', 'P2034'].includes(error.code)
+        ) {
+          throw new ConflictException(
+            'The roster or attendance changed. Refresh and try again.',
+          );
+        }
+        throw error;
+      });
+  }
+
+  private async ensureEditable(
+    tx: Prisma.TransactionClient,
+    schedule: {
+      id: string;
+      status: ShiftScheduleStatus;
+      staffId: string;
+      restaurantId: string;
+      scheduledStart: Date;
+      scheduledEnd: Date;
+    },
+  ) {
+    if (schedule.status !== ShiftScheduleStatus.SCHEDULED) {
+      throw new ConflictException(
+        'Only scheduled shifts can be edited or removed',
+      );
     }
-
-    await this.prisma.shiftSchedule.delete({
+    const punch = await tx.shift.findFirst({
       where: {
-        id,
+        voidedAt: null,
+        OR: [
+          { shiftScheduleId: schedule.id },
+          {
+            shiftScheduleId: null,
+            staffId: schedule.staffId,
+            restaurantId: schedule.restaurantId,
+            clockInAt: { lt: schedule.scheduledEnd },
+            OR: [
+              { clockOutAt: null },
+              { clockOutAt: { gt: schedule.scheduledStart } },
+            ],
+          },
+        ],
       },
+      select: { id: true },
     });
+    if (punch)
+      throw new ConflictException(
+        'This shift has attendance and cannot be edited or removed',
+      );
+  }
 
-    return {
-      message: 'Shift schedule deleted successfully',
-    };
+  private async ensureNoApprovedLeave(
+    tx: Prisma.TransactionClient,
+    staffId: string,
+    restaurantId: string,
+    start: Date,
+    end: Date,
+    timeZone?: string,
+  ) {
+    const leave = await tx.leave.findFirst({
+      where: {
+        staffId,
+        restaurantId,
+        status: 'APPROVED',
+        startDate: {
+          lte: dateInRestaurant(new Date(end.getTime() - 1), timeZone),
+        },
+        endDate: { gte: dateInRestaurant(start, timeZone) },
+      },
+      select: { id: true },
+    });
+    if (leave)
+      throw new ConflictException(
+        'This shift overlaps approved leave for the staff member',
+      );
   }
 
   // ============================================================

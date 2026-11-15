@@ -161,8 +161,8 @@ function RestaurantPunchClock({
           return false;
         }
 
-        // HR attendance records currently omit the schedule ID.
         return !completedToday.some((shift) => {
+          if (shift.shiftScheduleId) return shift.shiftScheduleId === schedule.id;
           const clockInAt = new Date(shift.clockInAt);
           return shift.staffId === schedule.staffId && clockInAt >= start && clockInAt < end;
         });
