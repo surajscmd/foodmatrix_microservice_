@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   Injectable,
@@ -203,12 +201,15 @@ export class ModifierService {
       },
     });
 
-    if (!existing?.isActive && updateDto.isActive === true) {
-      const groupId = updateDto.groupId ?? existing?.groupId;
+    if (!existing) throw new NotFoundException('Modifier not found');
 
+    if (
+      updateDto.groupId !== undefined ||
+      (!existing.isActive && updateDto.isActive === true)
+    ) {
       const group = await this.prisma.modifierGroup.findUnique({
         where: {
-          id: groupId,
+          id: updateDto.groupId ?? existing.groupId,
         },
       });
 
@@ -218,25 +219,9 @@ export class ModifierService {
 
       if (!group.isActive) {
         throw new BadRequestException(
-          'Cannot activate a modifier under an inactive modifier group',
-        );
-      }
-    }
-
-    if (updateDto.groupId !== undefined) {
-      const group = await this.prisma.modifierGroup.findUnique({
-        where: {
-          id: updateDto.groupId,
-        },
-      });
-
-      if (!group) {
-        throw new NotFoundException('Modifier group not found');
-      }
-
-      if (!group.isActive) {
-        throw new BadRequestException(
-          'Cannot assign modifier to an inactive modifier group',
+          updateDto.groupId !== undefined
+            ? 'Cannot assign modifier to an inactive modifier group'
+            : 'Cannot activate a modifier under an inactive modifier group',
         );
       }
     }

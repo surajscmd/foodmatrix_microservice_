@@ -1,19 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-
-import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { NotificationDeliveryService } from './notification-delivery.service.js';
 
 import type { StockRequestCreatedEvent } from '../types/inventory-events.js';
-
-import { NotificationGateway } from '../../socket/notification.gateway.js';
 
 @Injectable()
 export class StockRequestCreatedHandler {
   private readonly logger = new Logger(StockRequestCreatedHandler.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly notificationGateway: NotificationGateway,
-  ) {}
+  constructor(private readonly delivery: NotificationDeliveryService) {}
 
   async handle(event: StockRequestCreatedEvent): Promise<void> {
     if (!event.stockRequestId) {
@@ -21,12 +15,8 @@ export class StockRequestCreatedHandler {
       return;
     }
 
-    // ============================================================
-    // 1. CREATE NOTIFICATION IN DATABASE
-    // ============================================================
-
-    const notification = await this.prisma.notification.create({
-      data: {
+    await this.delivery.sendOnce(event.stockRequestId, [
+      {
         scope: 'WAREHOUSE',
 
         restaurantId: event.restaurantId,
@@ -48,16 +38,6 @@ export class StockRequestCreatedHandler {
 
         referenceType: 'StockRequest',
       },
-    });
-
-    // ============================================================
-    // 2. EMIT REAL-TIME NOTIFICATION
-    // ============================================================
-
-    this.notificationGateway.emitToWarehouse(event.warehouseId, notification);
-
-    this.logger.log(
-      `Stock-request-created notification created and emitted for warehouse ${event.warehouseId}`,
-    );
+    ]);
   }
 }

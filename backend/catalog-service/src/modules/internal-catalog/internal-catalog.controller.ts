@@ -7,8 +7,10 @@ import { CreateInternalRecipeDto } from './dto/create-internal-recipe.dto.js';
 import { GetInternalIngredientsDto } from './dto/get-internal-ingredients.dto.js';
 
 import { InternalAuthGuard } from '../../common/guards/internal-auth.guard.js';
+import { CatalogAccess } from '../../auth/catalog-access.js';
 
 @Controller('internal/catalog')
+@CatalogAccess('internal')
 @UseGuards(InternalAuthGuard)
 export class InternalCatalogController {
   constructor(private readonly internalService: InternalCatalogService) {}

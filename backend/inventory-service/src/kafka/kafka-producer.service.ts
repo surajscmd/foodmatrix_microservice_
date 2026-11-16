@@ -1,40 +1,37 @@
-import { Injectable } from '@nestjs/common';
-import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-
+import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
-import type { Producer } from 'kafkajs';
 
 @Injectable()
-export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
-  private readonly kafka = new Kafka({
+export class KafkaProducerService implements OnApplicationShutdown {
+  private readonly producer = new Kafka({
     clientId: 'inventory-service-producer',
-    brokers: ['localhost:9094', 'localhost:9095', 'localhost:9096'],
-  });
+    brokers: (
+      process.env.KAFKA_BROKERS ||
+      'localhost:9094,localhost:9095,localhost:9096'
+    )
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean),
+  }).producer();
+  private connection?: Promise<void>;
 
-  private readonly producer: Producer = this.kafka.producer();
-
-  async onModuleInit() {
-    await this.producer.connect();
-
-    console.log('Inventory Kafka producer connected');
-  }
-
-  async publish(topic: string, message: unknown) {
+  async publish(topic: string, message: unknown, key?: string) {
+    this.connection ??= this.producer.connect().catch((error: unknown) => {
+      this.connection = undefined;
+      throw error;
+    });
+    await this.connection;
     await this.producer.send({
       topic,
-      messages: [
-        {
-          value: JSON.stringify(message),
-        },
-      ],
+      acks: -1,
+      messages: [{ key, value: JSON.stringify(message) }],
     });
-
-    console.log(`Kafka event published: ${topic}`);
   }
 
-  async onModuleDestroy() {
-    await this.producer.disconnect();
-
-    console.log('Inventory Kafka producer disconnected');
+  async onApplicationShutdown() {
+    if (this.connection) {
+      await this.connection.catch(() => undefined);
+      await this.producer.disconnect();
+    }
   }
 }

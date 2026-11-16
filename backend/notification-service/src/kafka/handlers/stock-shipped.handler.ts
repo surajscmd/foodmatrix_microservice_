@@ -1,19 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
-
-import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { NotificationDeliveryService } from './notification-delivery.service.js';
 
 import type { StockShippedEvent } from '../types/inventory-events.js';
-
-import { NotificationGateway } from '../../socket/notification.gateway.js';
 
 @Injectable()
 export class StockShippedHandler {
   private readonly logger = new Logger(StockShippedHandler.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly notificationGateway: NotificationGateway,
-  ) {}
+  constructor(private readonly delivery: NotificationDeliveryService) {}
 
   async handle(event: StockShippedEvent): Promise<void> {
     if (!event.stockTransferId) {
@@ -21,12 +15,8 @@ export class StockShippedHandler {
       return;
     }
 
-    // ============================================================
-    // 1. RESTAURANT NOTIFICATION
-    // ============================================================
-
-    const restaurantNotification = await this.prisma.notification.create({
-      data: {
+    await this.delivery.sendOnce(event.stockTransferId, [
+      {
         scope: 'RESTAURANT',
 
         restaurantId: event.restaurantId,
@@ -45,20 +35,7 @@ export class StockShippedHandler {
 
         referenceType: 'StockTransfer',
       },
-    });
-
-    // Emit to restaurant room
-    this.notificationGateway.emitToRestaurant(
-      event.restaurantId,
-      restaurantNotification,
-    );
-
-    // ============================================================
-    // 2. WAREHOUSE NOTIFICATION
-    // ============================================================
-
-    const warehouseNotification = await this.prisma.notification.create({
-      data: {
+      {
         scope: 'WAREHOUSE',
 
         restaurantId: event.restaurantId,
@@ -77,16 +54,6 @@ export class StockShippedHandler {
 
         referenceType: 'StockTransfer',
       },
-    });
-
-    // Emit to warehouse room
-    this.notificationGateway.emitToWarehouse(
-      event.warehouseId,
-      warehouseNotification,
-    );
-
-    this.logger.log(
-      `Stock-shipped notifications created and emitted for transfer ${event.stockTransferId}`,
-    );
+    ]);
   }
 }

@@ -1,9 +1,18 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { OrderAccess } from '../../auth/order-access';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Post,
+} from '@nestjs/common';
 
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentService } from './payment.service';
 
 @Controller('payments')
+@OrderAccess('payment')
 export class PaymentController {
   constructor(private readonly paymentService: PaymentService) {}
 
@@ -13,6 +22,7 @@ export class PaymentController {
   // ============================================================
 
   @Post()
+  @OrderAccess('create-payment')
   async create(@Body() dto: CreatePaymentDto) {
     const result = await this.paymentService.create(dto);
 
@@ -28,7 +38,7 @@ export class PaymentController {
   // ============================================================
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.paymentService.findOne(id);
   }
 
@@ -38,7 +48,8 @@ export class PaymentController {
   // ============================================================
 
   @Get('order/:orderId')
-  async findByOrder(@Param('orderId') orderId: string) {
+  @OrderAccess('order-payments')
+  async findByOrder(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.paymentService.findByOrder(orderId);
   }
   // ============================================================
@@ -47,7 +58,8 @@ export class PaymentController {
   // ============================================================
 
   @Get('order/:orderId/summary')
-  async getPaymentSummary(@Param('orderId') orderId: string) {
+  @OrderAccess('order-payments')
+  async getPaymentSummary(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.paymentService.getPaymentSummary(orderId);
   }
 
@@ -57,7 +69,8 @@ export class PaymentController {
   // ============================================================
 
   @Post(':paymentId/refund')
-  async refund(@Param('paymentId') paymentId: string) {
+  @OrderAccess('refund-payment')
+  async refund(@Param('paymentId', ParseUUIDPipe) paymentId: string) {
     return this.paymentService.refund(paymentId);
   }
   // ============================================================
@@ -65,7 +78,8 @@ export class PaymentController {
   // POST /payments/order/:orderId/refund
   // ============================================================
   @Post('order/:orderId/refund')
-  async refundOrder(@Param('orderId') orderId: string) {
+  @OrderAccess('refund-order')
+  async refundOrder(@Param('orderId', ParseUUIDPipe) orderId: string) {
     return this.paymentService.refundOrder(orderId);
   }
 }

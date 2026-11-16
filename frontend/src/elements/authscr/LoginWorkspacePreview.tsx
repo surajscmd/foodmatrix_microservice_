@@ -1,14 +1,15 @@
 import {
-  ArrowRight,
   Boxes,
   CalendarDays,
   ChefHat,
   ClipboardList,
   ReceiptText,
   Store,
+  UtensilsCrossed,
 } from "lucide-react";
 import Image from "next/image";
-import servicePhoto from "../../../public/foodmatrix-login-service.webp";
+import servicePhoto from "../../../public/foodmatrix-login-service-hq.webp";
+import glass from "@/elements/branding/restaurant-glass.module.css";
 import styles from "./login-screen.module.css";
 
 const orderSteps = [
@@ -44,31 +45,27 @@ export default function LoginWorkspacePreview() {
           src={servicePhoto}
           alt="A server and chef review a tablet order at the kitchen pass."
           fill
-          sizes="(min-width: 1200px) 540px, (min-width: 900px) 47vw, (min-width: 640px) 540px, 100vw"
+          unoptimized
           className={styles.servicePhoto}
         />
 
-        <figcaption className={styles.orderCard}>
+        <figcaption className={`${glass.surface} ${styles.orderCard}`}>
           <div className={styles.orderHeading}>
-            <span>Table 07</span>
-            <span>Example order</span>
+            <span className={styles.orderTable}>
+              <UtensilsCrossed aria-hidden="true" size={14} strokeWidth={1.7} />
+              Table 07
+            </span>
+            <span className={styles.orderExample}>Example order</span>
           </div>
 
           <ol className={styles.orderSteps}>
-            {orderSteps.map(({ label, status, Icon }, index) => (
+            {orderSteps.map(({ label, status, Icon }) => (
               <li key={label} className={styles.orderStep}>
                 <span className={styles.stepIcon} aria-hidden="true">
                   <Icon size={17} strokeWidth={1.7} />
                 </span>
                 <span className={styles.stepLabel}>{label}</span>
                 <span className={styles.stepStatus}>{status}</span>
-                {index < orderSteps.length - 1 && (
-                  <ArrowRight
-                    aria-hidden="true"
-                    className={styles.stepArrow}
-                    size={12}
-                  />
-                )}
               </li>
             ))}
           </ol>

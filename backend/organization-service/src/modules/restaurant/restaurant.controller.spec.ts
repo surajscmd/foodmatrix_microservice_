@@ -22,6 +22,7 @@ it('limits Operations reads to the assigned restaurant and rejects an unassigned
   expect(findAll).toHaveBeenCalledWith({
     franchiseId: 'franchise',
     id: 'location',
+    status: 'ACTIVE',
   });
   await expect(
     controller.findAll({

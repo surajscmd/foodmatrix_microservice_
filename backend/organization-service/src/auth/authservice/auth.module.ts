@@ -1,8 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, type OnApplicationShutdown } from '@nestjs/common';
 import { AuthModule as BetterAuthModule } from '@thallesp/nestjs-better-auth';
 
 import { PrismaModule } from '../../lib/prisma/prisma.module.js';
-import { auth } from '../auths.js';
+import { auth, closeAuthDatabase } from '../auths.js';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { AuthGuard } from '../auth.guard.js';
@@ -13,4 +13,8 @@ import { AuthGuard } from '../auth.guard.js';
   providers: [AuthService, AuthGuard],
   exports: [AuthService, AuthGuard],
 })
-export class AuthModule {}
+export class AuthModule implements OnApplicationShutdown {
+  onApplicationShutdown() {
+    return closeAuthDatabase();
+  }
+}

@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -225,24 +227,14 @@ export class OrderService {
 
     this.validateOrderType(dto);
 
-    // ----------------------------------------------------------
-    // IDEMPOTENCY CHECK
-    // ----------------------------------------------------------
-
-    const existingOrder = await this.prisma.order.findUnique({
-      where: {
-        idempotencyKey: key,
-      },
-
-      include: this.orderInclude(),
-    });
-
-    if (existingOrder) {
-      return {
-        message: 'Order already exists. Returning the existing order.',
-        data: existingOrder,
-      };
-    }
+    const fingerprint = this.createFingerprint(dto);
+    const replay = await this.findCreateReplay(
+      this.prisma,
+      key,
+      dto,
+      fingerprint,
+    );
+    if (replay) return replay;
 
     // ----------------------------------------------------------
     // RESOLVE CATALOG DATA
@@ -258,24 +250,8 @@ export class OrderService {
     try {
       return await this.prisma.$transaction(
         async (tx) => {
-          // ----------------------------------------------------
-          // IDEMPOTENCY CHECK AGAIN
-          // ----------------------------------------------------
-
-          const existing = await tx.order.findUnique({
-            where: {
-              idempotencyKey: key,
-            },
-
-            include: this.orderInclude(),
-          });
-
-          if (existing) {
-            return {
-              message: 'Order already exists. Returning the existing order.',
-              data: existing,
-            };
-          }
+          const replay = await this.findCreateReplay(tx, key, dto, fingerprint);
+          if (replay) return replay;
 
           // ----------------------------------------------------
           // CUSTOMER
@@ -307,7 +283,7 @@ export class OrderService {
               where: {
                 restaurantId: dto.restaurantId,
 
-                tableId: dto.tableId,
+                tableId: { equals: dto.tableId?.trim(), mode: 'insensitive' },
 
                 status: {
                   in: ACTIVE_ORDER_STATUSES,
@@ -339,11 +315,9 @@ export class OrderService {
                 activeOrder.id,
               );
 
-              const currentTotal = new Prisma.Decimal(activeOrder.total);
-
-              if (paidAmount.gte(currentTotal)) {
+              if (paidAmount.gt(0)) {
                 throw new ConflictException(
-                  'The existing table order is already fully paid. A new order must be created.',
+                  'The existing table order has a payment and cannot be edited.',
                 );
               }
 
@@ -385,6 +359,10 @@ export class OrderService {
                 include: this.orderInclude(),
               });
 
+              await tx.orderCreateRequest.create({
+                data: { key, fingerprint, orderId: activeOrder.id },
+              });
+
               return {
                 message:
                   'Items added to the existing active table order successfully.',
@@ -405,7 +383,8 @@ export class OrderService {
 
               type: dto.type,
 
-              tableId: dto.type === OrderType.DINE_IN ? dto.tableId! : null,
+              tableId:
+                dto.type === OrderType.DINE_IN ? dto.tableId?.trim() : null,
 
               idempotencyKey: key,
 
@@ -451,6 +430,10 @@ export class OrderService {
             include: this.orderInclude(),
           });
 
+          await tx.orderCreateRequest.create({
+            data: { key, fingerprint, orderId: order.id },
+          });
+
           return {
             message: 'Order created successfully.',
             data: order,
@@ -466,7 +449,7 @@ export class OrderService {
         },
       );
     } catch (error) {
-      return this.handleCreateError(error, key);
+      return this.handleCreateError(error, key, dto, fingerprint);
     }
   }
 
@@ -518,45 +501,26 @@ export class OrderService {
   // ============================================================
 
   async prepare(orderId: string) {
-    await this.transition(
-      orderId,
-      OrderStatus.CONFIRMED,
-      OrderStatus.PREPARING,
-    );
+    const order = await this.kitchenTransaction(async (tx) => {
+      await tx.orderItem.updateMany({
+        where: {
+          orderId,
+          status: OrderItemStatus.PENDING,
+          OR: [
+            { unavailableRequestedAt: null },
+            { unavailableResolvedAt: { not: null } },
+          ],
+        },
+        data: { status: OrderItemStatus.PREPARING },
+      });
 
-    // All currently pending items
-    // start preparing.
-
-    await this.prisma.orderItem.updateMany({
-      where: {
+      return this.transition(
         orderId,
-
-        status: OrderItemStatus.PENDING,
-        OR: [
-          { unavailableRequestedAt: null },
-          { unavailableResolvedAt: { not: null } },
-        ],
-      },
-
-      data: {
-        status: OrderItemStatus.PREPARING,
-      },
+        OrderStatus.CONFIRMED,
+        OrderStatus.PREPARING,
+        tx,
+      );
     });
-
-    // Fetch again so response contains
-    // the updated item statuses.
-
-    const order = await this.prisma.order.findUnique({
-      where: {
-        id: orderId,
-      },
-
-      include: this.orderInclude(),
-    });
-
-    if (!order) {
-      throw new NotFoundException('Order not found.');
-    }
 
     return {
       message: 'Order moved to preparing successfully.',
@@ -564,48 +528,72 @@ export class OrderService {
     };
   }
 
-  // ============================================================
-  // READY
-  // PREPARING -> READY
-  // ============================================================
-
   async ready(orderId: string) {
-    const items = await this.prisma.orderItem.findMany({
-      where: {
+    const order = await this.kitchenTransaction(async (tx) => {
+      const current = await tx.order.findUnique({
+        where: { id: orderId },
+        include: this.orderInclude(),
+      });
+      if (!current) throw new NotFoundException('Order not found.');
+      if (current.status === OrderStatus.READY) return current;
+
+      const items = await tx.orderItem.findMany({
+        where: { orderId },
+        select: {
+          status: true,
+          unavailableRequestedAt: true,
+          unavailableResolvedAt: true,
+        },
+      });
+      if (!items.some((item) => item.status === OrderItemStatus.READY)) {
+        throw new BadRequestException('At least one order item must be ready.');
+      }
+
+      if (
+        items.some(
+          (item) =>
+            (item.status !== OrderItemStatus.READY &&
+              item.status !== OrderItemStatus.CANCELLED) ||
+            (item.unavailableRequestedAt && !item.unavailableResolvedAt),
+        )
+      ) {
+        throw new BadRequestException(
+          'Finish preparing or reviewing all order items before marking the order ready.',
+        );
+      }
+
+      return this.transition(
         orderId,
-      },
-
-      select: {
-        status: true,
-      },
-    });
-
-    if (items.length === 0) {
-      throw new BadRequestException('Order must contain at least one item.');
-    }
-
-    const hasIncompleteItems = items.some(
-      (item) =>
-        item.status !== OrderItemStatus.READY &&
-        item.status !== OrderItemStatus.CANCELLED,
-    );
-
-    if (hasIncompleteItems) {
-      throw new BadRequestException(
-        'All order items must be READY or CANCELLED before the order can be marked READY.',
+        OrderStatus.PREPARING,
+        OrderStatus.READY,
+        tx,
       );
-    }
-
-    const order = await this.transition(
-      orderId,
-      OrderStatus.PREPARING,
-      OrderStatus.READY,
-    );
+    });
 
     return {
       message: 'Order marked as ready successfully.',
       data: order,
     };
+  }
+
+  private async kitchenTransaction<T>(
+    operation: (tx: Prisma.TransactionClient) => Promise<T>,
+  ) {
+    try {
+      return await this.prisma.$transaction(operation, {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException(
+          'The order changed while updating the kitchen. Refresh and retry.',
+        );
+      }
+      throw error;
+    }
   }
 
   // ============================================================
@@ -678,7 +666,7 @@ export class OrderService {
   // CANCEL
   // ============================================================
 
-  async cancel(orderId: string, reason: string) {
+  async cancel(orderId: string, reason: string, manager: boolean) {
     const cleanReason = reason?.trim();
 
     if (!cleanReason) {
@@ -691,45 +679,95 @@ export class OrderService {
       );
     }
 
-    const order = await this.prisma.$transaction(async (tx) => {
-      const current = await tx.order.findUnique({
-        where: {
-          id: orderId,
+    const order = await this.prisma
+      .$transaction(
+        async (tx) => {
+          const current = await tx.order.findUnique({
+            where: {
+              id: orderId,
+            },
+          });
+
+          if (!current) {
+            throw new NotFoundException('Order not found.');
+          }
+
+          const started =
+            current.status === OrderStatus.CONFIRMED ||
+            current.status === OrderStatus.PREPARING;
+
+          if (current.status !== OrderStatus.PENDING && !started) {
+            throw new ConflictException(
+              'This order can no longer be cancelled.',
+            );
+          }
+          if (started && !manager) {
+            throw new ForbiddenException(
+              'Only a restaurant manager can cancel an order after confirmation.',
+            );
+          }
+
+          const readyItem = await tx.orderItem.findFirst({
+            where: { orderId, status: OrderItemStatus.READY },
+            select: { id: true },
+          });
+          if (readyItem) {
+            throw new ConflictException(
+              'A ready item has used stock. This order can no longer be cancelled.',
+            );
+          }
+
+          const paidAmount = await this.getCompletedPaymentAmount(tx, orderId);
+
+          if (paidAmount.gt(new Prisma.Decimal(0))) {
+            throw new ConflictException(
+              'Paid orders cannot be cancelled until the payment is refunded.',
+            );
+          }
+
+          const cancelledAt = new Date();
+          await tx.orderItem.updateMany({
+            where: { orderId, status: { not: OrderItemStatus.CANCELLED } },
+            data: { status: OrderItemStatus.CANCELLED },
+          });
+          await tx.orderItem.updateMany({
+            where: {
+              orderId,
+              unavailableRequestedAt: { not: null },
+              unavailableResolvedAt: null,
+            },
+            data: { unavailableResolvedAt: cancelledAt },
+          });
+
+          return tx.order.update({
+            where: {
+              id: orderId,
+            },
+
+            data: {
+              status: OrderStatus.CANCELLED,
+
+              cancelledAt,
+
+              cancelReason: cleanReason,
+            },
+
+            include: this.orderInclude(),
+          });
         },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      )
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2034'
+        ) {
+          throw new ConflictException(
+            'The order changed while cancelling. Refresh the order before retrying.',
+          );
+        }
+        throw error;
       });
-
-      if (!current) {
-        throw new NotFoundException('Order not found.');
-      }
-
-      if (current.status !== OrderStatus.PENDING) {
-        throw new BadRequestException('Only PENDING orders can be cancelled.');
-      }
-
-      const paidAmount = await this.getCompletedPaymentAmount(tx, orderId);
-
-      if (paidAmount.gt(new Prisma.Decimal(0))) {
-        throw new ConflictException(
-          'Paid orders cannot be cancelled until the payment is refunded.',
-        );
-      }
-
-      return tx.order.update({
-        where: {
-          id: orderId,
-        },
-
-        data: {
-          status: OrderStatus.CANCELLED,
-
-          cancelledAt: new Date(),
-
-          cancelReason: cleanReason,
-        },
-
-        include: this.orderInclude(),
-      });
-    });
 
     return {
       message: 'Order cancelled successfully.',
@@ -745,8 +783,9 @@ export class OrderService {
     orderId: string,
     from: OrderStatus,
     to: OrderStatus,
+    db: Prisma.TransactionClient = this.prisma,
   ) {
-    const result = await this.prisma.order.updateMany({
+    const result = await db.order.updateMany({
       where: {
         id: orderId,
         status: from,
@@ -758,7 +797,7 @@ export class OrderService {
     });
 
     if (result.count === 1) {
-      const order = await this.prisma.order.findUnique({
+      const order = await db.order.findUnique({
         where: {
           id: orderId,
         },
@@ -773,7 +812,7 @@ export class OrderService {
       return order;
     }
 
-    const order = await this.prisma.order.findUnique({
+    const order = await db.order.findUnique({
       where: {
         id: orderId,
       },
@@ -798,7 +837,7 @@ export class OrderService {
   // ============================================================
 
   private validateOrderType(dto: CreateOrderDto): void {
-    if (dto.type === OrderType.DINE_IN && !dto.tableId) {
+    if (dto.type === OrderType.DINE_IN && !dto.tableId?.trim()) {
       throw new BadRequestException(
         'Table number is required for dine-in orders.',
       );
@@ -902,30 +941,87 @@ export class OrderService {
   // CREATE ERROR HANDLER
   // ============================================================
 
-  private async handleCreateError(error: unknown, key: string) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError) {
-      if (error.code === 'P2002') {
-        const existing = await this.prisma.order.findUnique({
-          where: {
-            idempotencyKey: key,
-          },
+  private createFingerprint(dto: CreateOrderDto): string {
+    const request = {
+      restaurantId: dto.restaurantId.toLowerCase(),
+      phone: dto.phone,
+      name: dto.name ?? null,
+      type: dto.type,
+      tableId: dto.tableId?.trim().toLowerCase() ?? null,
+      items: dto.items.map((item) => ({
+        menuItemId: item.menuItemId.toLowerCase(),
+        quantity: item.quantity,
+        modifiers: (item.modifiers ?? [])
+          .map(({ modifierId, quantity }) => ({
+            modifierId: modifierId.toLowerCase(),
+            quantity,
+          }))
+          .sort(
+            (a, b) =>
+              a.modifierId.localeCompare(b.modifierId) ||
+              a.quantity - b.quantity,
+          ),
+      })),
+    };
+    return createHash('sha256').update(JSON.stringify(request)).digest('hex');
+  }
 
-          include: this.orderInclude(),
-        });
+  private async findCreateReplay(
+    db: Prisma.TransactionClient,
+    key: string,
+    dto: CreateOrderDto,
+    fingerprint: string,
+  ) {
+    const request = await db.orderCreateRequest.findUnique({
+      where: { key },
+      include: { order: { include: this.orderInclude() } },
+    });
+    // Orders written before request tracking still have their original key.
+    const order =
+      request?.order ??
+      (await db.order.findUnique({
+        where: { idempotencyKey: key },
+        include: this.orderInclude(),
+      }));
 
-        if (existing) {
-          return {
-            message: 'Order already exists. Returning the existing order.',
-            data: existing,
-          };
-        }
-      }
+    if (!order) return null;
 
-      if (error.code === 'P2034') {
-        throw new ConflictException(
-          'Order creation conflicted with another transaction. Please retry using the same Idempotency-Key.',
-        );
-      }
+    if (
+      order.restaurantId !== dto.restaurantId.toLowerCase() ||
+      (request && request.fingerprint !== fingerprint)
+    ) {
+      throw new ConflictException(
+        'Idempotency-Key has already been used for a different order request.',
+      );
+    }
+
+    return {
+      message: 'Order already exists. Returning the existing order.',
+      data: order,
+    };
+  }
+
+  private async handleCreateError(
+    error: unknown,
+    key: string,
+    dto: CreateOrderDto,
+    fingerprint: string,
+  ) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === 'P2002' || error.code === 'P2034')
+    ) {
+      const replay = await this.findCreateReplay(
+        this.prisma,
+        key,
+        dto,
+        fingerprint,
+      );
+      if (replay) return replay;
+
+      throw new ConflictException(
+        'Order creation conflicted with another transaction. Please retry using the same Idempotency-Key.',
+      );
     }
 
     throw error;

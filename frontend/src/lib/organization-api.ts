@@ -1,7 +1,6 @@
 import axios from "axios";
 
 import type {
-  CurrentUserResponse,
   FranchiseResponse,
   Franchise,
   RestaurantsResponse,
@@ -11,29 +10,20 @@ import type {
   CreateRestaurantData,
   UpdateRestaurantData,
   UpdateFranchiseData,
+  UpdateSystemUserAssignmentData,
 } from "@/utils/types/organization";
 
 // ============================================================
 // AXIOS INSTANCE
 // ============================================================
 
-export const organizationApi = axios.create({
+const organizationApi = axios.create({
   baseURL: "/api/organization",
   withCredentials: true,
   headers: {
     "Content-Type": "application/json",
   },
 });
-
-// ============================================================
-// CURRENT USER
-// ============================================================
-
-export async function getCurrentUser() {
-  const response = await organizationApi.get<CurrentUserResponse>("/auth/me");
-
-  return response.data.data;
-}
 
 // ============================================================
 // FRANCHISE
@@ -99,34 +89,6 @@ export async function updateRestaurant(
 
   return response.data.data;
 }
-
-export async function deleteRestaurant(restaurantId: string) {
-  const response = await organizationApi.delete<RestaurantResponse>(
-    `/restaurants/${restaurantId}`,
-  );
-
-  return response.data.data;
-}
-
-// ============================================================
-// SYSTEM USERS
-// ============================================================
-
-export async function getSystemUser(systemUserId: string) {
-  const response = await organizationApi.get<SystemUserResponse>(
-    `/system-users/${systemUserId}`,
-  );
-
-  return response.data.data;
-}
-
-export async function getSystemUserByAuthId(authUserId: string) {
-  const response = await organizationApi.get<SystemUserResponse>(
-    `/system-users/auth/${authUserId}`,
-  );
-
-  return response.data.data;
-}
 export async function getManageableSystemUsers(search: string) {
   const response = await organizationApi.get<{ data: SystemUser[] }>("/system-users", { params: { search } });
   return response.data.data;
@@ -135,4 +97,26 @@ export async function getManageableSystemUsers(search: string) {
 export async function setSystemUserActive(id: string, isActive: boolean) {
   const response = await organizationApi.patch<SystemUserResponse>(`/system-users/${id}/status`, { isActive });
   return response.data.data;
+}
+
+export async function updateSystemUserAssignment(
+  id: string,
+  assignment: UpdateSystemUserAssignmentData,
+) {
+  const response = await organizationApi.patch<SystemUserResponse>(
+    `/system-users/${id}/assignment`,
+    assignment,
+  );
+  return response.data.data;
+}
+
+export async function changeOrganizationPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
+  const response = await organizationApi.post<{ message: string }>(
+    "/auth/change-password",
+    { currentPassword, newPassword },
+  );
+  return response.data;
 }

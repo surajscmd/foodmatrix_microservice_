@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Delete,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -83,6 +84,14 @@ export class RestaurantController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateRestaurantDto,
   ) {
+    if (
+      dto.status !== undefined &&
+      req.user!.role === SystemUserRole.RESTAURANT_ADMIN
+    ) {
+      throw new ForbiddenException(
+        'Only central administrators can change restaurant status',
+      );
+    }
     const data = await this.restaurantService.update(
       id,
       dto,
@@ -95,6 +104,6 @@ export class RestaurantController {
   @Roles(SystemUserRole.SUPER_ADMIN)
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     const data = await this.restaurantService.remove(id);
-    return { message: 'Restaurant deleted successfully', data };
+    return { message: 'Restaurant deactivated successfully', data };
   }
 }

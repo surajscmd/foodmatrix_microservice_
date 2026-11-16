@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -7,8 +8,11 @@ import {
 import { Prisma, SystemUserRole, type SystemUser } from '@prisma/client';
 import type { AuthenticatedUser } from '../../auth/auth.guard.js';
 import { requiredFranchise } from '../../auth/organization-scope.js';
+import { restaurantRoles } from '../../auth/account-access.js';
+import { validateAccountAssignment } from '../../auth/account-assignment.js';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import type { UpdateAssignmentDto } from './dto/update-assignment.dto.js';
 
 @Injectable()
 export class SystemUserService {
@@ -27,11 +31,7 @@ export class SystemUserService {
         ...other,
         franchiseId: requiredFranchise(actor),
         role: {
-          in: [
-            SystemUserRole.RESTAURANT_ADMIN,
-            SystemUserRole.STAFF,
-            SystemUserRole.OPERATIONS,
-          ],
+          in: [...restaurantRoles],
         },
       };
     }
@@ -70,6 +70,55 @@ export class SystemUserService {
         await tx.session.deleteMany({ where: { userId: user.authUserId } });
       return user;
     });
+  }
+
+  async updateAssignment(
+    actor: AuthenticatedUser,
+    id: string,
+    dto: UpdateAssignmentDto,
+  ) {
+    const scope = this.manageableUsers(actor);
+    if (dto.role === SystemUserRole.SUPER_ADMIN)
+      throw new ForbiddenException(
+        'Super admin access cannot be assigned here',
+      );
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.systemUser.findFirst({
+            where: { ...scope, id },
+          });
+          if (!current)
+            throw new NotFoundException('Manageable system login not found');
+          const assignment = await validateAccountAssignment(tx, actor, dto);
+          if (
+            current.role === assignment.role &&
+            current.franchiseId === assignment.franchiseId &&
+            current.managedRestaurantId === assignment.managedRestaurantId
+          ) {
+            return current;
+          }
+          const updated = await tx.systemUser.update({
+            where: { id },
+            data: assignment,
+          });
+          await tx.session.deleteMany({
+            where: { userId: updated.authUserId },
+          });
+          return updated;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      )
+        throw new ConflictException(
+          'Login assignment changed. Refresh and try again.',
+        );
+      throw error;
+    }
   }
 
   /**

@@ -20,9 +20,13 @@ export default function DashboardShell({
 
   const pathname = usePathname();
   const role = useOrganizationStore((state) => state.currentUser?.systemUser.role);
+  const managerOnly = ["/restaurant/staff", "/restaurant/menu"];
   const restaurantNavigation = navigation.map((section) => ({
     ...section,
-    items: section.items.filter((item) => item.href !== "/restaurant/staff" || role === "RESTAURANT_ADMIN"),
+    items: section.items.filter(
+      (item) =>
+        role === "RESTAURANT_ADMIN" || !managerOnly.includes(item.href),
+    ),
   }));
 
   const currentPage = navigation

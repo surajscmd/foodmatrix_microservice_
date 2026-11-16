@@ -3,8 +3,8 @@ import { FranchiseService } from './franchise.service.js';
 import type { PrismaService } from '../../lib/prisma/prisma.service.js';
 
 it('reads the requested franchise and returns 404 when it is absent', async () => {
-  const findUnique = jest.fn(async ({ where }: { where: { id: string } }) =>
-    where.id === 'assigned' ? { id: where.id } : null,
+  const findUnique = jest.fn(({ where }: { where: { id: string } }) =>
+    Promise.resolve(where.id === 'assigned' ? { id: where.id } : null),
   );
   const service = new FranchiseService({
     franchise: { findUnique },

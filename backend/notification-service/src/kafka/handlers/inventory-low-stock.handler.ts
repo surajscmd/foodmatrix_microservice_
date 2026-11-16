@@ -1,21 +1,15 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { NotificationDeliveryService } from './notification-delivery.service.js';
 
 import type { LowStockEvent } from '../types/inventory-events.js';
-
-import { PrismaService } from '../../lib/prisma/prisma.service.js';
-
-import { NotificationGateway } from '../../socket/notification.gateway.js';
 
 @Injectable()
 export class InventoryLowStockHandler {
   private readonly logger = new Logger(InventoryLowStockHandler.name);
 
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly notificationGateway: NotificationGateway,
-  ) {}
+  constructor(private readonly delivery: NotificationDeliveryService) {}
 
-  async handle(event: LowStockEvent): Promise<void> {
+  async handle(event: LowStockEvent, deliveryId: string): Promise<void> {
     if (!event.restaurantId) {
       this.logger.warn('Low-stock event missing restaurantId');
       return;
@@ -37,12 +31,8 @@ export class InventoryLowStockHandler {
         ? `${ingredientNames[0]} is below the reorder level.`
         : `${ingredientNames.length} ingredients are below the reorder level: ${ingredientNames.join(', ')}.`;
 
-    // ============================================================
-    // 1. CREATE NOTIFICATION IN DATABASE
-    // ============================================================
-
-    const notification = await this.prisma.notification.create({
-      data: {
+    await this.delivery.sendOnce(deliveryId, [
+      {
         scope: 'RESTAURANT',
 
         restaurantId: event.restaurantId,
@@ -61,16 +51,6 @@ export class InventoryLowStockHandler {
 
         referenceType: 'RestaurantStock',
       },
-    });
-
-    // ============================================================
-    // 2. EMIT REAL-TIME NOTIFICATION
-    // ============================================================
-
-    this.notificationGateway.emitToRestaurant(event.restaurantId, notification);
-
-    this.logger.log(
-      `Low-stock notification created and emitted for restaurant ${event.restaurantId}`,
-    );
+    ]);
   }
 }

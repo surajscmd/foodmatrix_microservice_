@@ -1,17 +1,21 @@
 import {
   Controller,
   Get,
+  Header,
+  UseGuards,
   Param,
   ParseUUIDPipe,
   Patch,
   Query,
 } from '@nestjs/common';
 
+import { NotificationGuard } from '../../auth/notification.guard.js';
 import { NotificationService } from './notification.service.js';
 
 import { GetNotificationsDto } from './dto/get-notifications.dto.js';
 
 @Controller('notifications')
+@UseGuards(NotificationGuard)
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 
@@ -27,6 +31,7 @@ export class NotificationController {
    * - unread/read filtering
    */
   @Get('restaurant/:restaurantId')
+  @Header('Cache-Control', 'private, no-store')
   async findByRestaurant(
     @Param('restaurantId', ParseUUIDPipe)
     restaurantId: string,
@@ -35,7 +40,7 @@ export class NotificationController {
     query: GetNotificationsDto,
   ) {
     return this.notificationService.findByRestaurant(
-      restaurantId,
+      restaurantId.toLowerCase(),
       query.page,
       query.limit,
       query.isRead,
@@ -52,6 +57,7 @@ export class NotificationController {
    * Get notifications for a warehouse.
    */
   @Get('warehouse/:warehouseId')
+  @Header('Cache-Control', 'private, no-store')
   async findByWarehouse(
     @Param('warehouseId', ParseUUIDPipe)
     warehouseId: string,
@@ -60,7 +66,7 @@ export class NotificationController {
     query: GetNotificationsDto,
   ) {
     return this.notificationService.findByWarehouse(
-      warehouseId,
+      warehouseId.toLowerCase(),
       query.page,
       query.limit,
       query.isRead,
@@ -75,11 +81,12 @@ export class NotificationController {
    * Get a single notification.
    */
   @Get(':id')
+  @Header('Cache-Control', 'private, no-store')
   async findOne(
     @Param('id', ParseUUIDPipe)
     id: string,
   ) {
-    return this.notificationService.findOne(id);
+    return this.notificationService.findOne(id.toLowerCase());
   }
 
   // ============================================================
@@ -90,11 +97,12 @@ export class NotificationController {
    * Mark a single notification as read.
    */
   @Patch(':id/read')
+  @Header('Cache-Control', 'private, no-store')
   async markAsRead(
     @Param('id', ParseUUIDPipe)
     id: string,
   ) {
-    return this.notificationService.markAsRead(id);
+    return this.notificationService.markAsRead(id.toLowerCase());
   }
 
   // ============================================================
@@ -105,11 +113,14 @@ export class NotificationController {
    * Mark all unread restaurant notifications as read.
    */
   @Patch('restaurant/:restaurantId/read-all')
+  @Header('Cache-Control', 'private, no-store')
   async markRestaurantAsRead(
     @Param('restaurantId', ParseUUIDPipe)
     restaurantId: string,
   ) {
-    return this.notificationService.markRestaurantAsRead(restaurantId);
+    return this.notificationService.markRestaurantAsRead(
+      restaurantId.toLowerCase(),
+    );
   }
 
   // ============================================================
@@ -120,11 +131,14 @@ export class NotificationController {
    * Mark all unread warehouse notifications as read.
    */
   @Patch('warehouse/:warehouseId/read-all')
+  @Header('Cache-Control', 'private, no-store')
   async markWarehouseAsRead(
     @Param('warehouseId', ParseUUIDPipe)
     warehouseId: string,
   ) {
-    return this.notificationService.markWarehouseAsRead(warehouseId);
+    return this.notificationService.markWarehouseAsRead(
+      warehouseId.toLowerCase(),
+    );
   }
 }
 

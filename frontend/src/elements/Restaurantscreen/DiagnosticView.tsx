@@ -19,10 +19,9 @@ interface DiagnosticViewProps {
   restaurant: Restaurant;
 
   canEdit: boolean;
-  canDelete: boolean;
+  canChangeStatus: boolean;
 
   onEdit: () => void;
-  onDelete: () => void;
 
   onUpdateStatus: (id: string, status: Restaurant["status"]) => Promise<void>;
 
@@ -42,9 +41,8 @@ function getStatusClass(status: Restaurant["status"]) {
 export default function DiagnosticView({
   restaurant,
   canEdit,
-  canDelete,
+  canChangeStatus,
   onEdit,
-  onDelete,
   onUpdateStatus,
   onBack,
 }: DiagnosticViewProps) {
@@ -98,50 +96,42 @@ export default function DiagnosticView({
             </button>
           )}
 
-          {canDelete && (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-rose-500/5 border border-rose-500/10 text-xs font-semibold text-rose-400 hover:bg-rose-500/10 hover:border-rose-500/20 transition-all"
-              id="btn-delete-restaurant"
-            >
-              <ShieldAlert className="w-3.5 h-3.5" />
-              Delete
-            </button>
-          )}
         </div>
       </div>
 
       {/* Status Controller */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-900/60 p-2 rounded-xl border border-zinc-800/80">
-        <span className="text-[10px] font-mono text-zinc-400 px-2 uppercase">
-          Core Pulse:
-        </span>
+      {canChangeStatus && (
+        <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-900/60 p-2 rounded-xl border border-zinc-800/80">
+          <span className="text-[10px] font-mono text-zinc-400 px-2 uppercase">
+            Core Pulse:
+          </span>
 
-        <div className="flex gap-1.5">
-          {(["ACTIVE", "INACTIVE"] as const).map((status) => {
-            const isActive = restaurant.status === status;
+          <div className="flex gap-1.5">
+            {(["ACTIVE", "INACTIVE"] as const).map((status) => {
+              const isActive = restaurant.status === status;
 
-            return (
-              <button
-                key={status}
-                type="button"
-                onClick={() => void onUpdateStatus(restaurant.id, status)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold font-mono uppercase transition-all cursor-pointer ${
-                  isActive
-                    ? status === "ACTIVE"
-                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                      : "bg-zinc-800 text-zinc-300 border border-zinc-700"
-                    : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-                }`}
-                id={`btn-node-status-${status}`}
-              >
-                {status === "ACTIVE" ? "Operational" : "Inactive"}
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={isActive}
+                  onClick={() => void onUpdateStatus(restaurant.id, status)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold font-mono uppercase transition-all cursor-pointer ${
+                    isActive
+                      ? status === "ACTIVE"
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                        : "bg-zinc-800 text-zinc-300 border border-zinc-700"
+                      : "text-zinc-500 hover:text-zinc-300 border border-transparent"
+                  }`}
+                  id={`btn-node-status-${status}`}
+                >
+                  {status === "ACTIVE" ? "Operational" : "Inactive"}
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* KPI */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

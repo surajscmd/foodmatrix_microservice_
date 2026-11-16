@@ -1,6 +1,6 @@
 import axios from "axios";
 
-export const catalogApi = axios.create({
+const catalogApi = axios.create({
   baseURL: "/api/catalog",
   withCredentials: true,
   headers: {
@@ -49,18 +49,18 @@ export interface MenuItem {
   createdAt?: string;
   updatedAt?: string;
 }
-export interface MenuItemListResponse {
+interface MenuItemListResponse {
   message: string;
   data: MenuItem[];
   pagination: Pagination;
 }
 
-export interface MenuItemResponse {
+interface MenuItemResponse {
   message: string;
   data: MenuItem;
 }
 
-export interface MenuCategoryListResponse {
+interface MenuCategoryListResponse {
   message: string;
   data: MenuCategory[];
 }
@@ -74,11 +74,11 @@ export interface CreateMenuItemPayload {
   isAvailable?: boolean;
 }
 
-export interface UpdateMenuItemPayload {
+interface UpdateMenuItemPayload {
   categoryId?: string;
   name?: string;
   sku?: string;
-  description?: string;
+  description?: string | null;
   basePrice?: number;
   isAvailable?: boolean;
 }
@@ -102,32 +102,13 @@ export async function getMenuItems(
 }
 export async function getMenuItemsByCategory(
   categoryId: string,
-): Promise<MenuItemListResponse> {
-  const [itemsResponse, categoriesResponse] = await Promise.all([
-    catalogApi.get<MenuItemListResponse>(`/menu-items/category/${categoryId}`),
-    getMenuCategories(),
-  ]);
-
-  const response = itemsResponse.data;
-  const categories = categoriesResponse.data;
-
-  const category = categories.find((item) => item.id === categoryId);
-
-  return {
-    ...response,
-    data: response.data.map((item) => ({
-      ...item,
-      category:
-        item.category ??
-        category ??
-        ({
-          id: categoryId,
-          name: "Unknown",
-          sortOrder: 0,
-          isActive: true,
-        } as MenuCategory),
-    })),
-  };
+): Promise<{ message: string; data: MenuItem[]; category: MenuCategory }> {
+  const response = await catalogApi.get<{
+    message: string;
+    data: MenuItem[];
+    category: MenuCategory;
+  }>(`/menu-items/category/${categoryId}`);
+  return response.data;
 }
 export async function getMenuItemById(
   menuItemId: string,
@@ -173,9 +154,9 @@ export async function deleteMenuItem(
 // CATEGORIES
 // ============================================================
 
-export async function getMenuCategories(): Promise<MenuCategoryListResponse> {
+export async function getMenuCategories(signal?: AbortSignal): Promise<MenuCategoryListResponse> {
   const response =
-    await catalogApi.get<MenuCategoryListResponse>("/menu-categories");
+    await catalogApi.get<MenuCategoryListResponse>("/menu-categories", { signal });
 
   return response.data;
 }
@@ -183,7 +164,7 @@ export async function getMenuCategories(): Promise<MenuCategoryListResponse> {
 // MENU CATEGORY WRITE OPERATIONS
 // ============================================================
 
-export interface MenuCategoryResponse {
+interface MenuCategoryResponse {
   message: string;
   data: MenuCategory;
 }
@@ -194,7 +175,7 @@ export interface CreateMenuCategoryPayload {
   isActive?: boolean;
 }
 
-export interface UpdateMenuCategoryPayload {
+interface UpdateMenuCategoryPayload {
   name?: string;
   sortOrder?: number;
   isActive?: boolean;
@@ -262,7 +243,7 @@ export async function deactivateMenuCategory(categoryId: string) {
 // GET /menu-items/:menuItemId/restaurants
 // ============================================================
 
-export interface RestaurantMenuPrice {
+interface RestaurantMenuPrice {
   restaurantMenuItemId: string;
   restaurantId: string;
   price: number | string;
@@ -271,13 +252,13 @@ export interface RestaurantMenuPrice {
   updatedAt: string;
 }
 
-export interface MenuItemRestaurantPricing {
+interface MenuItemRestaurantPricing {
   menuItem: MenuItem;
 
   restaurants: RestaurantMenuPrice[];
 }
 
-export interface MenuItemRestaurantPricingResponse {
+interface MenuItemRestaurantPricingResponse {
   message: string;
   data: MenuItemRestaurantPricing;
 }
@@ -296,7 +277,7 @@ export async function getMenuItemRestaurantPricing(
 // RESTAURANT MENU ITEM
 // ============================================================
 
-export interface RestaurantMenuItem {
+interface RestaurantMenuItem {
   id: string;
   restaurantId: string;
   menuItemId: string;
@@ -310,21 +291,58 @@ export interface RestaurantMenuItem {
   menuItem?: MenuItem;
 }
 
-export interface CreateRestaurantMenuItemPayload {
+interface CreateRestaurantMenuItemPayload {
   restaurantId: string;
   menuItemId: string;
   price?: number;
   isAvailable?: boolean;
 }
 
-export interface UpdateRestaurantMenuItemPayload {
+interface UpdateRestaurantMenuItemPayload {
   price?: number;
   isAvailable?: boolean;
 }
 
-export interface RestaurantMenuItemResponse {
+interface RestaurantMenuItemResponse {
   message: string;
   data: RestaurantMenuItem;
+}
+
+export interface RestaurantMenuEntry {
+  id: string;
+  sku: string;
+  name: string;
+  description: string | null;
+  price: number;
+  isAvailable: boolean;
+  restaurantConfigured: boolean;
+  restaurantMenuItemId: string | null;
+  category: Pick<MenuCategory, "id" | "name" | "sortOrder">;
+}
+
+export interface RestaurantMenuFilters {
+  categoryId?: string;
+  search?: string;
+  availability?: "available" | "unavailable";
+}
+
+export interface RestaurantMenuAvailabilityCounts {
+  available: number;
+  unavailable: number;
+}
+
+export interface RestaurantMenuPage {
+  data: RestaurantMenuEntry[];
+  pagination: Pagination;
+  availabilityCounts?: RestaurantMenuAvailabilityCounts;
+}
+
+export function catalogError(error: unknown, fallback: string) {
+  if (!axios.isAxiosError<{ message?: string | string[] }>(error)) {
+    return fallback;
+  }
+  const message = error.response?.data?.message;
+  return (Array.isArray(message) ? message.join(" ") : message) || fallback;
 }
 
 // ============================================================
@@ -338,21 +356,6 @@ export async function createRestaurantMenuItem(
   const response = await catalogApi.post<RestaurantMenuItemResponse>(
     "/restaurant-menu-item",
     data,
-  );
-
-  return response.data;
-}
-
-// ============================================================
-// GET RESTAURANT MENU ITEM
-// GET /restaurant-menu-item/:id
-// ============================================================
-
-export async function getRestaurantMenuItemById(
-  restaurantMenuItemId: string,
-): Promise<RestaurantMenuItemResponse> {
-  const response = await catalogApi.get<RestaurantMenuItemResponse>(
-    `/restaurant-menu-item/${restaurantMenuItemId}`,
   );
 
   return response.data;
@@ -380,21 +383,6 @@ export async function updateRestaurantMenuItem(
 }
 
 // ============================================================
-// DELETE RESTAURANT MENU ITEM
-// DELETE /restaurant-menu-item/:id
-// ============================================================
-
-export async function deleteRestaurantMenuItem(
-  restaurantMenuItemId: string,
-): Promise<RestaurantMenuItemResponse> {
-  const response = await catalogApi.delete<RestaurantMenuItemResponse>(
-    `/restaurant-menu-item/${restaurantMenuItemId}`,
-  );
-
-  return response.data;
-}
-
-// ============================================================
 // RESTAURANT MENU
 // GET /restaurant-menu-item/restaurant/:restaurantId
 // ============================================================
@@ -403,55 +391,23 @@ export async function getRestaurantMenuItems(
   restaurantId: string,
   page = 1,
   limit = 20,
+  options: RestaurantMenuFilters & {
+    signal?: AbortSignal;
+    includeAvailabilityCounts?: boolean;
+  } = {},
 ) {
-  const response = await catalogApi.get(
+  const { signal, ...filters } = options;
+  const response = await catalogApi.get<RestaurantMenuPage>(
     `/restaurant-menu-item/restaurant/${restaurantId}`,
     {
       params: {
         page,
         limit,
+        ...filters,
       },
+      signal,
     },
   );
-
-  return response.data;
-}
-
-// ============================================================
-// CHANGED RESTAURANT MENU ITEMS
-// GET /restaurant-menu-item/restaurant/:restaurantId/changed
-// ============================================================
-
-export async function getChangedRestaurantMenuItems(
-  restaurantId: string,
-  page = 1,
-  limit = 20,
-) {
-  const response = await catalogApi.get(
-    `/restaurant-menu-item/restaurant/${restaurantId}/changed`,
-    {
-      params: {
-        page,
-        limit,
-      },
-    },
-  );
-
-  return response.data;
-}
-
-// ============================================================
-// ALL CHANGED RESTAURANT MENU ITEMS
-// GET /restaurant-menu-item/changed
-// ============================================================
-
-export async function getAllChangedRestaurantMenuItems(page = 1, limit = 20) {
-  const response = await catalogApi.get("/restaurant-menu-item/changed", {
-    params: {
-      page,
-      limit,
-    },
-  });
 
   return response.data;
 }
@@ -480,7 +436,7 @@ export interface UpdateIngredientPayload {
   uom?: string;
   isActive?: boolean;
 }
-export interface IngredientListResponse {
+interface IngredientListResponse {
   message: string;
   data: Ingredient[];
   pagination: Pagination;
@@ -557,7 +513,7 @@ export interface ModifierGroup {
   updatedAt?: string;
 }
 
-export interface CreateModifierGroupPayload {
+interface CreateModifierGroupPayload {
   name: string;
   sortOrder?: number;
   minSelections?: number;
@@ -565,7 +521,7 @@ export interface CreateModifierGroupPayload {
   isActive?: boolean;
 }
 
-export interface UpdateModifierGroupPayload {
+interface UpdateModifierGroupPayload {
   name?: string;
   sortOrder?: number;
   minSelections?: number;
@@ -575,16 +531,6 @@ export interface UpdateModifierGroupPayload {
 
 export async function getModifierGroups(): Promise<ModifierGroup[]> {
   const response = await catalogApi.get<ModifierGroup[]>("/modifier-group");
-
-  return response.data;
-}
-
-export async function getModifierGroupById(
-  groupId: string,
-): Promise<ModifierGroup> {
-  const response = await catalogApi.get<ModifierGroup>(
-    `/modifier-group/${groupId}`,
-  );
 
   return response.data;
 }
@@ -612,12 +558,6 @@ export async function updateModifierGroup(
   return response.data;
 }
 
-export async function deleteModifierGroup(groupId: string) {
-  const response = await catalogApi.delete(`/modifier-group/${groupId}`);
-
-  return response.data;
-}
-
 // ============================================================
 // MODIFIER
 // ============================================================
@@ -636,12 +576,12 @@ export interface Modifier {
   updatedAt?: string;
 }
 
-export interface ModifierListResponse {
+interface ModifierListResponse {
   message: string;
   result: Modifier[];
 }
 
-export interface ModifierMutationResponse {
+interface ModifierMutationResponse {
   message: string;
   result: {
     group: ModifierGroup;
@@ -649,7 +589,7 @@ export interface ModifierMutationResponse {
   };
 }
 
-export interface CreateModifierPayload {
+interface CreateModifierPayload {
   groupId: string;
   name: string;
   sortOrder?: number;
@@ -657,7 +597,7 @@ export interface CreateModifierPayload {
   isActive?: boolean;
 }
 
-export interface UpdateModifierPayload {
+interface UpdateModifierPayload {
   groupId?: string;
   name?: string;
   sortOrder?: number;
@@ -675,18 +615,6 @@ export async function getModifiers(
         }
       : undefined,
   });
-
-  return response.data;
-}
-
-export async function getModifierById(modifierId: string): Promise<{
-  message: string;
-  result: ModifierMutationResponse["result"];
-}> {
-  const response = await catalogApi.get<{
-    message: string;
-    result: ModifierMutationResponse["result"];
-  }>(`/modifiers/${modifierId}`);
 
   return response.data;
 }
@@ -714,12 +642,6 @@ export async function updateModifier(
   return response.data;
 }
 
-export async function deleteModifier(modifierId: string) {
-  const response = await catalogApi.delete(`/modifiers/${modifierId}`);
-
-  return response.data;
-}
-
 // ============================================================
 // ITEM MODIFIER GROUP
 // ============================================================
@@ -733,12 +655,12 @@ export interface ItemModifierGroup {
   group: ModifierGroup;
 }
 
-export interface ItemModifierGroupListResponse {
+interface ItemModifierGroupListResponse {
   message: string;
   result: ItemModifierGroup[];
 }
 
-export interface AssignModifierGroupPayload {
+interface AssignModifierGroupPayload {
   menuItemId: string;
   groupId: string;
 }
@@ -762,7 +684,8 @@ export async function assignModifierGroupToMenuItem(
 // ============================================================
 
 export async function getMenuItemModifierGroups(
-  menuItemId: string,
+  menuItemId?: string,
+  signal?: AbortSignal,
 ): Promise<ItemModifierGroupListResponse> {
   const response = await catalogApi.get<ItemModifierGroupListResponse>(
     "/item-modifier-groups",
@@ -770,23 +693,8 @@ export async function getMenuItemModifierGroups(
       params: {
         menuItemId,
       },
+      signal,
     },
-  );
-
-  return response.data;
-}
-
-// ============================================================
-// GET ONE
-// GET /item-modifier-groups/:menuItemId/:groupId
-// ============================================================
-
-export async function getItemModifierGroup(
-  menuItemId: string,
-  groupId: string,
-) {
-  const response = await catalogApi.get(
-    `/item-modifier-groups/${menuItemId}/${groupId}`,
   );
 
   return response.data;
@@ -826,25 +734,14 @@ export interface RecipeItem {
   modifier?: Modifier;
 }
 
-export interface CreateRecipeItemPayload {
+interface CreateRecipeItemPayload {
   menuItemId?: string;
   modifierId?: string;
   ingredientId: string;
   quantityNeeded: number;
 }
 
-export interface CreateBulkRecipeItem {
-  ingredientId: string;
-  quantityNeeded: number;
-}
-
-export interface CreateBulkRecipeItemPayload {
-  menuItemId?: string;
-  modifierId?: string;
-  recipes: CreateBulkRecipeItem[];
-}
-
-export interface RecipeIngredientRow {
+interface RecipeIngredientRow {
   recipeItemId: string;
   ingredientId: string;
   name: string;
@@ -853,7 +750,7 @@ export interface RecipeIngredientRow {
   quantityNeeded: number | string;
 }
 
-export interface MenuItemRecipeResponse {
+interface MenuItemRecipeResponse {
   message: string;
 
   menuItem: {
@@ -865,7 +762,7 @@ export interface MenuItemRecipeResponse {
   data: RecipeIngredientRow[];
 }
 
-export interface ModifierRecipeResponse {
+interface ModifierRecipeResponse {
   message: string;
 
   modifier: {
@@ -877,7 +774,7 @@ export interface ModifierRecipeResponse {
   data: RecipeIngredientRow[];
 }
 
-export interface UpdateRecipeItemPayload {
+interface UpdateRecipeItemPayload {
   ingredientId?: string;
   quantityNeeded?: number;
 }
@@ -889,30 +786,6 @@ export interface UpdateRecipeItemPayload {
 
 export async function createRecipeItem(data: CreateRecipeItemPayload) {
   const response = await catalogApi.post("/recipe-items", data);
-
-  return response.data;
-}
-
-// ============================================================
-// BULK CREATE RECIPE ITEMS
-// POST /recipe-items/bulk
-//
-// IMPORTANT:
-// Backend expects:
-// {
-//   menuItemId?: string,
-//   modifierId?: string,
-//   recipes: [
-//     {
-//       ingredientId: string,
-//       quantityNeeded: number
-//     }
-//   ]
-// }
-// ============================================================
-
-export async function createRecipeItemsBulk(data: CreateBulkRecipeItemPayload) {
-  const response = await catalogApi.post("/recipe-items/bulk", data);
 
   return response.data;
 }
@@ -948,17 +821,6 @@ export async function getModifierRecipes(
 }
 
 // ============================================================
-// GET RECIPE ITEM
-// GET /recipe-items/:id
-// ============================================================
-
-export async function getRecipeItemById(recipeItemId: string) {
-  const response = await catalogApi.get(`/recipe-items/${recipeItemId}`);
-
-  return response.data;
-}
-
-// ============================================================
 // UPDATE RECIPE ITEM
 // PATCH /recipe-items/:id
 // ============================================================
@@ -982,38 +844,6 @@ export async function updateRecipeItem(
 
 export async function deleteRecipeItem(recipeItemId: string) {
   const response = await catalogApi.delete(`/recipe-items/${recipeItemId}`);
-
-  return response.data;
-}
-
-// ============================================================
-// PAGINATED MENU ITEM RECIPES
-// GET /recipe-items/menu-items
-// ============================================================
-
-export async function getAllMenuItemRecipes(page = 1, limit = 20) {
-  const response = await catalogApi.get("/recipe-items/menu-items", {
-    params: {
-      page,
-      limit,
-    },
-  });
-
-  return response.data;
-}
-
-// ============================================================
-// PAGINATED MODIFIER RECIPES
-// GET /recipe-items/modifiers
-// ============================================================
-
-export async function getAllModifierRecipes(page = 1, limit = 20) {
-  const response = await catalogApi.get("/recipe-items/modifiers", {
-    params: {
-      page,
-      limit,
-    },
-  });
 
   return response.data;
 }

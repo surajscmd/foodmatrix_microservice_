@@ -6,9 +6,11 @@ services:
       dockerfile: Dockerfile
     container_name: matrix-catalog-service
     ports:
-      - "3002:3002"
+      - "3004:3004"
     env_file:
       - ./backend/catalog-service/.env.docker
+    environment:
+      ORGANIZATION_SERVICE_URL: ${CATALOG_ORGANIZATION_SERVICE_URL:-http://organization-service:3001}
     restart: unless-stopped
 
   hr-service:
@@ -31,6 +33,9 @@ services:
       - "3005:3005"
     env_file:
       - ./backend/order-service/.env.docker
+    environment:
+      ORGANIZATION_SERVICE_URL: ${ORDER_ORGANIZATION_SERVICE_URL:-http://organization-service:3001}
+      CATALOG_SERVICE_URL: ${ORDER_CATALOG_SERVICE_URL:-http://catalog-service:3004}
     restart: unless-stopped
 
   organization-service:

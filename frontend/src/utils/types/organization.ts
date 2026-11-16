@@ -24,13 +24,13 @@ export type SystemUserRole =
 // RESTAURANT STATUS
 // ------------------------------------------------------------
 
-export type RestaurantStatus = "ACTIVE" | "INACTIVE";
+type RestaurantStatus = "ACTIVE" | "INACTIVE";
 
 // ------------------------------------------------------------
 // BETTER AUTH USER
 // ------------------------------------------------------------
 
-export interface AuthUser {
+interface AuthUser {
   id: string;
   name: string;
   email: string;
@@ -63,6 +63,12 @@ export interface SystemUser {
 
   createdAt: string;
   updatedAt: string;
+}
+
+export interface UpdateSystemUserAssignmentData {
+  role: Exclude<SystemUserRole, "SUPER_ADMIN">;
+  franchiseId: string;
+  managedRestaurantId: string | null;
 }
 
 // ------------------------------------------------------------
@@ -179,61 +185,6 @@ export interface UpdateFranchiseData {
   name?: string;
   taxId?: string;
   defaultCurrency?: string;
-}
-
-// ------------------------------------------------------------
-// API ERROR
-// ------------------------------------------------------------
-
-export interface OrganizationApiError {
-  message: string;
-  statusCode?: number;
-  error?: string;
-}
-
-export interface MenuCategory {
-  id: string;
-  name: string;
-  sortOrder: number;
-  isActive: boolean;
-}
-
-export interface MenuItem {
-  id: string;
-  name: string;
-  sku: string;
-  description: string | null;
-  basePrice: number;
-  isAvailable: boolean;
-
-  category: MenuCategory;
-}
-
-export interface RestaurantMenuItem {
-  restaurantMenuItemId: string;
-  restaurantId: string;
-  price: number;
-  priceDifference: number;
-  isAvailable: boolean;
-  updatedAt: string;
-}
-
-export interface MenuItemRestaurantPricing {
-  menuItem: {
-    id: string;
-    name: string;
-    sku: string;
-    description: string | null;
-    basePrice: number;
-    isAvailable: boolean;
-    category: {
-      id: string;
-      name: string;
-      sortOrder: number;
-    };
-  };
-
-  restaurants: RestaurantMenuItem[];
 }
 
 export interface Restaurant {

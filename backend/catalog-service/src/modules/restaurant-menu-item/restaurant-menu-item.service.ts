@@ -3,10 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 
 import { CreateRestaurantMenuItemDto } from './dto/create-restaurant-menu-item.dto';
+import type { ListRestaurantMenuItemsDto } from './dto/list-restaurant-menu-items.dto';
 import { UpdateRestaurantMenuItemDto } from './dto/update-restaurant-menu-item.dto';
 import { PrismaService } from '../../lib/prisma/prisma.service';
+import { catalogPageOffset } from '../../common/catalog-pagination';
 
 @Injectable()
 export class RestaurantMenuItemService {
@@ -74,35 +77,76 @@ export class RestaurantMenuItemService {
   // Pagination is applied to global MenuItems.
   // ============================================================
 
-  async findAll(restaurantId: string, page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
-
-    const [menuItems, total] = await Promise.all([
-      this.prisma.menuItem.findMany({
-        where: {
-          isAvailable: true,
-        },
-        skip,
-        take: limit,
-        orderBy: {
-          createdAt: 'desc',
-        },
-        include: {
-          category: true,
-          restaurantMenus: {
-            where: {
-              restaurantId,
-            },
+  async findAll(
+    restaurantId: string,
+    page = 1,
+    limit = 10,
+    {
+      categoryId,
+      search,
+      availability,
+      includeAvailabilityCounts,
+    }: Omit<ListRestaurantMenuItemsDto, 'page' | 'limit'> = {},
+  ) {
+    const skip = catalogPageOffset(page, limit);
+    const unavailableHere = { restaurantId, isAvailable: false };
+    const term = search?.trim();
+    const match = { contains: term, mode: 'insensitive' } as const;
+    const baseWhere: Prisma.MenuItemWhereInput = {
+      isAvailable: true,
+      category: { isActive: true },
+      ...(categoryId && { categoryId }),
+      ...(term && {
+        OR: [{ name: match }, { sku: match }, { category: { name: match } }],
+      }),
+    };
+    const unavailableWhere = {
+      ...baseWhere,
+      restaurantMenus: { some: unavailableHere },
+    };
+    const where =
+      availability === 'unavailable'
+        ? unavailableWhere
+        : availability === 'available'
+          ? { ...baseWhere, restaurantMenus: { none: unavailableHere } }
+          : baseWhere;
+    const findItems = this.prisma.menuItem.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      include: {
+        category: true,
+        restaurantMenus: {
+          where: {
+            restaurantId,
           },
         },
-      }),
+      },
+    });
 
-      this.prisma.menuItem.count({
-        where: {
-          isAvailable: true,
-        },
-      }),
-    ]);
+    const [menuItems, matchingCount, unavailableCount] =
+      includeAvailabilityCounts === 'true'
+        ? await this.prisma.$transaction(
+            [
+              findItems,
+              this.prisma.menuItem.count({ where: baseWhere }),
+              this.prisma.menuItem.count({ where: unavailableWhere }),
+            ],
+            { isolationLevel: 'RepeatableRead' },
+          )
+        : await Promise.all([findItems, this.prisma.menuItem.count({ where })]);
+    const availabilityCounts =
+      unavailableCount === undefined
+        ? undefined
+        : {
+            available: matchingCount - unavailableCount,
+            unavailable: unavailableCount,
+          };
+    const total =
+      availabilityCounts && availability
+        ? availabilityCounts[availability]
+        : matchingCount;
 
     return {
       data: menuItems.map((menuItem) => {
@@ -138,6 +182,7 @@ export class RestaurantMenuItemService {
         total,
         totalPages: Math.ceil(total / limit),
       },
+      ...(availabilityCounts && { availabilityCounts }),
     };
   }
 
@@ -158,6 +203,7 @@ export class RestaurantMenuItemService {
   // ============================================================
 
   async findChangedItems(restaurantId: string, page = 1, limit = 10) {
+    const skip = catalogPageOffset(page, limit);
     const items = await this.prisma.restaurantMenuItem.findMany({
       where: {
         restaurantId,
@@ -179,8 +225,6 @@ export class RestaurantMenuItemService {
     );
 
     const total = changedItems.length;
-
-    const skip = (page - 1) * limit;
 
     return {
       data: changedItems.slice(skip, skip + limit).map((item) => ({
@@ -223,8 +267,10 @@ export class RestaurantMenuItemService {
   //     returned
   // ============================================================
 
-  async findAllChangedItems(page = 1, limit = 10) {
+  async findAllChangedItems(page = 1, limit = 10, restaurantIds?: string[]) {
+    const skip = catalogPageOffset(page, limit);
     const items = await this.prisma.restaurantMenuItem.findMany({
+      ...(restaurantIds && { where: { restaurantId: { in: restaurantIds } } }),
       include: {
         menuItem: {
           include: {
@@ -301,8 +347,6 @@ export class RestaurantMenuItemService {
     const totalRestaurants = restaurants.length;
     const totalChangedItems = changedItems.length;
 
-    const skip = (page - 1) * limit;
-
     return {
       data: restaurants.slice(skip, skip + limit),
 
@@ -320,10 +364,11 @@ export class RestaurantMenuItemService {
   // FIND ONE
   // ============================================================
 
-  async findOne(id: string) {
+  async findOne(id: string, restaurantIds?: string[]) {
     const item = await this.prisma.restaurantMenuItem.findUnique({
       where: {
         id,
+        ...(restaurantIds && { restaurantId: { in: restaurantIds } }),
       },
       include: {
         menuItem: {
@@ -369,10 +414,15 @@ export class RestaurantMenuItemService {
   // UPDATE
   // ============================================================
 
-  async update(id: string, dto: UpdateRestaurantMenuItemDto) {
+  async update(
+    id: string,
+    dto: UpdateRestaurantMenuItemDto,
+    restaurantIds?: string[],
+  ) {
     const existing = await this.prisma.restaurantMenuItem.findUnique({
       where: {
         id,
+        ...(restaurantIds && { restaurantId: { in: restaurantIds } }),
       },
     });
 
@@ -413,10 +463,11 @@ export class RestaurantMenuItemService {
   // DELETE
   // ============================================================
 
-  async remove(id: string) {
+  async remove(id: string, restaurantIds?: string[]) {
     const existing = await this.prisma.restaurantMenuItem.findUnique({
       where: {
         id,
+        ...(restaurantIds && { restaurantId: { in: restaurantIds } }),
       },
     });
 

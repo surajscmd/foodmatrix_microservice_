@@ -1,3 +1,4 @@
+import { InventoryAccess } from '../../auth/inventory-access.js';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { RestaurantStockService } from './restaurant-stock.service.js';
@@ -18,6 +19,7 @@ export class RestaurantStockController {
   // ======================================================
 
   @Get(':restaurantId')
+  @InventoryAccess('restaurant-read')
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query('page') page = '1',
@@ -47,6 +49,7 @@ export class RestaurantStockController {
   // ======================================================
 
   @Get(':restaurantId/low-stock')
+  @InventoryAccess('restaurant-read')
   async findLowStock(
     @Param('restaurantId') restaurantId: string,
     @Query('page') page = '1',
@@ -73,6 +76,7 @@ export class RestaurantStockController {
   // ======================================================
 
   @Get(':restaurantId/:ingredientId')
+  @InventoryAccess('restaurant-read')
   async findOne(
     @Param('restaurantId') restaurantId: string,
     @Param('ingredientId') ingredientId: string,
@@ -102,6 +106,7 @@ export class RestaurantStockController {
   // ======================================================
 
   @Post(':restaurantId/:ingredientId/adjust')
+  @InventoryAccess('restaurant-write')
   async adjustStock(
     @Param('restaurantId') restaurantId: string,
     @Param('ingredientId') ingredientId: string,

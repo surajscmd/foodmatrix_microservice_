@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from '@nestjs/common';
+import type { Request, Response } from 'express';
 
 import { Session, type UserSession } from '@thallesp/nestjs-better-auth';
 
@@ -27,9 +37,17 @@ export class AuthController {
   // ------------------------------------------------------------
 
   @Post('change-password')
+  @HttpCode(200)
   @UseGuards(AuthGuard)
-  async changePassword(@Req() req: Request, @Body() dto: ChangePasswordDto) {
-    return this.authService.changePassword(req, dto);
+  async changePassword(
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    const cookies = await this.authService.changePassword(req, dto);
+    for (const cookie of cookies) res.append('Set-Cookie', cookie);
+    res.setHeader('Cache-Control', 'private, no-store');
+    return { message: 'Password changed successfully' };
   }
 
   // ------------------------------------------------------------

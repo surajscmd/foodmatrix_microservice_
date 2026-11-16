@@ -18,6 +18,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true, // 🟢 Rejects requests with unexpected fields
     }),
   );
+  app.enableShutdownHooks();
   await app.listen(PORT);
 }
 void bootstrap();

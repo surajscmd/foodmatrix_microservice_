@@ -7,11 +7,18 @@ import PrintBill from "@/elements/Cash-pos/PrintBill";
 import MenuCatalog, {
   type RegisterMenuItem,
 } from "@/elements/Cash-pos/MenuCatalog";
+import ModifierPicker from "@/elements/Cash-pos/ModifierPicker";
+import {
+  cashierOrderItem,
+  type CashierModifierGroup,
+  type CartModifier,
+} from "@/elements/Cash-pos/cashier-modifiers";
+import useCashierModifierGroups from "@/elements/Cash-pos/useCashierModifierGroups";
 import SettleDesk, {
   canEditOrder,
   OpenOrders,
 } from "@/elements/Cash-pos/SettleDesk";
-import { getRestaurantMenuItems } from "@/lib/catalog-api";
+import useRestaurantMenu from "@/hooks/useRestaurantMenu";
 import {
   OrderApiError,
   needsUnavailableReview,
@@ -24,11 +31,6 @@ import {
 } from "@/lib/order-api";
 import { useOrganizationStore } from "@/store/organization-store";
 import type { Restaurant } from "@/utils/types/organization";
-
-interface MenuPage {
-  data: RegisterMenuItem[];
-  pagination: { totalPages: number };
-}
 
 interface ListResult {
   key: string;
@@ -45,28 +47,14 @@ interface TicketResult {
   error: string;
 }
 
-function messageFrom(error: unknown, fallback: string) {
-  return error instanceof Error ? error.message : fallback;
+interface ModifierSelection {
+  item: RegisterMenuItem;
+  groups: CashierModifierGroup[];
+  line?: CartLine;
 }
 
-async function loadMenu(restaurantId: string, signal: AbortSignal) {
-  const items = new Map<string, RegisterMenuItem>();
-
-  for (let page = 1; !signal.aborted; page++) {
-    const result: MenuPage = await getRestaurantMenuItems(
-      restaurantId,
-      page,
-      50,
-    );
-
-    for (const item of result.data) {
-      if (item.isAvailable) items.set(item.id, item);
-    }
-
-    if (page >= result.pagination.totalPages) break;
-  }
-
-  return [...items.values()];
+function messageFrom(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export default function CashierPOS() {
@@ -95,11 +83,18 @@ export default function CashierPOS() {
 }
 
 function Register({ restaurant }: { restaurant: Restaurant }) {
-  const [menu, setMenu] = useState<RegisterMenuItem[] | null>(null);
-  const [menuError, setMenuError] = useState("");
-  const [menuRevision, setMenuRevision] = useState(0);
+  const {
+    items: menu,
+    error: menuError,
+    refresh: refreshMenu,
+  } = useRestaurantMenu(restaurant.id);
+  const modifierCatalog = useCashierModifierGroups();
+  const customizableItems = new Set(
+    modifierCatalog.error ? undefined : modifierCatalog.groups?.keys(),
+  );
   const [cart, setCart] = useState<CartLine[]>([]);
   const [cartVersion, setCartVersion] = useState(0);
+  const [selection, setSelection] = useState<ModifierSelection | null>(null);
 
   const [view, setView] = useState<RegisterOrderView>("open");
   const [page, setPage] = useState(1);
@@ -138,22 +133,6 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
       ? { style: "currency", currency }
       : { maximumFractionDigits: 2 },
   );
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    void loadMenu(restaurant.id, controller.signal)
-      .then((items) => {
-        if (!controller.signal.aborted) setMenu(items);
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setMenuError(messageFrom(error, "Unable to load the menu."));
-        }
-      });
-
-    return () => controller.abort();
-  }, [restaurant.id, menuRevision]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -252,22 +231,18 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
     setCartVersion((value) => value + 1);
   }
 
-  function changeQuantity(item: RegisterMenuItem, delta: number) {
+  function changeQuantity(lineId: string, delta: number) {
     if (lock.current || uncertain) return;
 
-    setCart((current) => {
-      if (!current.some((line) => line.item.id === item.id)) {
-        return delta > 0 ? [...current, { item, quantity: 1 }] : current;
-      }
-
-      return current
+    setCart((current) =>
+      current
         .map((line) =>
-          line.item.id === item.id
+          line.id === lineId
             ? { ...line, quantity: Math.min(99, line.quantity + delta) }
             : line,
         )
-        .filter((line) => line.quantity > 0);
-    });
+        .filter((line) => line.quantity > 0),
+    );
   }
 
   async function runAction(action: () => Promise<string>) {
@@ -355,20 +330,61 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
     });
   }
 
-  function addMenuItem(item: RegisterMenuItem) {
+  function addMenuItem(item: RegisterMenuItem, modifiers: CartModifier[]) {
     if (lock.current || uncertain) return;
 
     if (!selectedId) {
-      changeQuantity(item, 1);
+      const newLine = { id: crypto.randomUUID(), item, quantity: 1, modifiers };
+      setCart((current) => {
+        const matching = current.find(
+          (line) =>
+            line.item.id === item.id &&
+            line.modifiers.length === modifiers.length &&
+            line.modifiers.every(({ id }) => modifiers.some((option) => option.id === id)),
+        );
+        if (!matching) return [...current, newLine];
+        return current.map((line) =>
+          line.id === matching.id
+            ? { ...line, quantity: Math.min(99, line.quantity + 1) }
+            : line,
+        );
+      });
       return;
     }
 
     if (!order || !editable) return;
 
     void runAction(async () => {
-      await orderApi.addItems(order.id, [{ menuItemId: item.id, quantity: 1 }]);
+      await orderApi.addItems(order.id, [cashierOrderItem(item.id, 1, modifiers)]);
       return `${item.name} added to order #${order.orderNumber}.`;
     });
+  }
+
+  function openItemOptions(item: RegisterMenuItem) {
+    if (lock.current || uncertain || !modifierCatalog.groups) return;
+    if (selectedId && !editable) return;
+    const groups = modifierCatalog.groups.get(item.id);
+    if (groups) setSelection({ item, groups });
+  }
+
+  function editOptions(line: CartLine) {
+    if (lock.current || uncertain) return;
+    const groups = modifierCatalog.groups?.get(line.item.id);
+    if (groups) setSelection({ item: line.item, groups, line });
+  }
+
+  function saveOptions(modifiers: CartModifier[]) {
+    if (!selection || lock.current || uncertain || (selectedId && !editable)) return;
+    const { item, line } = selection;
+    setSelection(null);
+
+    if (line) {
+      setCart((current) =>
+        current.map((entry) => entry.id === line.id ? { ...entry, modifiers } : entry),
+      );
+    } else {
+      addMenuItem(item, modifiers);
+    }
   }
 
   function recordPayment(
@@ -463,13 +479,14 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
           restaurantName={restaurant.name}
           items={menu}
           error={menuError}
+          optionsError={modifierCatalog.error}
           disabled={busy || uncertain || (Boolean(selectedId) && !editable)}
+          customizableItems={customizableItems}
           formatMoney={money.format}
-          onAdd={addMenuItem}
-          onRetry={() => {
-            setMenuError("");
-            setMenuRevision((value) => value + 1);
-          }}
+          onAdd={(item) => addMenuItem(item, [])}
+          onOptions={openItemOptions}
+          onRetry={refreshMenu}
+          onRetryOptions={modifierCatalog.refresh}
         />
 
         <aside
@@ -515,6 +532,8 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
               busy={busy}
               uncertain={uncertain}
               formatMoney={money.format}
+              customizableItems={customizableItems}
+              onEditOptions={editOptions}
               onQuantityChange={changeQuantity}
               onSubmit={placeOrder}
               onDiscard={() => {
@@ -665,6 +684,19 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
           </aside>
         )}
       </OpenOrders>
+      {selection && (
+        <ModifierPicker
+          item={selection.item}
+          groups={selection.groups}
+          initialModifiers={selection.line?.modifiers ?? []}
+          quantity={selection.line?.quantity ?? 1}
+          editing={Boolean(selection.line)}
+          blocked={busy || uncertain || (Boolean(selectedId) && !editable)}
+          formatMoney={money.format}
+          onClose={() => setSelection(null)}
+          onSave={saveOptions}
+        />
+      )}
     </div>
   );
 }

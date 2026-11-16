@@ -1,7 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, RefreshCw, Search, Utensils, X } from "lucide-react";
+import {
+  Plus,
+  RefreshCw,
+  Search,
+  SlidersHorizontal,
+  Utensils,
+  X,
+} from "lucide-react";
 
 export interface RegisterMenuItem {
   id: string;
@@ -20,10 +27,14 @@ interface Props {
   restaurantName: string;
   items: RegisterMenuItem[] | null;
   error: string;
+  optionsError: string;
   disabled: boolean;
+  customizableItems: ReadonlySet<string>;
   formatMoney: (amount: number) => string;
   onAdd: (item: RegisterMenuItem) => void;
+  onOptions: (item: RegisterMenuItem) => void;
   onRetry: () => void;
+  onRetryOptions: () => void;
 }
 
 const focus =
@@ -33,10 +44,14 @@ export default function MenuCatalog({
   restaurantName,
   items,
   error,
+  optionsError,
   disabled,
+  customizableItems,
   formatMoney,
   onAdd,
+  onOptions,
   onRetry,
+  onRetryOptions,
 }: Props) {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -134,6 +149,18 @@ export default function MenuCatalog({
           </p>
         ) : (
           <>
+            {optionsError && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-100">
+                <p role="status">{optionsError}</p>
+                <button
+                  type="button"
+                  onClick={onRetryOptions}
+                  className={`rounded underline underline-offset-2 ${focus}`}
+                >
+                  Retry options
+                </button>
+              </div>
+            )}
             <div
               role="group"
               aria-label="Menu categories"
@@ -171,29 +198,47 @@ export default function MenuCatalog({
               </p>
             ) : (
               <ul className="grid max-h-[28rem] gap-2 overflow-y-auto p-1 min-[480px]:grid-cols-2 2xl:grid-cols-3">
-                {visible.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onAdd(item)}
-                      aria-label={`Add ${item.name} for ${formatMoney(item.price)}`}
-                      className={`group flex min-h-20 w-full items-center justify-between gap-3 rounded-xl border border-slate-600/70 bg-slate-800 p-3 text-left transition enabled:hover:border-emerald-400 enabled:hover:bg-teal-950 ${focus}`}
+                {visible.map((item) => {
+                  const hasOptions = customizableItems.has(item.id);
+                  return (
+                    <li
+                      key={item.id}
+                      className="flex min-w-0 rounded-xl border border-slate-600/70 bg-slate-800"
                     >
-                      <span className="min-w-0">
-                        <span className="block break-words text-sm font-semibold text-white">
-                          {item.name}
+                      <button
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => onAdd(item)}
+                        aria-label={`Add ${item.name} for ${formatMoney(item.price)}`}
+                        className={`group flex min-h-20 min-w-0 flex-1 items-center justify-between gap-2.5 p-3 text-left transition enabled:hover:bg-teal-950 ${hasOptions ? "rounded-s-xl" : "rounded-xl"} ${focus}`}
+                      >
+                        <span className="min-w-0">
+                          <span className="block break-words text-sm font-semibold text-white">
+                            {item.name}
+                          </span>
+                          <span className="mt-1 block text-sm font-medium tabular-nums text-emerald-300">
+                            {formatMoney(item.price)}
+                          </span>
                         </span>
-                        <span className="mt-1 block text-sm font-medium tabular-nums text-emerald-300">
-                          {formatMoney(item.price)}
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-300 text-emerald-950 group-disabled:bg-slate-700 group-disabled:text-slate-400">
+                          <Plus aria-hidden="true" className="size-4" />
                         </span>
-                      </span>
-                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-300 text-emerald-950 group-disabled:bg-slate-700 group-disabled:text-slate-400">
-                        <Plus aria-hidden="true" className="size-4" />
-                      </span>
-                    </button>
-                  </li>
-                ))}
+                      </button>
+                      {hasOptions && (
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onOptions(item)}
+                          aria-label={`Choose options for ${item.name}`}
+                          className={`flex w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-e-xl border-s border-slate-600/70 bg-slate-900/55 text-[11px] font-medium text-teal-100 transition enabled:hover:bg-teal-900/75 disabled:opacity-55 ${focus}`}
+                        >
+                          <SlidersHorizontal aria-hidden="true" className="size-4" />
+                          Options
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </>

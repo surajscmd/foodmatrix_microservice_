@@ -1,208 +1,99 @@
-import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
 
-const API_URL =
-  process.env.FOODMATRIX_API_URL ?? "http://localhost:8000";
+const gateway = (
+  process.env.FOODMATRIX_API_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
+
+const resources = new Set([
+  "menu-items",
+  "menu-categories",
+  "ingredients",
+  "restaurant-menu-item",
+  "modifier-group",
+  "modifiers",
+  "item-modifier-groups",
+  "recipe-items",
+]);
 
 type RouteContext = {
-  params: Promise<{
-    path: string[];
-  }>;
+  params: Promise<{ path: string[] }>;
 };
 
-async function proxyRequest(
-  request: NextRequest,
-  context: RouteContext,
-) {
+function failure(status: number, message: string) {
+  return NextResponse.json(
+    { message },
+    { status, headers: { "cache-control": "private, no-store" } },
+  );
+}
+
+async function proxyRequest(request: NextRequest, context: RouteContext) {
+  const { path } = await context.params;
+  if (!resources.has(path[0]) || path.some((part) => !/^[a-z0-9-]+$/i.test(part))) {
+    return failure(404, "Catalog route not found");
+  }
+
+  const cookie = request.headers.get("cookie");
+  if (!cookie) return failure(401, "Sign in again to access Catalog");
+
+  const origin = process.env.FRONTEND_ORIGIN ?? request.nextUrl.origin;
+  const isRead = request.method === "GET";
+  if (!isRead && request.headers.get("origin") !== origin) {
+    return failure(403, "Request origin is not allowed");
+  }
+
   try {
-    const { path } = await context.params;
-
-    const pathName = path.join("/");
-
-    const searchParams =
-      request.nextUrl.searchParams.toString();
-
-    const targetUrl =
-      `${API_URL}/api/catalog/${pathName}` +
-      (searchParams ? `?${searchParams}` : "");
-
-    // --------------------------------------------------
-    // 1. Get Better Auth session cookie
-    // --------------------------------------------------
-
-    const cookie = request.headers.get("cookie");
-
-    if (!cookie) {
-      return NextResponse.json(
-        {
-          message: "Authentication cookie is missing",
-        },
-        {
-          status: 401,
-        },
-      );
+    const tokenResponse = await fetch(`${gateway}/api/auth/token`, {
+      headers: { Cookie: cookie, Origin: origin, Accept: "application/json" },
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!tokenResponse.ok) {
+      const { status } = tokenResponse;
+      if (status === 401 || status === 403) {
+        return failure(status, "Unable to authenticate Catalog request");
+      }
+      return failure(502, "Unable to verify your session");
     }
 
-    // --------------------------------------------------
-    // 2. Exchange session cookie for JWT
-    // --------------------------------------------------
-
-    const tokenResponse = await axios.get(
-      `${API_URL}/api/auth/token`,
-      {
-        headers: {
-          Cookie: cookie,
-          Origin:
-            request.headers.get("origin") ??
-            "http://localhost:3000",
-        },
-        validateStatus: () => true,
-      },
-    );
-
-    if (
-      tokenResponse.status < 200 ||
-      tokenResponse.status >= 300 ||
-      !tokenResponse.data?.token
-    ) {
-      console.error(
-        "JWT generation failed:",
-        tokenResponse.status,
-        tokenResponse.data,
-      );
-
-      return NextResponse.json(
-        {
-          message: "Unable to authenticate request",
-        },
-        {
-          status: 401,
-        },
-      );
+    const session = (await tokenResponse.json()) as { token?: unknown } | null;
+    if (typeof session?.token !== "string" || !session.token) {
+      return failure(401, "Unable to authenticate Catalog request");
     }
 
-    const token = tokenResponse.data.token;
+    const url = new URL(`${gateway}/api/catalog/${path.join("/")}`);
+    url.search = request.nextUrl.search;
+    const headers = new Headers({ Authorization: `Bearer ${session.token}` });
+    const contentType = request.headers.get("content-type");
+    if (contentType) headers.set("Content-Type", contentType);
 
-    // --------------------------------------------------
-    // 3. Prepare Catalog request headers
-    // --------------------------------------------------
+    const response = await fetch(url, {
+      method: request.method,
+      headers,
+      body: !isRead && request.body ? await request.arrayBuffer() : undefined,
+      cache: "no-store",
+      redirect: "error",
+      signal: AbortSignal.timeout(15_000),
+    });
 
-    const headers = new Headers();
+    const hasBody = response.status !== 204 && response.status !== 205 && response.status !== 304;
+    const responseHeaders = new Headers({ "cache-control": "private, no-store" });
+    const responseType = response.headers.get("content-type");
+    if (responseType) responseHeaders.set("Content-Type", responseType);
 
-    headers.set(
-      "Authorization",
-      `Bearer ${token}`,
-    );
-
-    const contentType =
-      request.headers.get("content-type");
-
-    if (contentType) {
-      headers.set(
-        "content-type",
-        contentType,
-      );
-    }
-
-    // --------------------------------------------------
-    // 4. Forward request body
-    // --------------------------------------------------
-
-    let body: string | undefined;
-
-    if (
-      request.method !== "GET" &&
-      request.method !== "HEAD"
-    ) {
-      body = await request.text();
-    }
-
-    // --------------------------------------------------
-    // 5. Forward request to Kong
-    // --------------------------------------------------
-
-    const response = await fetch(
-      targetUrl,
-      {
-        method: request.method,
-        headers,
-        body,
-        cache: "no-store",
-      },
-    );
-
-    const responseBody =
-      await response.text();
-
-    // --------------------------------------------------
-    // 6. Return Catalog response
-    // --------------------------------------------------
-
-    return new NextResponse(
-      responseBody,
-      {
-        status: response.status,
-        headers: {
-          "content-type":
-            response.headers.get(
-              "content-type",
-            ) ?? "application/json",
-        },
-      },
-    );
-  } catch (error) {
-    console.error(
-      "Catalog API proxy error:",
-      error,
-    );
-
-    return NextResponse.json(
-      {
-        message:
-          "Unable to connect to Catalog service",
-      },
-      {
-        status: 502,
-      },
-    );
+    return new NextResponse(hasBody ? await response.arrayBuffer() : null, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  } catch {
+    return failure(502, "Unable to connect to Catalog service");
   }
 }
 
-// ======================================================
-// HTTP METHODS
-// ======================================================
-
-export async function GET(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
-
-export async function POST(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
-
-export async function PATCH(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
-
-export async function PUT(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
-
-export async function DELETE(
-  request: NextRequest,
-  context: RouteContext,
-) {
-  return proxyRequest(request, context);
-}
+export {
+  proxyRequest as GET,
+  proxyRequest as POST,
+  proxyRequest as PATCH,
+  proxyRequest as PUT,
+  proxyRequest as DELETE,
+};

@@ -1,10 +1,14 @@
 import {
+  InventoryAccess,
+  InventoryUser,
+  type InventoryContext,
+} from '../../auth/inventory-access.js';
+import {
   Body,
   Controller,
   Delete,
   ForbiddenException,
   Get,
-  Headers,
   Param,
   Patch,
   Post,
@@ -14,7 +18,6 @@ import {
 import { StockRequestStatus } from '@prisma/client';
 
 import { StockRequestService } from './stock-request.service.js';
-import { StockRequestIdentityService } from './stock-request-identity.service.js';
 
 import { CreateStockRequestDto } from './dto/create-stock-request.dto.js';
 import { ApproveStockRequestDto } from './dto/approve-stock-request.dto.js';
@@ -23,14 +26,16 @@ import { UpdateStockRequestDto } from './dto/update-stock-request.dto.js';
 
 @Controller('stock-requests')
 export class StockRequestController {
-  constructor(
-    private readonly stockRequestService: StockRequestService,
-    private readonly identity: StockRequestIdentityService,
-  ) {}
+  constructor(private readonly stockRequestService: StockRequestService) {}
+
+  private warehouseActor({ userId, warehouseId }: InventoryContext) {
+    if (!warehouseId) throw new ForbiddenException('No warehouse assignment.');
+    return { userId, warehouseId };
+  }
 
   private async requestOwner(
     id: string,
-    cookie?: string,
+    actor: InventoryContext,
     restaurantId?: string,
   ) {
     const owner = await this.stockRequestService.findOwner(id);
@@ -39,10 +44,7 @@ export class StockRequestController {
         'This request belongs to a different restaurant.',
       );
     }
-    const { userId } = await this.identity.restaurantActor(
-      cookie,
-      owner.restaurantId,
-    );
+    const { userId } = actor;
     // Existing requests used a shared actor. Only the assigned restaurant manager may manage them.
     return owner.requestedBy === 'SYSTEM-RESTAURANT-MANAGER'
       ? owner.requestedBy
@@ -80,14 +82,12 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post()
+  @InventoryAccess('restaurant-write')
   async create(
     @Body() dto: CreateStockRequestDto,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
-    const { userId, warehouseId } = await this.identity.restaurantActor(
-      cookie,
-      dto.restaurantId,
-    );
+    const { userId, warehouseId } = this.warehouseActor(actor);
     const data = await this.stockRequestService.create(
       { ...dto, warehouseId },
       userId,
@@ -112,6 +112,7 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Get('restaurant/:restaurantId')
+  @InventoryAccess('restaurant-read')
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query('status') status?: StockRequestStatus,
@@ -141,8 +142,12 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post(':id/cancel')
-  async cancel(@Param('id') id: string, @Headers('cookie') cookie?: string) {
-    const userId = await this.requestOwner(id, cookie);
+  @InventoryAccess('request-restaurant')
+  async cancel(
+    @Param('id') id: string,
+    @InventoryUser() actor: InventoryContext,
+  ) {
+    const userId = await this.requestOwner(id, actor);
 
     const data = await this.stockRequestService.cancel(id, userId);
 
@@ -162,15 +167,16 @@ export class StockRequestController {
   // ======================================================
 
   @Patch(':id')
+  @InventoryAccess('request-restaurant')
   async update(
     @Param('id') requestId: string,
     @Body() dto: UpdateStockRequestDto,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
     const data = await this.stockRequestService.update(
       requestId,
       dto,
-      await this.requestOwner(requestId, cookie),
+      await this.requestOwner(requestId, actor),
     );
 
     return {
@@ -190,15 +196,16 @@ export class StockRequestController {
   // ======================================================
 
   @Delete(':id/restaurant/:restaurantId')
+  @InventoryAccess('request-restaurant')
   async deleteByRestaurant(
     @Param('id') requestId: string,
     @Param('restaurantId') restaurantId: string,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
     return this.stockRequestService.deleteByRestaurant(
       requestId,
       restaurantId,
-      await this.requestOwner(requestId, cookie, restaurantId),
+      await this.requestOwner(requestId, actor, restaurantId),
     );
   }
 
@@ -221,6 +228,7 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Get('warehouse/:warehouseId')
+  @InventoryAccess('warehouse')
   async findByWarehouse(
     @Param('warehouseId') warehouseId: string,
     @Query('status') status?: StockRequestStatus,
@@ -259,14 +267,15 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post(':id/approve')
+  @InventoryAccess('request-warehouse')
   async approve(
     @Param('id') id: string,
 
     @Body()
     dto: ApproveStockRequestDto,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
-    const { userId, warehouseId } = await this.identity.warehouseActor(cookie);
+    const { userId, warehouseId } = this.warehouseActor(actor);
 
     const data = await this.stockRequestService.approve(
       id,
@@ -290,14 +299,15 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Post(':id/reject')
+  @InventoryAccess('request-warehouse')
   async reject(
     @Param('id') id: string,
 
     @Body()
     dto: RejectStockRequestDto,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
-    const { userId, warehouseId } = await this.identity.warehouseActor(cookie);
+    const { userId, warehouseId } = this.warehouseActor(actor);
 
     const data = await this.stockRequestService.reject(
       id,
@@ -332,6 +342,7 @@ export class StockRequestController {
   // ------------------------------------------------------
 
   @Get(':id')
+  @InventoryAccess('request-read')
   async findById(@Param('id') id: string) {
     const data = await this.stockRequestService.findById(id);
 
@@ -352,6 +363,7 @@ export class StockRequestController {
   // ?status=REQUESTED
   // ------------------------------------------------------
   @Get()
+  @InventoryAccess('admin')
   async findAll(
     @Query('status')
     status?: StockRequestStatus,
@@ -382,14 +394,12 @@ export class StockRequestController {
   // ======================================================
 
   @Post('restaurant/:restaurantId/from-low-stock')
+  @InventoryAccess('restaurant-write')
   async createFromLowStock(
     @Param('restaurantId') restaurantId: string,
-    @Headers('cookie') cookie?: string,
+    @InventoryUser() actor: InventoryContext,
   ) {
-    const { userId, warehouseId } = await this.identity.restaurantActor(
-      cookie,
-      restaurantId,
-    );
+    const { userId, warehouseId } = this.warehouseActor(actor);
     const data = await this.stockRequestService.createFromLowStock(
       restaurantId,
       warehouseId,
@@ -414,6 +424,7 @@ export class StockRequestController {
   // ------------------------------------------------------
   // ======================================================
   @Get('restaurant/:restaurantId/low-stock')
+  @InventoryAccess('restaurant-read')
   async findLowStock(
     @Param('restaurantId') restaurantId: string,
     @Query('page') page = '1',

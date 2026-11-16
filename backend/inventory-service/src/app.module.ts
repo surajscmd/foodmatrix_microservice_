@@ -1,3 +1,4 @@
+import { AuthModule } from './auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
@@ -21,6 +22,7 @@ import { SchedulerModule } from './modules/schedule/scheduler.module.js';
     }),
     ScheduleModule.forRoot(),
     PrismaModule,
+    AuthModule,
     KafkaModule,
     StockRequestModule,
     StockTransferModule,
@@ -29,7 +31,7 @@ import { SchedulerModule } from './modules/schedule/scheduler.module.js';
     RestaurantStockModule,
     WasteLogModule,
     StockMovementModule,
-    SchedulerModule
+    SchedulerModule,
   ],
   controllers: [AppController],
   providers: [AppService],

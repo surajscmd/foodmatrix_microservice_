@@ -1,15 +1,17 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, SlidersHorizontal, Store } from "lucide-react";
+import { Building2, KeyRound, SlidersHorizontal, Store } from "lucide-react";
 
 import PlatformSettingsScreen from "@/components/PlatformSettingsScreen";
 import RestaurantProfileForm from "@/elements/settings/RestaurantProfileForm";
+import AccountSecuritySection from "@/elements/settings/AccountSecuritySection";
 import { useOrganizationStore } from "@/store/organization-store";
 
 const panels = [
   { id: "preferences", label: "Browser preferences", icon: SlidersHorizontal },
   { id: "restaurant", label: "Restaurant details", icon: Building2 },
+  { id: "account", label: "Account security", icon: KeyRound },
 ] as const;
 
 export default function RestaurantSettingsScreen() {
@@ -66,6 +68,7 @@ export default function RestaurantSettingsScreen() {
       <div hidden={panel !== "preferences"}>
         <PlatformSettingsScreen embedded />
       </div>
+      {panel === "account" && <AccountSecuritySection />}
     </div>
   );
 }

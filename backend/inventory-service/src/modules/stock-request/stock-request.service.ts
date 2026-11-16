@@ -13,14 +13,12 @@ import { RejectStockRequestDto } from './dto/reject-stock-request.dto.js';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { UpdateStockRequestDto } from './dto/update-stock-request.dto.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
-import { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 
 @Injectable()
 export class StockRequestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogGatewayService: CatalogGatewayService,
-    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   // ======================================================
@@ -57,82 +55,91 @@ export class StockRequestService {
     // Prevent duplicate ACTIVE requests
     // ----------------------------------------------------
 
-    const existingActiveItems = await this.prisma.stockRequestItem.findMany({
-      where: {
-        ingredientId: {
-          in: ingredientIds,
+    return this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtextextended(${'stock-request:' + dto.restaurantId}, 0))`;
+      const existingActiveItems = await tx.stockRequestItem.findMany({
+        where: {
+          ingredientId: {
+            in: ingredientIds,
+          },
+
+          stockRequest: {
+            restaurantId: dto.restaurantId,
+
+            status: {
+              in: [StockRequestStatus.REQUESTED, StockRequestStatus.APPROVED],
+            },
+          },
         },
 
-        stockRequest: {
+        select: {
+          ingredientId: true,
+
+          stockRequest: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
+        },
+      });
+
+      if (existingActiveItems.length > 0) {
+        const duplicateIngredients = [
+          ...new Set(existingActiveItems.map((item) => item.ingredientId)),
+        ];
+
+        throw new ConflictException(
+          `Active stock request already exists for ingredient(s): ${duplicateIngredients.join(', ')}`,
+        );
+      }
+
+      // ----------------------------------------------------
+      // CREATE REQUEST
+      // ----------------------------------------------------
+
+      const stockRequest = await tx.stockRequest.create({
+        data: {
           restaurantId: dto.restaurantId,
+          warehouseId: dto.warehouseId,
+          requestedBy,
+          reason: dto.reason,
+          status: StockRequestStatus.REQUESTED,
 
-          status: {
-            in: [StockRequestStatus.REQUESTED, StockRequestStatus.APPROVED],
+          items: {
+            create: dto.items.map((item) => ({
+              ingredientId: item.ingredientId,
+              requestedQty: new Prisma.Decimal(item.requestedQty),
+            })),
           },
         },
-      },
 
-      select: {
-        ingredientId: true,
+        include: {
+          items: true,
+        },
+      });
 
-        stockRequest: {
-          select: {
-            id: true,
-            status: true,
+      // ----------------------------------------------------
+      // PUBLISH KAFKA EVENT
+      // ----------------------------------------------------
+
+      await tx.inventoryOutbox.create({
+        data: {
+          topic: 'inventory.stock-request-created',
+          payload: {
+            stockRequestId: stockRequest.id,
+            restaurantId: stockRequest.restaurantId,
+            warehouseId: stockRequest.warehouseId,
+            requestedBy: stockRequest.requestedBy,
+            itemCount: stockRequest.items.length,
           },
         },
-      },
+      });
+
+      return stockRequest;
     });
-
-    if (existingActiveItems.length > 0) {
-      const duplicateIngredients = [
-        ...new Set(existingActiveItems.map((item) => item.ingredientId)),
-      ];
-
-      throw new ConflictException(
-        `Active stock request already exists for ingredient(s): ${duplicateIngredients.join(', ')}`,
-      );
-    }
-
-    // ----------------------------------------------------
-    // CREATE REQUEST
-    // ----------------------------------------------------
-
-    const stockRequest = await this.prisma.stockRequest.create({
-      data: {
-        restaurantId: dto.restaurantId,
-        warehouseId: dto.warehouseId,
-        requestedBy,
-        reason: dto.reason,
-        status: StockRequestStatus.REQUESTED,
-
-        items: {
-          create: dto.items.map((item) => ({
-            ingredientId: item.ingredientId,
-            requestedQty: new Prisma.Decimal(item.requestedQty),
-          })),
-        },
-      },
-
-      include: {
-        items: true,
-      },
-    });
-
-    // ----------------------------------------------------
-    // PUBLISH KAFKA EVENT
-    // ----------------------------------------------------
-
-    await this.kafkaProducer.publish('inventory.stock-request-created', {
-      stockRequestId: stockRequest.id,
-      restaurantId: stockRequest.restaurantId,
-      warehouseId: stockRequest.warehouseId,
-      requestedBy: stockRequest.requestedBy,
-      itemCount: stockRequest.items.length,
-    });
-
-    return stockRequest;
   }
+
   // ======================================================
   // UPDATE STOCK REQUEST
   //
@@ -897,9 +904,10 @@ export class StockRequestService {
       // Update request
       // ------------------------------------------------
 
-      await tx.stockRequest.update({
+      const requestState = await tx.stockRequest.updateMany({
         where: {
           id: request.id,
+          status: StockRequestStatus.REQUESTED,
         },
 
         data: {
@@ -911,23 +919,26 @@ export class StockRequestService {
         },
       });
 
+      if (requestState.count !== 1) {
+        throw new ConflictException('Stock request has already been processed');
+      }
+
+      await tx.inventoryOutbox.create({
+        data: {
+          topic: 'inventory.stock-request-approved',
+          payload: {
+            stockRequestId: requestId,
+            restaurantId: transfer.toRestaurantId,
+            warehouseId: transfer.fromWarehouseId,
+
+            items: transfer.items.map((item) => ({
+              ingredientId: item.ingredientId,
+              approvedQty: item.approvedQty?.toJSON() ?? null,
+            })),
+          },
+        },
+      });
       return transfer;
-    });
-
-    // ==================================================
-    // PUBLISH NOTIFICATION EVENT
-    // AFTER TRANSACTION SUCCESS
-    // ==================================================
-
-    await this.kafkaProducer.publish('inventory.stock-request-approved', {
-      stockRequestId: requestId,
-      restaurantId: transfer.toRestaurantId,
-      warehouseId: transfer.fromWarehouseId,
-
-      items: transfer.items.map((item) => ({
-        ingredientId: item.ingredientId,
-        approvedQty: item.approvedQty,
-      })),
     });
 
     return transfer;

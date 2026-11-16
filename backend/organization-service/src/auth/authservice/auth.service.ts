@@ -1,14 +1,19 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isAPIError } from 'better-auth/api';
+import { fromNodeHeaders } from 'better-auth/node';
+import type { Request } from 'express';
 
-import { SystemUserRole, type SystemUser } from '@prisma/client';
+import { type SystemUser } from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 import { auth } from '../auths.js';
+import { validateAccountAssignment } from '../account-assignment.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 
@@ -72,154 +77,14 @@ export class AuthService {
     }
 
     // ----------------------------------------------------------
-    // CREATOR PERMISSION
-    // ONLY CENTRAL ADMINS CAN CREATE USERS
+    // VALIDATE ACCOUNT ASSIGNMENT
     // ----------------------------------------------------------
 
-    const allowedCreators: SystemUserRole[] = [
-      SystemUserRole.SUPER_ADMIN,
-      SystemUserRole.FRANCHISE_ADMIN,
-    ];
-
-    if (!allowedCreators.includes(creator.role)) {
-      throw new BadRequestException(
-        'Only Super Admin or Franchise Admin can create user accounts',
-      );
-    }
-
-    // ----------------------------------------------------------
-    // ROLE GROUPS
-    // ----------------------------------------------------------
-
-    const restaurantRoles: SystemUserRole[] = [
-      SystemUserRole.RESTAURANT_ADMIN,
-      SystemUserRole.STAFF,
-      SystemUserRole.OPERATIONS,
-    ];
-
-    const franchiseRoles: SystemUserRole[] = [
-      SystemUserRole.SUPER_ADMIN,
-      SystemUserRole.FRANCHISE_ADMIN,
-    ];
-
-    // ----------------------------------------------------------
-    // TARGET ROLE VALIDATION
-    // ----------------------------------------------------------
-
-    if (
-      !restaurantRoles.includes(dto.role) &&
-      !franchiseRoles.includes(dto.role)
-    ) {
-      throw new BadRequestException('Invalid system user role');
-    }
-
-    // ----------------------------------------------------------
-    // FRANCHISE ADMIN RESTRICTIONS
-    // ----------------------------------------------------------
-
-    if (creator.role === SystemUserRole.FRANCHISE_ADMIN) {
-      const allowedRolesForFranchiseAdmin: SystemUserRole[] = [
-        SystemUserRole.RESTAURANT_ADMIN,
-        SystemUserRole.STAFF,
-        SystemUserRole.OPERATIONS,
-      ];
-
-      if (!allowedRolesForFranchiseAdmin.includes(dto.role)) {
-        throw new BadRequestException(
-          'Franchise Admin cannot create this role',
-        );
-      }
-
-      if (!creator.franchiseId) {
-        throw new BadRequestException('Creator is not assigned to a franchise');
-      }
-
-      if (dto.franchiseId !== creator.franchiseId) {
-        throw new BadRequestException(
-          'You can only create users inside your own franchise',
-        );
-      }
-    }
-
-    // ----------------------------------------------------------
-    // ROLE SCOPE VALIDATION
-    // ----------------------------------------------------------
-
-    // Restaurant-level users require:
-    // - franchiseId
-    // - managedRestaurantId
-
-    if (restaurantRoles.includes(dto.role)) {
-      if (!dto.franchiseId) {
-        throw new BadRequestException(`${dto.role} requires franchiseId`);
-      }
-
-      if (!dto.managedRestaurantId) {
-        throw new BadRequestException(
-          `${dto.role} requires managedRestaurantId`,
-        );
-      }
-    }
-
-    // Franchise-level users require:
-    // - franchiseId
-    // - no managedRestaurantId
-
-    if (franchiseRoles.includes(dto.role)) {
-      if (!dto.franchiseId) {
-        throw new BadRequestException(`${dto.role} requires franchiseId`);
-      }
-
-      if (dto.managedRestaurantId) {
-        throw new BadRequestException(
-          `${dto.role} cannot have managedRestaurantId`,
-        );
-      }
-    }
-
-    // ----------------------------------------------------------
-    // VALIDATE RESTAURANT
-    // ----------------------------------------------------------
-
-    if (dto.managedRestaurantId) {
-      const restaurant = await this.prisma.restaurant.findUnique({
-        where: {
-          id: dto.managedRestaurantId,
-        },
-      });
-
-      if (!restaurant) {
-        throw new NotFoundException('Restaurant not found');
-      }
-
-      if (!dto.franchiseId) {
-        throw new BadRequestException(
-          'franchiseId is required when managedRestaurantId is provided',
-        );
-      }
-
-      if (restaurant.franchiseId !== dto.franchiseId) {
-        throw new BadRequestException(
-          'Restaurant does not belong to the specified franchise',
-        );
-      }
-    }
-
-    // ----------------------------------------------------------
-    // VALIDATE FRANCHISE
-    // ----------------------------------------------------------
-
-    if (dto.franchiseId) {
-      const franchise = await this.prisma.franchise.findUnique({
-        where: {
-          id: dto.franchiseId,
-        },
-      });
-
-      if (!franchise) {
-        throw new NotFoundException('Franchise not found');
-      }
-    }
+    const assignment = await validateAccountAssignment(
+      this.prisma,
+      creator,
+      dto,
+    );
 
     // ----------------------------------------------------------
     // CHECK EXISTING SYSTEM USER
@@ -300,9 +165,7 @@ export class AuthService {
           firstName,
           lastName,
           email: authUser.email,
-          role: dto.role,
-          franchiseId: dto.franchiseId ?? null,
-          managedRestaurantId: dto.managedRestaurantId ?? null,
+          ...assignment,
         },
       });
 
@@ -367,18 +230,23 @@ export class AuthService {
   async changePassword(
     request: Request,
     dto: ChangePasswordDto,
-  ): Promise<{ message: string }> {
-    await auth.api.changePassword({
-      body: {
-        currentPassword: dto.currentPassword,
-        newPassword: dto.newPassword,
-        revokeOtherSessions: true,
-      },
-      headers: request.headers,
-    });
-
-    return {
-      message: 'Password changed successfully',
-    };
+  ): Promise<string[]> {
+    try {
+      const result = await auth.api.changePassword({
+        body: {
+          currentPassword: dto.currentPassword,
+          newPassword: dto.newPassword,
+          revokeOtherSessions: true,
+        },
+        headers: fromNodeHeaders(request.headers),
+        returnHeaders: true,
+      });
+      return result.headers.getSetCookie();
+    } catch (error) {
+      if (isAPIError(error) && error.statusCode < 500) {
+        throw new HttpException(error.message, error.statusCode);
+      }
+      throw error;
+    }
   }
 }

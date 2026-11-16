@@ -58,7 +58,7 @@ async function proxyRequest(request: NextRequest, context: RouteContext) {
 
     const responseBody = await backendResponse.text();
 
-    const responseHeaders = new Headers();
+    const responseHeaders = new Headers({ "Cache-Control": "private, no-store" });
 
     const responseContentType = backendResponse.headers.get("content-type");
 

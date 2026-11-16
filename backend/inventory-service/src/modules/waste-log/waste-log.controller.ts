@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post , Query } from '@nestjs/common';
+import { InventoryAccess } from '../../auth/inventory-access.js';
+import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { WasteLogService } from './waste-log.service.js';
 
@@ -15,6 +16,7 @@ export class WasteLogController {
   // ======================================================
 
   @Post()
+  @InventoryAccess('restaurant-write')
   async create(@Body() dto: CreateWasteLogDto) {
     const data = await this.wasteLogService.create(dto);
 
@@ -31,6 +33,7 @@ export class WasteLogController {
   // ======================================================
 
   @Get('restaurant/:restaurantId')
+  @InventoryAccess('restaurant-read')
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query('page') page = '1',
@@ -55,6 +58,7 @@ export class WasteLogController {
   // ======================================================
 
   @Get(':id')
+  @InventoryAccess('waste-read')
   async findOne(@Param('id') id: string) {
     const data = await this.wasteLogService.findOne(id);
 

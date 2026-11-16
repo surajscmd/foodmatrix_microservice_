@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { RestaurantStockController } from './restaurant-stock.controller';
-import { RestaurantStockService } from './restaurant-stock.service';
+import { RestaurantStockController } from './restaurant-stock.controller.js';
+import { RestaurantStockService } from './restaurant-stock.service.js';
 
 describe('RestaurantStockController', () => {
   let controller: RestaurantStockController;
@@ -8,10 +9,12 @@ describe('RestaurantStockController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RestaurantStockController],
-      providers: [RestaurantStockService],
+      providers: [{ provide: RestaurantStockService, useValue: {} }],
     }).compile();
 
-    controller = module.get<RestaurantStockController>(RestaurantStockController);
+    controller = module.get<RestaurantStockController>(
+      RestaurantStockController,
+    );
   });
 
   it('should be defined', () => {

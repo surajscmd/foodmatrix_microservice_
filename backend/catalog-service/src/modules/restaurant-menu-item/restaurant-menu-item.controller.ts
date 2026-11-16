@@ -11,9 +11,18 @@ import {
 
 import { RestaurantMenuItemService } from './restaurant-menu-item.service';
 import { CreateRestaurantMenuItemDto } from './dto/create-restaurant-menu-item.dto';
+import { ListRestaurantMenuItemsDto } from './dto/list-restaurant-menu-items.dto';
 import { UpdateRestaurantMenuItemDto } from './dto/update-restaurant-menu-item.dto';
+import {
+  CatalogAccess,
+  CatalogUser,
+  type CatalogActor,
+  catalogRestaurantIds,
+  requireCatalogRestaurant,
+} from '../../auth/catalog-access.js';
 
 @Controller('restaurant-menu-item')
+@CatalogAccess('restaurant')
 export class RestaurantMenuItemController {
   constructor(
     private readonly restaurantMenuItemService: RestaurantMenuItemService,
@@ -26,9 +35,11 @@ export class RestaurantMenuItemController {
 
   @Post()
   async create(
+    @CatalogUser() actor: CatalogActor,
     @Body()
     createRestaurantMenuItemDto: CreateRestaurantMenuItemDto,
   ) {
+    requireCatalogRestaurant(actor, createRestaurantMenuItemDto.restaurantId);
     const result = await this.restaurantMenuItemService.create(
       createRestaurantMenuItemDto,
     );
@@ -53,20 +64,22 @@ export class RestaurantMenuItemController {
 
   @Get('restaurant/:restaurantId')
   async findAll(
+    @CatalogUser() actor: CatalogActor,
     @Param('restaurantId') restaurantId: string,
-    @Query('page') page = '1',
-    @Query('limit') limit = '10',
+    @Query() query: ListRestaurantMenuItemsDto,
   ) {
+    requireCatalogRestaurant(actor, restaurantId);
+    const { page, limit, ...filters } = query;
     const result = await this.restaurantMenuItemService.findAll(
       restaurantId,
       Number(page),
       Number(limit),
+      filters,
     );
 
     return {
       message: 'Restaurant menu items retrieved successfully',
-      data: result.data,
-      pagination: result.pagination,
+      ...result,
     };
   }
 
@@ -84,10 +97,12 @@ export class RestaurantMenuItemController {
 
   @Get('restaurant/:restaurantId/changed')
   async findChangedItems(
+    @CatalogUser() actor: CatalogActor,
     @Param('restaurantId') restaurantId: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
+    requireCatalogRestaurant(actor, restaurantId);
     const result = await this.restaurantMenuItemService.findChangedItems(
       restaurantId,
       Number(page),
@@ -114,12 +129,14 @@ export class RestaurantMenuItemController {
 
   @Get('changed')
   async findAllChangedItems(
+    @CatalogUser() actor: CatalogActor,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
   ) {
     const result = await this.restaurantMenuItemService.findAllChangedItems(
       Number(page),
       Number(limit),
+      catalogRestaurantIds(actor),
     );
 
     return {
@@ -136,8 +153,11 @@ export class RestaurantMenuItemController {
   // ============================================================
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
-    const result = await this.restaurantMenuItemService.findOne(id);
+  async findOne(@CatalogUser() actor: CatalogActor, @Param('id') id: string) {
+    const result = await this.restaurantMenuItemService.findOne(
+      id,
+      catalogRestaurantIds(actor),
+    );
 
     return {
       message: 'Restaurant menu item retrieved successfully',
@@ -153,6 +173,7 @@ export class RestaurantMenuItemController {
 
   @Patch(':id')
   async update(
+    @CatalogUser() actor: CatalogActor,
     @Param('id') id: string,
     @Body()
     updateRestaurantMenuItemDto: UpdateRestaurantMenuItemDto,
@@ -160,6 +181,7 @@ export class RestaurantMenuItemController {
     const result = await this.restaurantMenuItemService.update(
       id,
       updateRestaurantMenuItemDto,
+      catalogRestaurantIds(actor),
     );
 
     return {
@@ -175,8 +197,11 @@ export class RestaurantMenuItemController {
   // ============================================================
 
   @Delete(':id')
-  async remove(@Param('id') id: string) {
-    const result = await this.restaurantMenuItemService.remove(id);
+  async remove(@CatalogUser() actor: CatalogActor, @Param('id') id: string) {
+    const result = await this.restaurantMenuItemService.remove(
+      id,
+      catalogRestaurantIds(actor),
+    );
 
     return {
       message: 'Restaurant menu item deleted successfully',

@@ -2,7 +2,7 @@ import { IsOptional, IsString, Length, ValidateIf } from 'class-validator';
 import { IsSupportedCurrency } from '../../organization-settings.validation.js';
 
 export class UpdateFranchiseDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(2, 100)
   name?: string;

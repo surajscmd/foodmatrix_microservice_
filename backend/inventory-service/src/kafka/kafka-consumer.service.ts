@@ -1,117 +1,101 @@
-import { Injectable, Logger } from '@nestjs/common';
-import type { OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-
-import { Kafka } from 'kafkajs';
-import type { Consumer } from 'kafkajs';
-
 import {
-  InsufficientRestaurantStockError,
-  OrderInventoryService,
-} from '../modules/order-inventory/order-inventory.service.js';
-
-import type { OrderCompleteEvent } from '../modules/order-inventory/events/order-complete.event.js';
+  Injectable,
+  Logger,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
+import { Interval } from '@nestjs/schedule';
+import { Kafka } from 'kafkajs';
+import { isOrderCompleteEvent } from '../modules/order-inventory/events/order-complete.event.js';
+import { OrderDeductionRetryService } from '../modules/order-inventory/order-deduction-retry.service.js';
+import { PrismaService } from '../lib/prisma/prisma.service.js';
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KafkaConsumerService.name);
-  private readonly kafka = new Kafka({
+  private readonly consumer = new Kafka({
     clientId: 'inventory-service-consumer',
-    brokers: ['localhost:9094', 'localhost:9095', 'localhost:9096'],
-  });
+    brokers: (
+      process.env.KAFKA_BROKERS ||
+      'localhost:9094,localhost:9095,localhost:9096'
+    )
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean),
+  }).consumer({ groupId: 'inventory-service-group' });
 
-  private readonly consumer: Consumer = this.kafka.consumer({
-    groupId: 'inventory-service-group',
-  });
-  private readonly failedEvents = this.kafka.producer();
+  private connecting?: Promise<void>;
+  private subscribed = false;
+  private closing = false;
 
-  constructor(private readonly orderInventoryService: OrderInventoryService) {}
+  constructor(
+    private readonly deductions: OrderDeductionRetryService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  // ======================================================
-  // MODULE INIT
-  // ======================================================
+  onModuleInit() {
+    this.consumer.on(this.consumer.events.CRASH, ({ payload }) => {
+      if (!payload.restart) this.subscribed = false;
+    });
+    this.connect();
+  }
 
-  async onModuleInit(): Promise<void> {
-    // ----------------------------------------------------
-    // CONNECT CONSUMER
-    // ----------------------------------------------------
+  @Interval(15000)
+  connect() {
+    if (this.closing || this.subscribed || this.connecting) return;
+    this.connecting = this.subscribe()
+      .catch(async (error: unknown) => {
+        this.logger.warn(
+          'Inventory Kafka consumer will retry its connection.',
+          error,
+        );
+        await this.consumer.disconnect().catch(() => undefined);
+      })
+      .finally(() => {
+        this.connecting = undefined;
+      });
+  }
 
-    await this.failedEvents.connect();
+  private async subscribe() {
     await this.consumer.connect();
-
-    console.log('Inventory Kafka consumer connected');
-
-    // ----------------------------------------------------
-    // SUBSCRIBE
-    // ----------------------------------------------------
-
     await this.consumer.subscribe({
       topics: ['order-complete'],
       fromBeginning: true,
     });
-
-    console.log('Inventory subscribed to topic: order-complete');
-
-    // ----------------------------------------------------
-    // CONSUME
-    // ----------------------------------------------------
-
     await this.consumer.run({
       eachMessage: async ({ topic, partition, message }) => {
-        if (!message.value) {
-          return;
-        }
-
-        const event = JSON.parse(
-          message.value.toString(),
-        ) as OrderCompleteEvent;
-
-        console.log('\n========== KAFKA EVENT RECEIVED ==========');
-        console.log('Topic:', topic);
-        console.log('Partition:', partition);
-        console.log('Offset:', message.offset);
-        console.log('Event:', JSON.stringify(event, null, 2));
-        console.log('==========================================');
-
+        const source = { topic, partition, offset: message.offset };
+        const raw = message.value?.toString() ?? '';
+        let event: unknown;
         try {
-          await this.orderInventoryService.processOrderComplete(event);
-        } catch (error) {
-          if (!(error instanceof InsufficientRestaurantStockError)) throw error;
-
-          // Kafka may advance the source offset only after saving the failed event.
-          await this.failedEvents.send({
-            topic: 'order-complete-stock-shortage',
-            acks: -1,
-            messages: [
-              {
-                key: `${topic}:${partition}:${message.offset}`,
-                value: JSON.stringify({
-                  event,
-                  source: { topic, partition, offset: message.offset },
-                  ingredientId: error.ingredientId,
-                  requiredQuantity: error.requiredQuantity,
-                }),
-              },
-            ],
+          event = JSON.parse(raw) as unknown;
+        } catch {
+          event = null;
+        }
+        if (!isOrderCompleteEvent(event)) {
+          await this.prisma.inventoryOutbox.upsert({
+            where: { id: topic + ':' + partition + ':' + message.offset },
+            create: {
+              id: topic + ':' + partition + ':' + message.offset,
+              topic: 'order-complete-invalid',
+              payload: { source, raw },
+            },
+            update: {},
           });
           this.logger.warn(
-            `Stock deduction deferred for item ${event.orderItemId}: ingredient ${error.ingredientId}, required ${error.requiredQuantity} (${topic}:${partition}:${message.offset}).`,
+            'Invalid order event queued for review at offset ' + message.offset,
           );
+          return;
         }
+        await this.deductions.processOrDefer(event, source);
       },
     });
+    this.subscribed = true;
   }
 
-  // ======================================================
-  // MODULE DESTROY
-  // ======================================================
-
-  async onModuleDestroy(): Promise<void> {
-    try {
-      await this.consumer.disconnect();
-    } finally {
-      await this.failedEvents.disconnect();
-    }
-
-    console.log('Inventory Kafka consumer disconnected');
+  async onModuleDestroy() {
+    this.closing = true;
+    await this.connecting;
+    await this.consumer.disconnect();
   }
 }

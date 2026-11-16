@@ -8,6 +8,42 @@ import { Pool } from 'pg'; // <-- 1. Import Pool from 'pg'
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
+class SequentialPrismaPg extends PrismaPg {
+  override async connect() {
+    const adapter = await super.connect();
+    const startTransaction = adapter.startTransaction.bind(adapter);
+
+    adapter.startTransaction = async (isolationLevel) => {
+      const transaction = await startTransaction(isolationLevel);
+      let pending: Promise<void> = Promise.resolve();
+
+      // Prisma can fan out relation reads on the transaction's single pg client.
+      function enqueue<Args extends unknown[], Result>(
+        operation: (...args: Args) => Promise<Result>,
+      ) {
+        return (...args: Args): Promise<Result> => {
+          const result = pending.then(() => operation(...args));
+          pending = result.then(
+            () => undefined,
+            () => undefined,
+          );
+          return result;
+        };
+      }
+
+      transaction.queryRaw = enqueue(transaction.queryRaw.bind(transaction));
+      transaction.executeRaw = enqueue(
+        transaction.executeRaw.bind(transaction),
+      );
+      transaction.commit = enqueue(transaction.commit.bind(transaction));
+      transaction.rollback = enqueue(transaction.rollback.bind(transaction));
+      return transaction;
+    };
+
+    return adapter;
+  }
+}
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -25,7 +61,7 @@ export class PrismaService
     });
 
     // 3. Pass the pool into the PrismaPg adapter
-    const adapter = new PrismaPg(pool);
+    const adapter = new SequentialPrismaPg(pool);
 
     // 4. Pass the adapter to the PrismaClient constructor
     super({

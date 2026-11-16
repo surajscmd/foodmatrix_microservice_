@@ -14,7 +14,7 @@ export function attendanceError(error: unknown, fallback: string) {
    Browser -> Next.js /api/hr -> Kong -> HR Service
    ========================================================= */
 
-export const hrApi = axios.create({
+const hrApi = axios.create({
   baseURL: "/api/hr",
   withCredentials: true,
   headers: {
@@ -71,14 +71,14 @@ export interface Staff {
   wageHistories?: WageHistory[];
 }
 
-export interface Pagination {
+interface Pagination {
   page: number;
   limit: number;
   total: number;
   totalPages: number;
 }
 
-export interface StaffListResponse {
+interface StaffListResponse {
   message: string;
 
   data: {
@@ -87,7 +87,7 @@ export interface StaffListResponse {
   };
 }
 
-export interface StaffResponse {
+interface StaffResponse {
   message: string;
   data: Staff;
 }
@@ -96,7 +96,7 @@ export interface StaffResponse {
    STAFF PAYLOADS
    ========================================================= */
 
-export interface CreateStaffPayload {
+interface CreateStaffPayload {
   restaurantId: string;
 
   employeeCode: string;
@@ -119,7 +119,7 @@ export interface CreateStaffPayload {
   approvedById?: string;
 }
 
-export interface UpdateStaffPayload {
+interface UpdateStaffPayload {
   restaurantId?: string;
 
   employeeCode?: string;
@@ -130,10 +130,6 @@ export interface UpdateStaffPayload {
   role?: string;
 
   pin?: string;
-}
-
-export interface UpdateStaffStatusPayload {
-  status: EmployeeStatus;
 }
 
 /* =========================================================
@@ -206,7 +202,7 @@ export async function deleteStaff(staffId: string): Promise<StaffResponse> {
    WAGES
    ========================================================= */
 
-export interface WageListResponse {
+interface WageListResponse {
   message: string;
 
   data: {
@@ -215,12 +211,12 @@ export interface WageListResponse {
   };
 }
 
-export interface WageResponse {
+interface WageResponse {
   message: string;
   data: WageHistory;
 }
 
-export interface CreateWagePayload {
+interface CreateWagePayload {
   staffId: string;
 
   payType: PayType;
@@ -232,22 +228,6 @@ export interface CreateWagePayload {
   salaryAmount?: number;
 
   effectiveStartDate: string;
-
-  approvedById?: string;
-}
-
-export interface UpdateWagePayload {
-  payType?: PayType;
-
-  hourlyWage?: number;
-
-  overtimeRate?: number;
-
-  salaryAmount?: number;
-
-  effectiveStartDate?: string;
-
-  effectiveEndDate?: string;
 
   approvedById?: string;
 }
@@ -268,39 +248,10 @@ export async function getWages(
   return response.data;
 }
 
-export async function getWageById(wageId: string): Promise<WageResponse> {
-  const response = await hrApi.get<WageResponse>(`/wages/${wageId}`);
-
-  return response.data;
-}
-
 export async function getCurrentWage(staffId: string): Promise<WageResponse> {
   const response = await hrApi.get<WageResponse>(
     `/wages/staff/${staffId}/current`,
   );
-
-  return response.data;
-}
-
-export async function createWage(
-  data: CreateWagePayload,
-): Promise<WageResponse> {
-  const response = await hrApi.post<WageResponse>("/wages", data);
-
-  return response.data;
-}
-
-export async function updateWage(
-  wageId: string,
-  data: UpdateWagePayload,
-): Promise<WageResponse> {
-  const response = await hrApi.patch<WageResponse>(`/wages/${wageId}`, data);
-
-  return response.data;
-}
-
-export async function deleteWage(wageId: string): Promise<WageResponse> {
-  const response = await hrApi.delete<WageResponse>(`/wages/${wageId}`);
 
   return response.data;
 }
@@ -336,17 +287,17 @@ export interface AttendanceShift {
   };
 }
 
-export interface AttendanceResponse {
+interface AttendanceResponse {
   message: string;
   data: AttendanceShift;
 }
 
-export interface AttendanceListResponse {
+interface AttendanceListResponse {
   message: string;
   data: AttendanceShift[];
 }
 
-export interface ClockInPayload {
+interface ClockInPayload {
   restaurantId: string;
   staffId: string;
   shiftScheduleId: string;
@@ -363,15 +314,6 @@ export async function getAttendance(params?: {
     {
       params,
     },
-  );
-
-  return response.data;
-}
-export async function getAttendanceById(
-  shiftId: string,
-): Promise<AttendanceResponse> {
-  const response = await hrApi.get<AttendanceResponse>(
-    `/attendance/${shiftId}`,
   );
 
   return response.data;
@@ -467,17 +409,17 @@ export interface ShiftSchedule {
   };
 }
 
-export interface ShiftScheduleResponse {
+interface ShiftScheduleResponse {
   message: string;
   data: ShiftSchedule;
 }
 
-export interface ShiftScheduleListResponse {
+interface ShiftScheduleListResponse {
   message: string;
   data: ShiftSchedule[];
 }
 
-export interface CreateShiftSchedulePayload {
+interface CreateShiftSchedulePayload {
   restaurantId: string;
 
   staffId: string;
@@ -488,7 +430,7 @@ export interface CreateShiftSchedulePayload {
   scheduledEnd: string;
 }
 
-export interface UpdateShiftSchedulePayload {
+interface UpdateShiftSchedulePayload {
   shiftTemplateId?: string;
 
   scheduledStart?: string;
@@ -507,15 +449,6 @@ export async function getShiftSchedules(params?: {
     {
       params,
     },
-  );
-
-  return response.data;
-}
-export async function getShiftScheduleById(
-  scheduleId: string,
-): Promise<ShiftScheduleResponse> {
-  const response = await hrApi.get<ShiftScheduleResponse>(
-    `/shift-schedules/${scheduleId}`,
   );
 
   return response.data;
@@ -604,12 +537,12 @@ export interface LeaveRecord {
   };
 }
 
-export interface LeaveListResponse {
+interface LeaveListResponse {
   message: string;
   data: LeaveRecord[];
 }
 
-export type LeavePayload = Pick<LeaveRecord, "staffId" | "type" | "isPaidLeave" | "startDate" | "endDate"> & { reason: string };
+type LeavePayload = Pick<LeaveRecord, "staffId" | "type" | "isPaidLeave" | "startDate" | "endDate"> & { reason: string };
 
 export async function saveLeave(payload: LeavePayload, id?: string) {
   const response = id
@@ -681,12 +614,7 @@ export interface Payslip {
   payrollRun?: Pick<PayrollRun, "periodStartDate" | "periodEndDate">;
 }
 
-export interface PayslipResponse {
-  message: string;
-  data: Payslip;
-}
-
-export interface PayslipListResponse {
+interface PayslipListResponse {
   message: string;
   data: Payslip[];
 }
@@ -699,24 +627,6 @@ export async function getPayslips(params?: {
   const response = await hrApi.get<PayslipListResponse>("/payslips", {
     params,
   });
-
-  return response.data;
-}
-
-export async function getPayslipsByStaff(
-  staffId: string,
-): Promise<PayslipListResponse> {
-  const response = await hrApi.get<PayslipListResponse>(
-    `/payslips/staff/${staffId}`,
-  );
-
-  return response.data;
-}
-
-export async function getPayslipById(
-  payslipId: string,
-): Promise<PayslipResponse> {
-  const response = await hrApi.get<PayslipResponse>(`/payslips/${payslipId}`);
 
   return response.data;
 }
@@ -755,7 +665,7 @@ export interface PayrollRunResponse {
   data: PayrollRun;
 }
 
-export interface PayrollRunListResponse {
+interface PayrollRunListResponse {
   message: string;
   data: PayrollRun[];
 }
@@ -770,16 +680,6 @@ export async function getPayrollRuns(params?: {
     {
       params,
     },
-  );
-
-  return response.data;
-}
-
-export async function getPayrollRunById(
-  payrollRunId: string,
-): Promise<PayrollRunResponse> {
-  const response = await hrApi.get<PayrollRunResponse>(
-    `/payroll-runs/${payrollRunId}`,
   );
 
   return response.data;

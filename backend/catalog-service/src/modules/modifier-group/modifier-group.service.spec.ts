@@ -53,6 +53,10 @@ describe('ModifierGroupService', () => {
   // CREATE
   // ============================================================
 
+  const modifierInclude = {
+    modifiers: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
+  };
+
   describe('create', () => {
     const createDto: CreateModifierGroupDto = {
       name: 'Dosa Extras',
@@ -86,6 +90,7 @@ describe('ModifierGroupService', () => {
           maxSelections: 4,
           isActive: true,
         },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(createdGroup);
@@ -123,6 +128,7 @@ describe('ModifierGroupService', () => {
           maxSelections: 1,
           isActive: true,
         },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(createdGroup);
@@ -179,7 +185,7 @@ describe('ModifierGroupService', () => {
   // ============================================================
 
   describe('findAll', () => {
-    it('should return all active modifier groups ordered correctly', async () => {
+    it('should return all modifier groups ordered correctly', async () => {
       const groups: ModifierGroup[] = [
         {
           id: 'group-1',
@@ -208,9 +214,7 @@ describe('ModifierGroupService', () => {
       const result = await service.findAll();
 
       expect(modifierGroupFindMany).toHaveBeenCalledWith({
-        where: {
-          isActive: true,
-        },
+        include: modifierInclude,
         orderBy: [
           {
             sortOrder: 'asc',
@@ -224,7 +228,7 @@ describe('ModifierGroupService', () => {
       expect(result).toEqual(groups);
     });
 
-    it('should return an empty array when no active groups exist', async () => {
+    it('should return an empty array when no groups exist', async () => {
       modifierGroupFindMany.mockResolvedValue([]);
 
       const result = await service.findAll();
@@ -270,9 +274,7 @@ describe('ModifierGroupService', () => {
         where: {
           id: 'group-1',
         },
-        include: {
-          modifiers: true,
-        },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(group);
@@ -329,9 +331,7 @@ describe('ModifierGroupService', () => {
         where: {
           id: 'group-1',
         },
-        include: {
-          modifiers: true,
-        },
+        include: modifierInclude,
       });
 
       expect(modifierGroupUpdate).toHaveBeenCalledWith({
@@ -344,6 +344,7 @@ describe('ModifierGroupService', () => {
           minSelections: 0,
           maxSelections: 3,
         },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(updatedGroup);
@@ -371,6 +372,7 @@ describe('ModifierGroupService', () => {
         data: {
           name: 'Updated Dosa Extras',
         },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(updatedGroup);
@@ -401,7 +403,9 @@ describe('ModifierGroupService', () => {
           name: 'Updated Group',
         }),
       ).rejects.toThrow(
-        new BadRequestException('Cannot update an inactive modifier group'),
+        new BadRequestException(
+          'Inactive modifier groups can only be reactivated first',
+        ),
       );
 
       expect(modifierGroupUpdate).not.toHaveBeenCalled();
@@ -423,7 +427,7 @@ describe('ModifierGroupService', () => {
       expect(modifierGroupUpdate).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when updated maxSelections becomes smaller than existing minSelections', async () => {
+    it('should throw BadRequestException when updated maxSelections is negative', async () => {
       modifierGroupFindUnique.mockResolvedValue(existingGroup);
 
       const updateDto: UpdateModifierGroupDto = {
@@ -431,9 +435,7 @@ describe('ModifierGroupService', () => {
       };
 
       await expect(service.update('group-1', updateDto)).rejects.toThrow(
-        new BadRequestException(
-          'minSelections cannot be greater than maxSelections',
-        ),
+        new BadRequestException('maxSelections cannot be negative'),
       );
 
       expect(modifierGroupUpdate).not.toHaveBeenCalled();
@@ -464,6 +466,7 @@ describe('ModifierGroupService', () => {
           minSelections: 2,
           maxSelections: 4,
         },
+        include: modifierInclude,
       });
 
       expect(result).toEqual(updatedGroup);
@@ -503,9 +506,7 @@ describe('ModifierGroupService', () => {
         where: {
           id: 'group-1',
         },
-        include: {
-          modifiers: true,
-        },
+        include: modifierInclude,
       });
 
       expect(modifierGroupUpdate).toHaveBeenCalledWith({

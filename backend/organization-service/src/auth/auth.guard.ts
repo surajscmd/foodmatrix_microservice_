@@ -15,6 +15,7 @@ import type { Request } from 'express';
 
 import { PrismaService } from '../lib/prisma/prisma.service.js';
 import { auth } from './auths.js';
+import { accountAccessInclude, hasWorkspaceAccess } from './account-access.js';
 
 export const ROLES_KEY = 'roles';
 
@@ -62,14 +63,15 @@ export class AuthGuard implements CanActivate {
       where: {
         authUserId: session.user.id,
       },
+      include: accountAccessInclude,
     });
 
     if (!systemUser) {
       throw new UnauthorizedException('FoodMatrix system user not found');
     }
 
-    if (!systemUser.isActive) {
-      throw new UnauthorizedException('System user is inactive');
+    if (!hasWorkspaceAccess(systemUser)) {
+      throw new UnauthorizedException('Account or restaurant is inactive');
     }
 
     // ------------------------------------------------------------

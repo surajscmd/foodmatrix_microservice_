@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { Prisma, Restaurant } from '@prisma/client';
+import { Prisma, Restaurant, RestaurantStatus } from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
 
@@ -91,14 +91,30 @@ export class RestaurantService {
     dto: UpdateRestaurantDto,
     scope: Prisma.RestaurantWhereInput,
   ): Promise<Restaurant> {
+    const update = {
+      where: { id, AND: [scope] },
+      data: dto,
+    };
     try {
-      return await this.prisma.restaurant.update({
-        where: {
-          id,
-          AND: [scope],
+      if (!dto.status) return await this.prisma.restaurant.update(update);
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const restaurant = await tx.restaurant.update(update);
+          if (dto.status === RestaurantStatus.INACTIVE) {
+            const accounts = await tx.systemUser.findMany({
+              where: { managedRestaurantId: id },
+              select: { authUserId: true },
+            });
+            await tx.session.deleteMany({
+              where: {
+                userId: { in: accounts.map(({ authUserId }) => authUserId) },
+              },
+            });
+          }
+          return restaurant;
         },
-        data: dto,
-      });
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
@@ -112,18 +128,20 @@ export class RestaurantService {
       ) {
         throw new ConflictException('Restaurant with this name already exists');
       }
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException(
+          'Restaurant changed. Refresh and try again.',
+        );
+      }
 
       throw error;
     }
   }
 
   async remove(id: string): Promise<Restaurant> {
-    await this.findOne(id);
-
-    return this.prisma.restaurant.delete({
-      where: {
-        id,
-      },
-    });
+    return this.update(id, { status: RestaurantStatus.INACTIVE }, {});
   }
 }

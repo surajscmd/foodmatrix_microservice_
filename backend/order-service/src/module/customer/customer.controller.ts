@@ -1,3 +1,4 @@
+import { OrderAccess } from '../../auth/order-access';
 import {
   Body,
   Controller,
@@ -14,6 +15,7 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Controller('customers')
+@OrderAccess('customers')
 export class CustomerController {
   constructor(private readonly customerService: CustomerService) {}
 

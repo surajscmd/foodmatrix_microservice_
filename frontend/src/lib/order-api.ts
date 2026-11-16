@@ -1,11 +1,11 @@
 export type OrderType = "DINE_IN" | "TAKEAWAY" | "DELIVERY";
-export type OrderStatus =
+type OrderStatus =
   "PENDING" | "CONFIRMED" | "PREPARING" | "READY" | "COMPLETED" | "CANCELLED";
 export type OrderItemStatus = "PENDING" | "PREPARING" | "READY" | "CANCELLED";
 export type RegisterOrderView = "open" | "history";
 export type UnavailabilityDecision = "approve" | "cancel-order" | "dismiss";
 export type PaymentMethod = "CASH" | "CARD" | "UPI" | "ONLINE";
-export type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
+type PaymentStatus = "PENDING" | "COMPLETED" | "FAILED" | "REFUNDED";
 
 interface Pagination {
   page: number;
@@ -27,12 +27,7 @@ interface Result<T> extends Message {
   data: T;
 }
 
-interface PageQuery {
-  page?: number;
-  limit?: number;
-}
-
-export interface Customer {
+interface Customer {
   id: string;
   phone: string;
   name: string | null;
@@ -66,7 +61,7 @@ export function needsUnavailableReview(item: OrderItem) {
   return Boolean(item.unavailableRequestedAt && !item.unavailableResolvedAt);
 }
 
-export interface Payment {
+interface Payment {
   id: string;
   orderId: string;
   amount: string;
@@ -128,22 +123,6 @@ export interface CreatePaymentInput {
   transactionId?: string;
 }
 
-export interface CustomerInput {
-  phone: string;
-  name?: string;
-}
-
-interface PaymentSummary {
-  orderId: string;
-  orderNumber: number;
-  orderTotal: string;
-  paidAmount: string;
-  refundedAmount: string;
-  remainingAmount: string;
-  fullyPaid: boolean;
-  fullyRefunded: boolean;
-}
-
 interface OrderPayments {
   orderId: string;
   orderTotal: string;
@@ -160,21 +139,6 @@ interface RecordedPayment {
   newPaidAmount: string;
   remainingAmount: string;
   fullyPaid: boolean;
-}
-
-interface PaymentRefund {
-  payment: Payment;
-  refundedAmount: string;
-  orderId: string;
-  orderTotal: string;
-}
-
-interface OrderRefund {
-  orderId: string;
-  orderNumber: number;
-  orderTotal: string;
-  refundedAmount: string;
-  payments: Payment[];
 }
 
 export class OrderApiError extends Error {
@@ -223,20 +187,9 @@ function json(method: "POST" | "PATCH", body: unknown): RequestInit {
   };
 }
 
-function pagePath(path: string, query: PageQuery) {
-  const params = new URLSearchParams();
-  if (query.page !== undefined) params.set("page", String(query.page));
-  if (query.limit !== undefined) params.set("limit", String(query.limit));
-  const search = params.toString();
-  return search ? `${path}?${search}` : path;
-}
-
 const orderPath = (id: string) => `orders/${encodeURIComponent(id)}`;
-const paymentPath = (id: string) => `payments/${encodeURIComponent(id)}`;
 const orderPaymentsPath = (id: string) =>
   `payments/order/${encodeURIComponent(id)}`;
-const customerPath = (id: string) => `customers/${encodeURIComponent(id)}`;
-
 function changeOrderStatus(
   orderId: string,
   action: "confirm" | "prepare" | "ready" | "complete",
@@ -248,10 +201,6 @@ export const orderApi = {
   getDashboard: (signal?: AbortSignal) =>
     request<OrderDashboard>("orders/dashboard", { signal }),
 
-  getKitchenQueue: (query: PageQuery = {}, signal?: AbortSignal) =>
-    request<Page<Order> & Message>(pagePath("orders/kitchen/upcoming", query), {
-      signal,
-    }),
   getRegisterOrders: (
     view: RegisterOrderView,
     page: number,
@@ -307,66 +256,14 @@ export const orderApi = {
       },
     ),
 
-  removeModifier: (
-    orderId: string,
-    itemId: string,
-    orderItemModifierId: string,
-  ) =>
-    readData<Order>(
-      `${orderPath(orderId)}/items/${encodeURIComponent(itemId)}/modifiers/${encodeURIComponent(orderItemModifierId)}`,
-      { method: "DELETE" },
-    ),
-
   confirmOrder: (orderId: string) => changeOrderStatus(orderId, "confirm"),
   prepareOrder: (orderId: string) => changeOrderStatus(orderId, "prepare"),
   markOrderReady: (orderId: string) => changeOrderStatus(orderId, "ready"),
   completeOrder: (orderId: string) => changeOrderStatus(orderId, "complete"),
 
-  cancelOrder: (orderId: string, reason: string) =>
-    readData<Order>(`${orderPath(orderId)}/cancel`, json("POST", { reason })),
-
   createPayment: (input: CreatePaymentInput) =>
     readData<RecordedPayment>("payments", json("POST", input)),
 
-  getPayment: (paymentId: string) =>
-    readData<
-      Payment & { order: Omit<Order, "items" | "payments" | "customer"> }
-    >(paymentPath(paymentId)),
-  getOpenOrders: (query: Pick<PageQuery, "page"> = {}, signal?: AbortSignal) =>
-    request<Page<Order>>(pagePath("orders", query), { signal }),
   getOrderPayments: (orderId: string) =>
     readData<OrderPayments>(orderPaymentsPath(orderId)),
-
-  getPaymentSummary: (orderId: string) =>
-    readData<PaymentSummary>(`${orderPaymentsPath(orderId)}/summary`),
-
-  refundPayment: (paymentId: string) =>
-    readData<PaymentRefund>(`${paymentPath(paymentId)}/refund`, {
-      method: "POST",
-    }),
-
-  refundOrder: (orderId: string) =>
-    readData<OrderRefund>(`${orderPaymentsPath(orderId)}/refund`, {
-      method: "POST",
-    }),
-
-  listCustomers: (query: PageQuery = {}) =>
-    request<Page<Customer>>(pagePath("customers", query)),
-
-  createCustomer: (input: CustomerInput) =>
-    request<Customer>("customers", json("POST", input)),
-
-  getCustomer: (customerId: string) =>
-    request<Customer>(customerPath(customerId)),
-
-  getCustomerOrders: (customerId: string) =>
-    request<Array<Omit<Order, "customer">>>(
-      `${customerPath(customerId)}/orders`,
-    ),
-
-  updateCustomer: (customerId: string, input: Partial<CustomerInput>) =>
-    request<Customer>(customerPath(customerId), json("PATCH", input)),
-
-  deleteCustomer: (customerId: string) =>
-    request<Message>(customerPath(customerId), { method: "DELETE" }),
 };

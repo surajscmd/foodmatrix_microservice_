@@ -4,17 +4,15 @@ import { useCallback, useMemo, useState } from "react";
 
 import {
   AlertCircle,
-  AlertTriangle,
   Loader2,
   Plus,
+  Power,
   RefreshCw,
-  Trash2,
   X,
 } from "lucide-react";
 
 import {
   createRestaurant,
-  deleteRestaurant,
   getRestaurants,
   updateRestaurant,
 } from "@/lib/organization-api";
@@ -33,6 +31,8 @@ import DiagnosticView from "@/elements/Restaurantscreen/DiagnosticView";
 import FilterBar from "@/elements/Restaurantscreen/FilterBar";
 import FranchiseKPIs from "@/elements/Restaurantscreen/FranchiseKPIs";
 import RestaurantGrid from "@/elements/Restaurantscreen/RestaurantGrid";
+import WorkforceFormDialog from "@/elements/restaurantworkforce/WorkforceFormDialog";
+import { ErrorNote, primary } from "@/elements/restaurantworkforce/shared";
 
 interface RestaurantScreenProps {
   searchTerm?: string;
@@ -72,8 +72,7 @@ export default function RestaurantScreen({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
-
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deactivation, setDeactivation] = useState<Restaurant | null>(null);
 
   const [error, setError] = useState<string | null>(null);
 
@@ -87,10 +86,6 @@ export default function RestaurantScreen({
   const [editingRestaurant, setEditingRestaurant] = useState<Restaurant | null>(
     null,
   );
-
-  // Delete confirmation
-  const [restaurantToDelete, setRestaurantToDelete] =
-    useState<Restaurant | null>(null);
 
   // ============================================================
   // DERIVED USER DATA
@@ -112,8 +107,6 @@ export default function RestaurantScreen({
     currentUserRole === "SUPER_ADMIN" ||
     currentUserRole === "FRANCHISE_ADMIN" ||
     currentUserRole === "RESTAURANT_ADMIN";
-
-  const canDelete = currentUserRole === "SUPER_ADMIN";
 
   // ============================================================
   // INITIAL STATE
@@ -310,11 +303,11 @@ export default function RestaurantScreen({
       );
 
       if (!existing) {
-        return;
+        return false;
       }
 
       if (existing.status === status) {
-        return;
+        return true;
       }
 
       try {
@@ -333,10 +326,12 @@ export default function RestaurantScreen({
         setSelectedRestaurant(updated);
 
         setLastUpdated(new Date());
+        return true;
       } catch (err) {
         console.error("Failed to update restaurant status:", err);
 
         setError("Unable to update restaurant status.");
+        return false;
       } finally {
         setIsUpdatingStatus(false);
       }
@@ -344,55 +339,16 @@ export default function RestaurantScreen({
     [restaurants, setRestaurants],
   );
 
-  // ============================================================
-  // DELETE
-  // ============================================================
-
-  const handleRequestDelete = useCallback(() => {
-    if (!selectedRestaurant || !canDelete) {
-      return;
-    }
-
-    setRestaurantToDelete(selectedRestaurant);
-  }, [selectedRestaurant, canDelete]);
-
-  const handleCancelDelete = useCallback(() => {
-    if (isDeleting) {
-      return;
-    }
-
-    setRestaurantToDelete(null);
-  }, [isDeleting]);
-
-  const handleConfirmDelete = useCallback(async () => {
-    if (!restaurantToDelete || !canDelete) {
-      return;
-    }
-
-    try {
-      setIsDeleting(true);
+  async function requestStatusUpdate(id: string, status: Restaurant["status"]) {
+    if (isUpdatingStatus) return;
+    const restaurant = restaurants.find((item) => item.id === id);
+    if (status === "INACTIVE" && restaurant?.status === "ACTIVE") {
       setError(null);
-
-      await deleteRestaurant(restaurantToDelete.id);
-
-      // Update Zustand
-      setRestaurants(
-        restaurants.filter(
-          (restaurant) => restaurant.id !== restaurantToDelete.id,
-        ),
-      );
-
-      setSelectedRestaurant(null);
-      setRestaurantToDelete(null);
-      setLastUpdated(new Date());
-    } catch (err) {
-      console.error("Failed to delete restaurant:", err);
-
-      setError("Unable to delete restaurant node.");
-    } finally {
-      setIsDeleting(false);
+      setDeactivation(restaurant);
+      return;
     }
-  }, [restaurantToDelete, canDelete, restaurants, setRestaurants]);
+    await handleUpdateStatus(id, status);
+  }
 
   // ============================================================
   // SELECTED RESTAURANT VIEW
@@ -408,81 +364,43 @@ export default function RestaurantScreen({
           </div>
         )}
 
+        {error && !deactivation && <ErrorNote>{error}</ErrorNote>}
+
         <DiagnosticView
           restaurant={selectedRestaurant}
           canEdit={canEdit}
-          canDelete={canDelete}
+          canChangeStatus={canCreate}
           onEdit={handleOpenEdit}
-          onDelete={handleRequestDelete}
-          onUpdateStatus={handleUpdateStatus}
+          onUpdateStatus={requestStatusUpdate}
           onBack={handleBack}
         />
 
-        {/* DELETE CONFIRMATION */}
-        {restaurantToDelete && (
-          <div className="fixed inset-0 z-[110] flex items-center justify-center bg-zinc-950/70 px-4 backdrop-blur-sm">
-            <div className="w-full max-w-md rounded-2xl border border-zinc-800 bg-[#0c0c0e] p-6 shadow-2xl">
-              <div className="flex items-start gap-3">
-                <div className="rounded-xl bg-rose-500/10 p-2 text-rose-400">
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-white">
-                    Delete restaurant node?
-                  </h3>
-
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-                    This will remove{" "}
-                    <span className="font-semibold text-zinc-300">
-                      {restaurantToDelete.name}
-                    </span>{" "}
-                    from the Organization Service.
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-zinc-800 bg-zinc-950 p-3">
-                <span className="block font-mono text-[9px] uppercase text-zinc-600">
-                  Node ID
-                </span>
-
-                <span className="break-all font-mono text-xs text-zinc-300">
-                  {restaurantToDelete.id}
-                </span>
-              </div>
-
-              <div className="mt-6 flex gap-3">
-                <button
-                  type="button"
-                  onClick={handleCancelDelete}
-                  disabled={isDeleting}
-                  className="flex-1 rounded-xl border border-zinc-800 bg-zinc-900 py-2 text-xs font-medium text-zinc-300 transition-all hover:bg-zinc-800 hover:text-white disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => void handleConfirmDelete()}
-                  disabled={isDeleting}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-500 py-2 text-xs font-semibold text-zinc-950 transition-all hover:bg-rose-400 disabled:opacity-50"
-                >
-                  {isDeleting ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      Deleting...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="h-3.5 w-3.5" />
-                      Delete Node
-                    </>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
+        {deactivation && (
+          <WorkforceFormDialog
+            title="Deactivate restaurant"
+            icon={Power}
+            saving={isUpdatingStatus}
+            onClose={() => {
+              setDeactivation(null);
+              setError(null);
+            }}
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (!isUpdatingStatus && await handleUpdateStatus(deactivation.id, "INACTIVE"))
+                setDeactivation(null);
+            }}
+            actions={
+              <button type="submit" className={primary} disabled={isUpdatingStatus}>
+                {isUpdatingStatus ? "Deactivating…" : "Deactivate restaurant"}
+              </button>
+            }
+          >
+            <p className="text-sm text-zinc-200">{deactivation.name}</p>
+            <p className="text-xs leading-relaxed text-zinc-400">
+              Assigned users will be signed out. The restaurant and its history stay in the directory.
+            </p>
+            {error && <ErrorNote>{error}</ErrorNote>}
+          </WorkforceFormDialog>
         )}
 
         {/* EDIT / CREATE DRAWER */}

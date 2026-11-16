@@ -10,17 +10,17 @@ import { RestaurantStatus } from '@prisma/client';
 import { IsSupportedTimeZone } from '../../organization-settings.validation.js';
 
 export class UpdateRestaurantDto {
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(2, 100)
   name?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(2, 255)
   address?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(2, 100)
   city?: string;
@@ -30,7 +30,7 @@ export class UpdateRestaurantDto {
   @Length(2, 100)
   state?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsString()
   @Length(2, 100)
   country?: string;
@@ -39,7 +39,7 @@ export class UpdateRestaurantDto {
   @IsSupportedTimeZone()
   timezone?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(RestaurantStatus)
   status?: RestaurantStatus;
 }

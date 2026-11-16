@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, it } from '@jest/globals';
 import { Test, TestingModule } from '@nestjs/testing';
-import { WasteLogController } from './waste-log.controller';
-import { WasteLogService } from './waste-log.service';
+import { WasteLogController } from './waste-log.controller.js';
+import { WasteLogService } from './waste-log.service.js';
 
 describe('WasteLogController', () => {
   let controller: WasteLogController;
@@ -8,7 +9,7 @@ describe('WasteLogController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [WasteLogController],
-      providers: [WasteLogService],
+      providers: [{ provide: WasteLogService, useValue: {} }],
     }).compile();
 
     controller = module.get<WasteLogController>(WasteLogController);

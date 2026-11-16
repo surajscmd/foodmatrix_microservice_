@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Body,
   Controller,
@@ -13,6 +12,11 @@ import {
 import { MenuItemService } from './menu-item.service';
 import { CreateMenuItemDto } from './dto/create-menu-item.dto';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto';
+import {
+  CatalogUser,
+  type CatalogActor,
+  catalogRestaurantIds,
+} from '../../auth/catalog-access.js';
 // POST   /menu-items
 // GET    /menu-items
 // GET    /menu-items/:id
@@ -32,10 +36,15 @@ export class MenuItemController {
   }
 
   @Get()
-  async findAll(@Query('page') page = '1', @Query('limit') limit = '10') {
+  async findAll(
+    @CatalogUser() actor: CatalogActor,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+  ) {
     const result = await this.menuItemService.findAll(
       Number(page),
       Number(limit),
+      catalogRestaurantIds(actor),
     );
 
     return {
@@ -44,8 +53,14 @@ export class MenuItemController {
     };
   }
   @Get(':menuItemId/restaurants')
-  async findRestaurantPrices(@Param('menuItemId') menuItemId: string) {
-    const result = await this.menuItemService.findRestaurantPrices(menuItemId);
+  async findRestaurantPrices(
+    @CatalogUser() actor: CatalogActor,
+    @Param('menuItemId') menuItemId: string,
+  ) {
+    const result = await this.menuItemService.findRestaurantPrices(
+      menuItemId,
+      catalogRestaurantIds(actor),
+    );
 
     return {
       message: 'Menu item restaurant pricing retrieved successfully',
@@ -63,8 +78,14 @@ export class MenuItemController {
     };
   }
   @Get('category/:categoryId')
-  async findByCategory(@Param('categoryId') categoryId: string) {
-    const result = await this.menuItemService.findByCategory(categoryId);
+  async findByCategory(
+    @CatalogUser() actor: CatalogActor,
+    @Param('categoryId') categoryId: string,
+  ) {
+    const result = await this.menuItemService.findByCategory(
+      categoryId,
+      catalogRestaurantIds(actor),
+    );
 
     return {
       message: 'Menu items by category retrieved successfully',

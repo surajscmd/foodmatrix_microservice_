@@ -18,6 +18,7 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
 }
+
 enum OrderItemStatus {
   PENDING
   PREPARING
@@ -121,8 +122,9 @@ model Order {
   // ------------------------------------------
   // RELATIONS
   // ------------------------------------------
-  items    OrderItem[]
-  payments Payment[]
+  items          OrderItem[]
+  payments       Payment[]
+  createRequests OrderCreateRequest[]
 
   // ------------------------------------------
   // TIMESTAMPS
@@ -153,16 +155,16 @@ model Order {
 model OrderItem {
   id String @id @default(uuid()) @db.Uuid
 
-  orderId String @map("order_id") @db.Uuid
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  status OrderItemStatus @default(PENDING)
-  unavailableReason      String?   @map("unavailable_reason") @db.VarChar(500)
-  unavailableRequestedAt DateTime? @map("unavailable_requested_at") @db.Timestamptz(3)
-  unavailableResolvedAt  DateTime? @map("unavailable_resolved_at") @db.Timestamptz(3)
+  orderId                String          @map("order_id") @db.Uuid
+  order                  Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status                 OrderItemStatus @default(PENDING)
+  unavailableReason      String?         @map("unavailable_reason") @db.VarChar(500)
+  unavailableRequestedAt DateTime?       @map("unavailable_requested_at") @db.Timestamptz(3)
+  unavailableResolvedAt  DateTime?       @map("unavailable_resolved_at") @db.Timestamptz(3)
   // ------------------------------------------
   // CATALOG REFERENCE
   // ------------------------------------------
-  menuItemId String @map("menu_item_id") @db.Uuid
+  menuItemId             String          @map("menu_item_id") @db.Uuid
 
   // ------------------------------------------
   // SNAPSHOT
@@ -257,4 +259,23 @@ model Payment {
   @@index([orderId])
   @@index([status])
   @@map("payments")
+}
+
+model OrderCreateRequest {
+  key         String @id @db.VarChar(255)
+  fingerprint String @db.Char(64)
+  orderId     String @map("order_id") @db.Uuid
+  order       Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_create_requests")
+}
+
+model OrderInventoryEvent {
+  orderItemId String   @id @map("order_item_id") @db.Uuid
+  payload     Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([createdAt])
+  @@map("order_inventory_events")
 }

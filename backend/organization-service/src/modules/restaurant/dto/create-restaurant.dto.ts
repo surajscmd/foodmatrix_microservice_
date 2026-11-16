@@ -36,7 +36,7 @@ export class CreateRestaurantDto {
   @IsSupportedTimeZone()
   timezone?: string;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsEnum(RestaurantStatus)
   status?: RestaurantStatus;
 

@@ -1,6 +1,7 @@
 import 'dotenv/config';
 
 import { betterAuth } from 'better-auth/minimal';
+import { createAuthMiddleware } from 'better-auth/api';
 import { prismaAdapter } from 'better-auth/adapters/prisma';
 import { jwt } from 'better-auth/plugins';
 
@@ -8,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Logger } from '@nestjs/common';
 import { deliverPasswordReset } from './password-reset-delivery.js';
+import { accountAccessInclude, hasWorkspaceAccess } from './account-access.js';
 
 const connectionString = process.env.DATABASE_URL;
 
@@ -22,6 +24,10 @@ const adapter = new PrismaPg({
 const prisma = new PrismaClient({
   adapter,
 });
+
+export function closeAuthDatabase() {
+  return prisma.$disconnect();
+}
 const logger = new Logger('OrganizationAuth');
 const resetDelivery = process.env.PASSWORD_RESET_WEBHOOK_URL;
 const resetToken = process.env.PASSWORD_RESET_WEBHOOK_TOKEN;
@@ -76,12 +82,27 @@ export const auth = betterAuth({
         before: async (session) => {
           const systemUser = await prisma.systemUser.findUnique({
             where: { authUserId: session.userId },
-            select: { isActive: true },
+            include: accountAccessInclude,
           });
-          if (!systemUser?.isActive) return false;
+          if (!hasWorkspaceAccess(systemUser)) return false;
         },
       },
     },
+  },
+
+  hooks: {
+    after: createAuthMiddleware(async (ctx) => {
+      const signIn = ctx.context.newSession;
+      if (ctx.path !== '/sign-in/email' || !signIn) return;
+      try {
+        await prisma.systemUser.updateMany({
+          where: { authUserId: signIn.user.id, isActive: true },
+          data: { lastLoginAt: new Date() },
+        });
+      } catch {
+        logger.warn('Unable to record the last sign-in');
+      }
+    }),
   },
 
   plugins: [
@@ -96,29 +117,22 @@ export const auth = betterAuth({
       jwt: {
         expirationTime: '15m',
 
-        definePayload: async ({ user }) => {
+        definePayload: async ({ user, session }) => {
           const systemUser = await prisma.systemUser.findUnique({
             where: {
               authUserId: user.id,
             },
-            include: {
-              restaurant: {
-                select: {
-                  timezone: true,
-                  name: true,
-                  franchise: { select: { defaultCurrency: true } },
-                },
-              },
-            },
+            include: accountAccessInclude,
           });
 
-          if (!systemUser?.isActive) {
+          if (!systemUser || !hasWorkspaceAccess(systemUser)) {
             throw new Error('Active FoodMatrix system user required');
           }
 
           return {
             id: user.id,
             sub: user.id,
+            sessionId: session.id,
             name: user.name,
             email: user.email,
 

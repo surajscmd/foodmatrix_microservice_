@@ -1,6 +1,6 @@
 "use client";
 
-import { SidebarNavSection } from "../../utils/types";
+import type { SidebarNavSection } from "@/utils/types/platform-settings";
 import SidebarItem from "./SidebarItem";
 interface SidebarSectionProps {
   section: SidebarNavSection;

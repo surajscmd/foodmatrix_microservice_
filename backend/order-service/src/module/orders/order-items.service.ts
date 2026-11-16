@@ -1,4 +1,5 @@
 import {
+  BadGatewayException,
   BadRequestException,
   ConflictException,
   Injectable,
@@ -22,8 +23,10 @@ import { UpdateOrderItemStatusDto } from './dto/update-order-item-status.dto';
 
 import { CatalogGatewayService } from '../../utils/catalog-gateway.service';
 
-import { areModifiersEqual } from '../../utils/order-item.util';
-import { KafkaService } from '../../kafka/kafka.service';
+import {
+  areModifiersEqual,
+  MAX_ORDER_QUANTITY,
+} from '../../utils/order-item.util';
 
 // ============================================================
 // EDITABLE ORDER STATUSES
@@ -60,7 +63,6 @@ export class OrderItemsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: CatalogGatewayService,
-    private readonly kafkaService: KafkaService,
   ) {}
 
   // ============================================================
@@ -592,7 +594,13 @@ export class OrderItemsService {
                 restaurantId: order.restaurantId,
               }
             : null;
-        return { item: updatedItem, kafkaEvent };
+        if (kafkaEvent) {
+          await tx.orderInventoryEvent.create({
+            data: { orderItemId: updatedItem.id, payload: kafkaEvent },
+          });
+        }
+
+        return updatedItem;
       },
 
       {
@@ -602,14 +610,6 @@ export class OrderItemsService {
         timeout: 10000,
       },
     );
-
-    // --------------------------------------------------------
-    // PUBLISH AFTER DATABASE TRANSACTION COMMITS
-    // --------------------------------------------------------
-
-    if (result.kafkaEvent) {
-      await this.kafkaService.publish('order-complete', result.kafkaEvent);
-    }
 
     // --------------------------------------------------------
     // FETCH COMPLETE ORDER
@@ -631,7 +631,7 @@ export class OrderItemsService {
       message: 'Order item status updated successfully.',
 
       data: {
-        item: result.item,
+        item: result,
         order,
       },
     };
@@ -685,6 +685,17 @@ export class OrderItemsService {
           if (!modifier) {
             throw new NotFoundException(
               `Modifier ${requestedModifier.modifierId} was not found.`,
+            );
+          }
+
+          if (!Array.isArray(menuItem.modifierGroupIds) || !modifier.groupId) {
+            throw new BadGatewayException(
+              'Catalog did not provide modifier assignments.',
+            );
+          }
+          if (!menuItem.modifierGroupIds.includes(modifier.groupId)) {
+            throw new BadRequestException(
+              'Selected modifier is not available for ' + menuItem.name + '.',
             );
           }
 
@@ -762,6 +773,7 @@ export class OrderItemsService {
           item.status === OrderItemStatus.PENDING &&
           (!item.unavailableRequestedAt || !!item.unavailableResolvedAt) &&
           item.menuItemId === line.menuItemId &&
+          item.price.equals(line.price) &&
           areModifiersEqual(item.modifiers, line.modifiers),
       );
 
@@ -771,6 +783,11 @@ export class OrderItemsService {
 
       if (existingItem) {
         const newQuantity = existingItem.quantity + line.quantity;
+        if (newQuantity > MAX_ORDER_QUANTITY) {
+          throw new BadRequestException(
+            'Item quantity exceeds the supported limit.',
+          );
+        }
 
         const newTotal = this.calculateOrderItemTotal(
           existingItem.price,

@@ -1,10 +1,18 @@
+import type { CatalogActor } from '../../auth/catalog-access';
 import { RestaurantMenuItemController } from './restaurant-menu-item.controller';
 import { RestaurantMenuItemService } from './restaurant-menu-item.service';
 
 import { CreateRestaurantMenuItemDto } from './dto/create-restaurant-menu-item.dto';
+import { ListRestaurantMenuItemsDto } from './dto/list-restaurant-menu-items.dto';
 import { UpdateRestaurantMenuItemDto } from './dto/update-restaurant-menu-item.dto';
 
 describe('RestaurantMenuItemController', () => {
+  const actor: CatalogActor = {
+    id: 'admin',
+    role: 'SUPER_ADMIN',
+    managedRestaurantId: null,
+    restaurants: [{ id: 'restaurant-1' }],
+  };
   let controller: RestaurantMenuItemController;
 
   const restaurantMenuItemServiceMock = {
@@ -49,7 +57,7 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.create.mockResolvedValue(serviceResult);
 
-      const result = await controller.create(dto);
+      const result = await controller.create(actor, dto);
 
       expect(restaurantMenuItemServiceMock.create).toHaveBeenCalledWith(dto);
 
@@ -87,12 +95,16 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.findAll.mockResolvedValue(serviceResult);
 
-      const result = await controller.findAll('restaurant-1', '1', '10');
+      const result = await controller.findAll(actor, 'restaurant-1', {
+        page: '1',
+        limit: '10',
+      });
 
       expect(restaurantMenuItemServiceMock.findAll).toHaveBeenCalledWith(
         'restaurant-1',
         1,
         10,
+        {},
       );
 
       expect(result).toEqual({
@@ -115,12 +127,17 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.findAll.mockResolvedValue(serviceResult);
 
-      const result = await controller.findAll('restaurant-1');
+      const result = await controller.findAll(
+        actor,
+        'restaurant-1',
+        new ListRestaurantMenuItemsDto(),
+      );
 
       expect(restaurantMenuItemServiceMock.findAll).toHaveBeenCalledWith(
         'restaurant-1',
         1,
         10,
+        {},
       );
 
       expect(result).toEqual({
@@ -130,7 +147,7 @@ describe('RestaurantMenuItemController', () => {
       });
     });
 
-    it('should convert page and limit from string to number', async () => {
+    it('passes filters and converts page and limit to numbers', async () => {
       restaurantMenuItemServiceMock.findAll.mockResolvedValue({
         data: [],
         pagination: {
@@ -141,12 +158,19 @@ describe('RestaurantMenuItemController', () => {
         },
       });
 
-      await controller.findAll('restaurant-1', '2', '5');
+      await controller.findAll(actor, 'restaurant-1', {
+        page: '2',
+        limit: '5',
+        categoryId: 'category-1',
+        search: 'idli',
+        availability: 'available',
+      });
 
       expect(restaurantMenuItemServiceMock.findAll).toHaveBeenCalledWith(
         'restaurant-1',
         2,
         5,
+        { categoryId: 'category-1', search: 'idli', availability: 'available' },
       );
     });
   });
@@ -187,6 +211,7 @@ describe('RestaurantMenuItemController', () => {
       );
 
       const result = await controller.findChangedItems(
+        actor,
         'restaurant-1',
         '1',
         '10',
@@ -218,7 +243,7 @@ describe('RestaurantMenuItemController', () => {
         serviceResult,
       );
 
-      const result = await controller.findChangedItems('restaurant-1');
+      const result = await controller.findChangedItems(actor, 'restaurant-1');
 
       expect(
         restaurantMenuItemServiceMock.findChangedItems,
@@ -264,11 +289,11 @@ describe('RestaurantMenuItemController', () => {
         serviceResult,
       );
 
-      const result = await controller.findAllChangedItems('1', '10');
+      const result = await controller.findAllChangedItems(actor, '1', '10');
 
       expect(
         restaurantMenuItemServiceMock.findAllChangedItems,
-      ).toHaveBeenCalledWith(1, 10);
+      ).toHaveBeenCalledWith(1, 10, undefined);
 
       expect(result).toEqual({
         message: 'Changed restaurant menu items retrieved successfully',
@@ -292,11 +317,11 @@ describe('RestaurantMenuItemController', () => {
         serviceResult,
       );
 
-      const result = await controller.findAllChangedItems();
+      const result = await controller.findAllChangedItems(actor);
 
       expect(
         restaurantMenuItemServiceMock.findAllChangedItems,
-      ).toHaveBeenCalledWith(1, 10);
+      ).toHaveBeenCalledWith(1, 10, undefined);
 
       expect(result).toEqual({
         message: 'Changed restaurant menu items retrieved successfully',
@@ -329,10 +354,11 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.findOne.mockResolvedValue(serviceResult);
 
-      const result = await controller.findOne('restaurant-menu-item-1');
+      const result = await controller.findOne(actor, 'restaurant-menu-item-1');
 
       expect(restaurantMenuItemServiceMock.findOne).toHaveBeenCalledWith(
         'restaurant-menu-item-1',
+        undefined,
       );
 
       expect(result).toEqual({
@@ -363,11 +389,16 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.update.mockResolvedValue(serviceResult);
 
-      const result = await controller.update('restaurant-menu-item-1', dto);
+      const result = await controller.update(
+        actor,
+        'restaurant-menu-item-1',
+        dto,
+      );
 
       expect(restaurantMenuItemServiceMock.update).toHaveBeenCalledWith(
         'restaurant-menu-item-1',
         dto,
+        undefined,
       );
 
       expect(result).toEqual({
@@ -391,11 +422,16 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.update.mockResolvedValue(serviceResult);
 
-      const result = await controller.update('restaurant-menu-item-1', dto);
+      const result = await controller.update(
+        actor,
+        'restaurant-menu-item-1',
+        dto,
+      );
 
       expect(restaurantMenuItemServiceMock.update).toHaveBeenCalledWith(
         'restaurant-menu-item-1',
         dto,
+        undefined,
       );
 
       expect(result).toEqual({
@@ -418,10 +454,11 @@ describe('RestaurantMenuItemController', () => {
 
       restaurantMenuItemServiceMock.remove.mockResolvedValue(serviceResult);
 
-      const result = await controller.remove('restaurant-menu-item-1');
+      const result = await controller.remove(actor, 'restaurant-menu-item-1');
 
       expect(restaurantMenuItemServiceMock.remove).toHaveBeenCalledWith(
         'restaurant-menu-item-1',
+        undefined,
       );
 
       expect(result).toEqual({

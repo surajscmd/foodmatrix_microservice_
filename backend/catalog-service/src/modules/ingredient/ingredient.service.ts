@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   ConflictException,
   Injectable,
@@ -10,6 +5,7 @@ import {
 } from '@nestjs/common';
 
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { catalogPageOffset } from '../../common/catalog-pagination.js';
 
 import { CreateIngredientDto } from './dto/create-ingredient.dto.js';
 import { UpdateIngredientDto } from './dto/update-ingredient.dto.js';
@@ -40,8 +36,8 @@ export class IngredientService {
   }
 
   // GET ALL
-  async findAll(page: number, limit: number, search?: string) {
-    const skip = (page - 1) * limit;
+  async findAll(page = 1, limit = 10, search?: string) {
+    const skip = catalogPageOffset(page, limit);
 
     const where = {
       ...(search

@@ -1,10 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/require-await */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-
 import {
   BadRequestException,
   Injectable,
@@ -24,14 +17,16 @@ export class ModifierGroupService {
   // ============================================================
 
   async create(createDto: CreateModifierGroupDto) {
-    this.validateSelections(createDto.minSelections, createDto.maxSelections);
+    const minSelections = createDto.minSelections ?? 0;
+    const maxSelections = createDto.maxSelections ?? 1;
+    this.validateSelections(minSelections, maxSelections);
 
     return this.prisma.modifierGroup.create({
       data: {
         name: createDto.name,
         sortOrder: createDto.sortOrder ?? 0,
-        minSelections: createDto.minSelections ?? 0,
-        maxSelections: createDto.maxSelections ?? 1,
+        minSelections,
+        maxSelections,
         isActive: createDto.isActive ?? true,
       },
 

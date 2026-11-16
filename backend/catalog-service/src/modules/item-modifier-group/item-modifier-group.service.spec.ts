@@ -18,6 +18,7 @@ describe('ItemModifierGroupService', () => {
       findUnique: jest.fn(),
     },
     itemModifierGroup: {
+      findFirst: jest.fn(),
       findUnique: jest.fn(),
       findMany: jest.fn(),
       create: jest.fn(),
@@ -36,6 +37,18 @@ describe('ItemModifierGroupService', () => {
   // ============================================================
   // CREATE
   // ============================================================
+
+  const activeAssignmentInclude = {
+    menuItem: true,
+    group: {
+      include: {
+        modifiers: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+      },
+    },
+  };
 
   describe('create', () => {
     const createDto = {
@@ -107,14 +120,7 @@ describe('ItemModifierGroupService', () => {
           menuItemId: 'menu-item-1',
           groupId: 'group-1',
         },
-        include: {
-          menuItem: true,
-          group: {
-            include: {
-              modifiers: true,
-            },
-          },
-        },
+        include: activeAssignmentInclude,
       });
 
       expect(result).toEqual(createdRelation);
@@ -215,22 +221,8 @@ describe('ItemModifierGroupService', () => {
       const result = await service.findAll();
 
       expect(prismaMock.itemModifierGroup.findMany).toHaveBeenCalledWith({
-        where: undefined,
-        include: {
-          menuItem: true,
-          group: {
-            include: {
-              modifiers: {
-                where: {
-                  isActive: true,
-                },
-                orderBy: {
-                  sortOrder: 'asc',
-                },
-              },
-            },
-          },
-        },
+        where: { group: { isActive: true } },
+        include: activeAssignmentInclude,
         orderBy: {
           group: {
             sortOrder: 'asc',
@@ -249,22 +241,9 @@ describe('ItemModifierGroupService', () => {
       expect(prismaMock.itemModifierGroup.findMany).toHaveBeenCalledWith({
         where: {
           menuItemId: 'menu-item-1',
+          group: { isActive: true },
         },
-        include: {
-          menuItem: true,
-          group: {
-            include: {
-              modifiers: {
-                where: {
-                  isActive: true,
-                },
-                orderBy: {
-                  sortOrder: 'asc',
-                },
-              },
-            },
-          },
-        },
+        include: activeAssignmentInclude,
         orderBy: {
           group: {
             sortOrder: 'asc',
@@ -312,39 +291,24 @@ describe('ItemModifierGroupService', () => {
     };
 
     it('should return the modifier group assignment', async () => {
-      prismaMock.itemModifierGroup.findUnique.mockResolvedValue(relation);
+      prismaMock.itemModifierGroup.findFirst.mockResolvedValue(relation);
 
       const result = await service.findOne('menu-item-1', 'group-1');
 
-      expect(prismaMock.itemModifierGroup.findUnique).toHaveBeenCalledWith({
+      expect(prismaMock.itemModifierGroup.findFirst).toHaveBeenCalledWith({
         where: {
-          menuItemId_groupId: {
-            menuItemId: 'menu-item-1',
-            groupId: 'group-1',
-          },
+          menuItemId: 'menu-item-1',
+          groupId: 'group-1',
+          group: { isActive: true },
         },
-        include: {
-          menuItem: true,
-          group: {
-            include: {
-              modifiers: {
-                where: {
-                  isActive: true,
-                },
-                orderBy: {
-                  sortOrder: 'asc',
-                },
-              },
-            },
-          },
-        },
+        include: activeAssignmentInclude,
       });
 
       expect(result).toEqual(relation);
     });
 
     it('should throw NotFoundException when assignment does not exist', async () => {
-      prismaMock.itemModifierGroup.findUnique.mockResolvedValue(null);
+      prismaMock.itemModifierGroup.findFirst.mockResolvedValue(null);
 
       await expect(service.findOne('menu-item-1', 'group-1')).rejects.toThrow(
         new NotFoundException('Modifier group assignment not found'),
@@ -373,34 +337,19 @@ describe('ItemModifierGroupService', () => {
         },
       };
 
-      prismaMock.itemModifierGroup.findUnique.mockResolvedValue(relation);
+      prismaMock.itemModifierGroup.findFirst.mockResolvedValue(relation);
 
       prismaMock.itemModifierGroup.delete.mockResolvedValue(relation);
 
       const result = await service.remove('menu-item-1', 'group-1');
 
-      expect(prismaMock.itemModifierGroup.findUnique).toHaveBeenCalledWith({
+      expect(prismaMock.itemModifierGroup.findFirst).toHaveBeenCalledWith({
         where: {
-          menuItemId_groupId: {
-            menuItemId: 'menu-item-1',
-            groupId: 'group-1',
-          },
+          menuItemId: 'menu-item-1',
+          groupId: 'group-1',
+          group: { isActive: true },
         },
-        include: {
-          menuItem: true,
-          group: {
-            include: {
-              modifiers: {
-                where: {
-                  isActive: true,
-                },
-                orderBy: {
-                  sortOrder: 'asc',
-                },
-              },
-            },
-          },
-        },
+        include: activeAssignmentInclude,
       });
 
       expect(prismaMock.itemModifierGroup.delete).toHaveBeenCalledWith({
@@ -418,7 +367,7 @@ describe('ItemModifierGroupService', () => {
     });
 
     it('should throw NotFoundException when removing non-existing assignment', async () => {
-      prismaMock.itemModifierGroup.findUnique.mockResolvedValue(null);
+      prismaMock.itemModifierGroup.findFirst.mockResolvedValue(null);
 
       await expect(service.remove('menu-item-1', 'group-1')).rejects.toThrow(
         new NotFoundException('Modifier group assignment not found'),

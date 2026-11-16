@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getOrderAuthorization } from "@/lib/order-authorization";
 import type { OrderDashboard } from "@/lib/order-api";
 import type { CurrentUserResponse, RestaurantResponse, RestaurantsResponse } from "@/utils/types/organization";
 
@@ -32,8 +33,8 @@ export async function GET(request: NextRequest) {
     }
     const { data: restaurants } = (await locations.json()) as RestaurantsResponse;
     const allowed = restaurants.filter((item) => !franchiseId || item.franchiseId === franchiseId);
-    const key = process.env.RESTAURANT_DASHBOARD_KEY;
-    if (!key) return NextResponse.json({ message: "Order dashboard configuration is missing." }, { status: 503 });
+    const { authorization, status } = await getOrderAuthorization(gateway, sessionHeaders, signal);
+    if (!authorization) return NextResponse.json({ message: "Unable to verify your session." }, { status });
 
     const metrics: { restaurant: RestaurantResponse["data"]; dashboard: OrderDashboard | null }[] = [];
     for (let index = 0; index < allowed.length; index += 8) {
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
           const url = new URL(`${gateway}/api/order/orders/dashboard`);
           url.searchParams.set("restaurantId", restaurant.id);
           const response = await fetch(url, {
-            headers: { Accept: "application/json", "x-dashboard-key": key },
+            headers: { Accept: "application/json", Authorization: authorization },
             signal,
             cache: "no-store",
           });

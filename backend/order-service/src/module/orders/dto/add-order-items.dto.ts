@@ -4,9 +4,11 @@ import {
   IsInt,
   IsOptional,
   IsUUID,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { MAX_ORDER_QUANTITY } from '../../../utils/order-item.util';
 import { Type } from 'class-transformer';
 
 export class AddOrderItemModifierDto {
@@ -15,6 +17,7 @@ export class AddOrderItemModifierDto {
 
   @IsInt()
   @Min(1)
+  @Max(MAX_ORDER_QUANTITY)
   quantity: number = 1;
 }
 
@@ -24,6 +27,7 @@ export class AddOrderItemDto {
 
   @IsInt()
   @Min(1)
+  @Max(MAX_ORDER_QUANTITY)
   quantity: number = 1;
 
   @IsOptional()

@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import SettingsSection from "@/elements/settings/SettingsSection";
+import AccountSecuritySection from "@/elements/settings/AccountSecuritySection";
 
 import {
   DEFAULT_PLATFORM_PREFERENCES,
@@ -124,6 +125,7 @@ export default function PlatformSettingsScreen({ embedded = false }: { embedded?
             onSaved={setMessage}
           />
         )}
+        {!embedded && <AccountSecuritySection />}
       </div>
     </div>
   );

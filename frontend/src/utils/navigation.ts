@@ -2,6 +2,7 @@ import {
   Bell,
   Boxes,
   CalendarDays,
+  BookOpen,
   LayoutGrid,
   MonitorPlay,
   Settings,
@@ -15,7 +16,7 @@ import {
   Users,
 } from "lucide-react";
 
-import type { SidebarNavSection } from "./types";
+import type { SidebarNavSection } from "./types/platform-settings";
 
 // resturant navigation object
 export const navigation: SidebarNavSection[] = [
@@ -62,6 +63,15 @@ export const navigation: SidebarNavSection[] = [
         header: {
           title: "Kitchen Display System",
           subtitle: "Kitchen Operations",
+        },
+      },
+      {
+        title: "Menu Management",
+        href: "/restaurant/menu",
+        icon: BookOpen,
+        header: {
+          title: "Menu Management",
+          subtitle: "Restaurant pricing and availability",
         },
       },
     ],
@@ -154,15 +164,6 @@ export const regionalNavigation: SidebarNavSection[] = [
           subtitle: "Corporate Command",
         },
       },
-      // {
-      //   title: "Matrix Analytics",
-      //   href: "/operations/analytics",
-      //   icon: Building2,
-      //   header: {
-      //     title: "Matrix Analytics",
-      //     subtitle: "Enterprise Performance Intelligence",
-      //   },
-      // },
     ],
   },
 

@@ -1,16 +1,34 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 
 import { CreateMenuItemDto } from './dto/create-menu-item.dto.js';
 import { UpdateMenuItemDto } from './dto/update-menu-item.dto.js';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { catalogPageOffset } from '../../common/catalog-pagination.js';
+
+function menuListInclude(restaurantIds?: string[]) {
+  const restaurantWhere = restaurantIds && {
+    restaurantId: { in: restaurantIds },
+  };
+  return {
+    category: true,
+    _count: {
+      select: {
+        restaurantMenus: restaurantWhere ? { where: restaurantWhere } : true,
+        recipe: true,
+        modifierGroups: true,
+      },
+    },
+    restaurantMenus: {
+      where: { isAvailable: false, ...restaurantWhere },
+      select: { restaurantId: true },
+    },
+  } satisfies Prisma.MenuItemInclude;
+}
 
 @Injectable()
 export class MenuItemService {
@@ -60,35 +78,15 @@ export class MenuItemService {
   }
 
   // GET ALL
-  async findAll(page = 1, limit = 10) {
-    const skip = (page - 1) * limit;
+  async findAll(page = 1, limit = 10, restaurantIds?: string[]) {
+    const skip = catalogPageOffset(page, limit);
 
     const [menuItems, total] = await Promise.all([
       this.prisma.menuItem.findMany({
         skip,
         take: limit,
 
-        include: {
-          category: true,
-
-          _count: {
-            select: {
-              restaurantMenus: true,
-              recipe: true,
-              modifierGroups: true,
-            },
-          },
-
-          // NEW: Get restaurants where the item is explicitly unavailable.
-          restaurantMenus: {
-            where: {
-              isAvailable: false,
-            },
-            select: {
-              restaurantId: true,
-            },
-          },
-        },
+        include: menuListInclude(restaurantIds),
 
         orderBy: {
           createdAt: 'desc',
@@ -146,7 +144,7 @@ export class MenuItemService {
   // to Organization Service.
   // ============================================================
 
-  async findRestaurantPrices(menuItemId: string) {
+  async findRestaurantPrices(menuItemId: string, restaurantIds?: string[]) {
     const menuItem = await this.prisma.menuItem.findUnique({
       where: {
         id: menuItemId,
@@ -154,6 +152,9 @@ export class MenuItemService {
       include: {
         category: true,
         restaurantMenus: {
+          ...(restaurantIds && {
+            where: { restaurantId: { in: restaurantIds } },
+          }),
           orderBy: {
             updatedAt: 'desc',
           },
@@ -220,33 +221,18 @@ export class MenuItemService {
   }
   // GET MENU ITEMS BY CATEGORY
 
-  async findByCategory(categoryId: string) {
+  async findByCategory(categoryId: string, restaurantIds?: string[]) {
+    const category = await this.prisma.menuCategory.findUnique({
+      where: { id: categoryId },
+    });
+    if (!category) throw new NotFoundException('Menu category not found');
+
     const menuItems = await this.prisma.menuItem.findMany({
       where: {
         categoryId,
       },
 
-      include: {
-        category: true,
-
-        _count: {
-          select: {
-            restaurantMenus: true,
-            recipe: true,
-            modifierGroups: true,
-          },
-        },
-
-        // Get restaurants where the item is explicitly unavailable.
-        restaurantMenus: {
-          where: {
-            isAvailable: false,
-          },
-          select: {
-            restaurantId: true,
-          },
-        },
-      },
+      include: menuListInclude(restaurantIds),
 
       orderBy: {
         createdAt: 'desc',
@@ -280,6 +266,7 @@ export class MenuItemService {
     }));
 
     return {
+      category,
       data,
     };
   }

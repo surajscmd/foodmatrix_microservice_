@@ -14,7 +14,7 @@ import {
   type CartItem,
   type MenuItem,
 } from "@/elements/waiterpad/types";
-import { getRestaurantMenuItems } from "@/lib/catalog-api";
+import useRestaurantMenu from "@/hooks/useRestaurantMenu";
 import { OrderApiError, orderApi, type Order } from "@/lib/order-api";
 import { useOrganizationStore } from "@/store/organization-store";
 import type { Restaurant } from "@/utils/types/organization";
@@ -51,9 +51,11 @@ export default function WaiterScreen() {
 }
 
 function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
-  const [menu, setMenu] = useState<MenuItem[] | null>(null);
-  const [menuError, setMenuError] = useState("");
-  const [menuRevision, setMenuRevision] = useState(0);
+  const {
+    items: menu,
+    error: menuError,
+    refresh: refreshMenu,
+  } = useRestaurantMenu(restaurant.id);
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [ordersError, setOrdersError] = useState("");
   const [ordersRevision, setOrdersRevision] = useState(0);
@@ -98,31 +100,6 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
       ? { style: "currency", currency }
       : { maximumFractionDigits: 2 },
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadMenu() {
-      const items = new Map<string, MenuItem>();
-      for (let page = 1; !cancelled; page++) {
-        const result: { data: MenuItem[]; pagination: { totalPages: number } } =
-          await getRestaurantMenuItems(restaurant.id, page, 50);
-        for (const item of result.data) {
-          if (item.isAvailable) items.set(item.id, item);
-        }
-        if (page >= result.pagination.totalPages) break;
-      }
-      if (!cancelled) setMenu([...items.values()]);
-    }
-
-    void loadMenu().catch((error: unknown) => {
-      if (!cancelled)
-        setMenuError(errorMessage(error, "Unable to load the menu."));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [restaurant.id, menuRevision]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -590,15 +567,12 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                 >
                   <MenuGrid
                     restaurantName={restaurant.name}
-                    items={menu}
+                    items={menu?.filter((item) => item.isAvailable) ?? null}
                     error={menuError}
                     disabled={menuDisabled}
                     formatMoney={money.format}
                     onAdd={addItem}
-                    onRetry={() => {
-                      setMenuError("");
-                      setMenuRevision((value) => value + 1);
-                    }}
+                    onRetry={refreshMenu}
                   />
                 </div>
               )}

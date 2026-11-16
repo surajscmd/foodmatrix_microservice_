@@ -107,6 +107,8 @@ export class CatalogGatewayService {
         `${this.baseUrl}/internal/catalog/bulk-pricing`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(5000),
+          redirect: 'error',
 
           headers: {
             'Content-Type': 'application/json',
@@ -167,6 +169,8 @@ export class CatalogGatewayService {
         `${this.baseUrl}/internal/catalog/bulk-recipes`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(5000),
+          redirect: 'error',
 
           headers: {
             'Content-Type': 'application/json',
@@ -222,6 +226,8 @@ export class CatalogGatewayService {
         `${this.baseUrl}/internal/catalog/bulk-ingredients`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(5000),
+          redirect: 'error',
 
           headers: {
             'Content-Type': 'application/json',

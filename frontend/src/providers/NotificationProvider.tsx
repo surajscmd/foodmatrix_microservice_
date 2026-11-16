@@ -269,29 +269,29 @@ function NotificationSession({
     socketRef.current = socket;
 
     const onConnect = () => {
-      if (scope === "RESTAURANT") {
-        socket.timeout(7000).emit(
-          "join-restaurant",
-          { restaurantId: locationId },
-          (error: Error | null, response?: { joined: boolean }) => {
-            if (socketRef.current !== socket || !socket.connected) return;
-            if (error || !response?.joined) {
-              socket.disconnect();
-              return;
-            }
-            setConnected(true);
-            scheduleSync();
-          },
-        );
-        return;
-      }
-
-      socket.emit("join-warehouse", { warehouseId: locationId });
-      setConnected(true);
-      scheduleSync();
+      const event = scope === "RESTAURANT" ? "join-restaurant" : "join-warehouse";
+      const location = scope === "RESTAURANT" ? { restaurantId: locationId } : { warehouseId: locationId };
+      socket.timeout(7000).emit(
+        event,
+        location,
+        (error: Error | null, response?: { joined: boolean }) => {
+          if (socketRef.current !== socket || !socket.connected) return;
+          if (error || !response?.joined) {
+            socket.disconnect();
+            return;
+          }
+          setConnected(true);
+          scheduleSync();
+        },
+      );
     };
 
-    const onDisconnect = () => setConnected(false);
+    const onDisconnect = (reason: string) => {
+      setConnected(false);
+      if (reason === "io server disconnect") socket.connect();
+    };
+
+    const onConnectError = () => setConnected(false);
 
     const onNotification = (payload: unknown) => {
       if (typeof payload !== "object" || payload === null) return;
@@ -314,7 +314,7 @@ function NotificationSession({
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    socket.on("connect_error", onDisconnect);
+    socket.on("connect_error", onConnectError);
     socket.on("notification:new", onNotification);
 
     socket.connect();
@@ -322,7 +322,7 @@ function NotificationSession({
     return () => {
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
-      socket.off("connect_error", onDisconnect);
+      socket.off("connect_error", onConnectError);
       socket.off("notification:new", onNotification);
 
       socket.disconnect();

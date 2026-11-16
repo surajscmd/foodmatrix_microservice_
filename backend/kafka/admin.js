@@ -19,6 +19,11 @@ const run = async () => {
           replicationFactor: 3,
         },
         {
+          topic: "order-complete-invalid",
+          numPartitions: 3,
+          replicationFactor: 3,
+        },
+        {
           topic: "order-complete-stock-shortage",
           numPartitions: 3,
           replicationFactor: 3,

@@ -307,7 +307,9 @@ export class OrderInventoryService {
       for (const ingredient of recipe.ingredients) {
         const recipeQuantity = new Prisma.Decimal(ingredient.quantityNeeded);
 
-        const consumedQuantity = recipeQuantity.mul(modifierQuantity);
+        const consumedQuantity = recipeQuantity
+          .mul(modifierQuantity)
+          .mul(event.quantity);
 
         this.addIngredientQuantity(
           ingredientConsumption,

@@ -1,3 +1,8 @@
+import {
+  InventoryAccess,
+  InventoryUser,
+  type InventoryContext,
+} from '../../auth/inventory-access.js';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { TransferStatus } from '@prisma/client';
@@ -33,6 +38,7 @@ export class StockTransferController {
   // ?status=APPROVED
   // ------------------------------------------------------
   @Get('warehouse/:warehouseId')
+  @InventoryAccess('warehouse')
   async findByWarehouse(
     @Param('warehouseId') warehouseId: string,
     @Query('status') status?: TransferStatus,
@@ -64,11 +70,12 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/start-picking')
-  async startPicking(@Param('id') id: string) {
-    // TODO:
-    // Replace with authenticated warehouse user ID
-    // from JWT.
-    const warehouseUserId = 'SYSTEM-WAREHOUSE-USER';
+  @InventoryAccess('transfer-warehouse')
+  async startPicking(
+    @Param('id') id: string,
+    @InventoryUser() actor: InventoryContext,
+  ) {
+    const warehouseUserId = actor.userId;
 
     const data = await this.stockTransferService.startPicking(
       id,
@@ -92,6 +99,7 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/ready-to-ship')
+  @InventoryAccess('transfer-warehouse')
   async readyToShip(@Param('id') id: string) {
     const data = await this.stockTransferService.readyToShip(id);
 
@@ -117,6 +125,7 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/shipment')
+  @InventoryAccess('transfer-warehouse')
   async createShipment(
     @Param('id') id: string,
     @Body() dto: CreateShipmentDto,
@@ -149,11 +158,13 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/ship')
-  async ship(@Param('id') id: string, @Body() dto: ShipTransferDto) {
-    // TODO:
-    // Replace with authenticated warehouse user ID
-    // from JWT.
-    const shippedBy = 'SYSTEM-WAREHOUSE-USER';
+  @InventoryAccess('transfer-warehouse')
+  async ship(
+    @Param('id') id: string,
+    @Body() dto: ShipTransferDto,
+    @InventoryUser() actor: InventoryContext,
+  ) {
+    const shippedBy = actor.userId;
 
     const data = await this.stockTransferService.ship(id, dto, shippedBy);
 
@@ -174,6 +185,7 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/in-transit')
+  @InventoryAccess('transfer-warehouse')
   async markInTransit(@Param('id') id: string) {
     const data = await this.stockTransferService.markInTransit(id);
 
@@ -204,6 +216,7 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Get('restaurant/:restaurantId')
+  @InventoryAccess('restaurant-read')
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query('status') status?: TransferStatus,
@@ -254,11 +267,13 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/receive')
-  async receive(@Param('id') id: string, @Body() dto: ReceiveTransferDto) {
-    // TODO:
-    // Replace with authenticated restaurant manager ID
-    // from JWT.
-    const receivedBy = 'SYSTEM-RESTAURANT-MANAGER';
+  @InventoryAccess('transfer-restaurant')
+  async receive(
+    @Param('id') id: string,
+    @Body() dto: ReceiveTransferDto,
+    @InventoryUser() actor: InventoryContext,
+  ) {
+    const receivedBy = actor.userId;
 
     const data = await this.stockTransferService.receive(id, dto, receivedBy);
 
@@ -287,6 +302,7 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Get(':id')
+  @InventoryAccess('transfer-read')
   async findById(@Param('id') id: string) {
     const data = await this.stockTransferService.findById(id);
 
@@ -307,14 +323,13 @@ export class StockTransferController {
   // ------------------------------------------------------
 
   @Post(':id/resolve-discrepancy')
+  @InventoryAccess('transfer-warehouse')
   async resolveDiscrepancy(
     @Param('id') id: string,
     @Body() dto: ResolveDiscrepancyDto,
+    @InventoryUser() actor: InventoryContext,
   ) {
-    // TODO:
-    // Replace with authenticated warehouse admin ID
-    // from JWT.
-    const resolvedBy = 'SYSTEM-WAREHOUSE-ADMIN';
+    const resolvedBy = actor.userId;
 
     const data = await this.stockTransferService.resolveDiscrepancy(
       id,

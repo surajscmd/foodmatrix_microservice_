@@ -12,12 +12,12 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
   grid-template-areas: "preview sign-in";
   align-items: center;
   gap: clamp(2rem, 5vw, 4.5rem);
   width: 100%;
-  max-width: 70rem;
+  max-width: 78rem;
   margin-inline: auto;
 }
 
@@ -42,7 +42,7 @@
 .showcaseHeading h2 {
   max-width: 17ch;
   margin: 0;
-  font-size: clamp(1.75rem, 2.45vw, 2.25rem);
+  font-size: clamp(1.8125rem, 2.55vw, 2.375rem);
   font-weight: 600;
   line-height: 1.15;
   letter-spacing: -0.03em;
@@ -57,7 +57,7 @@
   max-width: 41ch;
   margin-top: 0.65rem;
   color: var(--color-zinc-300);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   line-height: 1.55;
 }
 
@@ -67,7 +67,8 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: clamp(17rem, 34vh, 21rem);
+  aspect-ratio: 16 / 10;
+  min-height: 20rem;
   padding: clamp(0.75rem, 1.2vw, 1rem);
   overflow: hidden;
   border: 1px solid var(--color-zinc-700);
@@ -78,26 +79,22 @@
 .servicePhoto {
   z-index: -2;
   object-fit: cover;
-  object-position: 50% 41%;
+  object-position: center 36%;
 }
 
 .servicePreview::after {
   position: absolute;
   z-index: -1;
   inset: 0;
-  background: linear-gradient(180deg, transparent 55%, rgb(7 9 20 / 64%));
+  background: linear-gradient(180deg, transparent 60%, rgb(7 9 20 / 42%));
   content: "";
 }
 
 .orderCard {
   align-self: flex-end;
-  width: min(100%, 22rem);
-  padding: 0.6rem 0.75rem 0.65rem;
-  border: 1px solid var(--color-zinc-700);
-  border-radius: 0.85rem;
-  background: rgb(16 18 25 / 94%);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 32%);
-  backdrop-filter: blur(12px);
+  width: min(100%, 21.5rem);
+  padding: 0.55rem 0.7rem 0.6rem;
+  border-radius: 1rem;
 }
 
 .orderHeading {
@@ -105,74 +102,108 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.65rem;
-  padding-bottom: 0.55rem;
-  border-bottom: 1px solid var(--color-zinc-700);
+  padding-bottom: 0.48rem;
+  border-bottom: 1px solid rgb(255 255 255 / 8%);
 }
 
-.orderHeading span:first-child {
-  font-size: 0.83rem;
+.orderTable {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
   font-weight: 600;
 }
 
-.orderHeading span:last-child {
-  color: var(--color-zinc-400);
-  font-family: var(--font-mono);
+.orderTable svg {
+  flex: none;
+  color: var(--color-emerald-300);
+}
+
+.orderExample {
+  padding: 0.18rem 0.48rem;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 5%);
+  color: var(--color-zinc-300);
   font-size: 0.69rem;
-  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 
 .orderSteps {
+  --node-size: 1.875rem;
+  --order-cycle: 4200ms;
+  position: relative;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.4rem;
-  padding-top: 0.65rem;
+  margin-top: 0.58rem;
+}
+
+.orderSteps::before,
+.orderSteps::after {
+  position: absolute;
+  inset-inline: 16.6667%;
+  top: calc(var(--node-size) / 2 - 1px);
+  height: 2px;
+  border-radius: 2px;
+  content: "";
+}
+
+.orderSteps::before {
+  background: rgb(255 255 255 / 13%);
+}
+
+.orderSteps::after {
+  background: linear-gradient(90deg, #7dd3fc, #fcd38b, #6ee7b7);
+  opacity: 0.62;
+  transform-origin: left center;
 }
 
 .orderStep {
+  --step-color: var(--color-sky-200);
+  --step-delay: 0ms;
   position: relative;
+  z-index: 1;
   display: grid;
   justify-items: center;
   align-content: start;
   min-width: 0;
+  padding-inline: 0.2rem;
   text-align: center;
+}
+
+.orderStep:nth-child(2) {
+  --step-color: var(--color-amber-200);
+  --step-delay: 735ms;
+}
+
+.orderStep:nth-child(3) {
+  --step-color: var(--color-emerald-200);
+  --step-delay: 1470ms;
 }
 
 .stepIcon {
   display: grid;
-  width: 1.75rem;
-  height: 1.75rem;
+  width: var(--node-size);
+  height: var(--node-size);
   margin-bottom: 0.32rem;
   place-items: center;
-  border-radius: 0.45rem;
-  background: #263542;
-  color: var(--color-sky-200);
-}
-
-.orderStep:nth-child(2) .stepIcon {
-  background: #363027;
-  color: var(--color-amber-200);
-}
-
-.orderStep:nth-child(3) .stepIcon {
-  background: #26372f;
-  color: var(--color-emerald-200);
+  border: 1px solid color-mix(in oklab, var(--step-color) 36%, #242a31);
+  border-radius: 0.65rem;
+  background: color-mix(in oklab, var(--step-color) 13%, #161c24);
+  color: var(--step-color);
 }
 
 .stepLabel {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 600;
+  line-height: 1.2;
 }
 
 .stepStatus {
-  color: var(--color-zinc-400);
-  font-size: 0.7rem;
-}
-
-.stepArrow {
-  position: absolute;
-  top: 0.5rem;
-  right: -0.6rem;
-  color: var(--color-zinc-400);
+  margin-top: 0.14rem;
+  color: var(--step-color);
+  font-size: 0.67rem;
+  line-height: 1.2;
 }
 
 .workspaceAreas {
@@ -188,7 +219,7 @@
   align-items: center;
   gap: 0.5rem;
   color: var(--color-zinc-300);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 500;
 }
 
@@ -423,7 +454,7 @@
   }
 
   .servicePreview {
-    min-height: clamp(14rem, 50vw, 19rem);
+    min-height: clamp(16rem, 64vw, 21rem);
   }
 
   .input {
@@ -450,7 +481,13 @@
   }
 
   .orderCard {
-    padding: 0.5rem;
+    padding: 0.55rem;
+  }
+
+  .stepLabel {
+    min-height: 2.4em;
+    font-size: 0.7rem;
+    text-wrap: balance;
   }
 }
 
@@ -464,6 +501,14 @@
 
   .orderCard {
     animation-delay: 130ms;
+  }
+
+  .orderSteps::after {
+    animation: trace-order var(--order-cycle) linear infinite;
+  }
+
+  .stepIcon {
+    animation: mark-order-step var(--order-cycle) var(--step-delay) ease-out infinite;
   }
 
   .form {
@@ -483,5 +528,35 @@
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+}
+
+@keyframes trace-order {
+  0% {
+    transform: scaleX(0);
+    opacity: 0.62;
+  }
+  35%,
+  68% {
+    transform: scaleX(1);
+    opacity: 0.62;
+  }
+  83%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+
+@keyframes mark-order-step {
+  0%,
+  12%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    transform: translateY(0);
+  }
+  5% {
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--step-color) 15%, transparent);
+    transform: translateY(-2px);
   }
 }

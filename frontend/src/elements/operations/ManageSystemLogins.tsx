@@ -4,9 +4,10 @@ import { ArrowRight, KeyRound, Search } from "lucide-react";
 import {
   getManageableSystemUsers,
   setSystemUserActive,
+  updateSystemUserAssignment,
 } from "@/lib/organization-api";
 import { useOrganizationStore } from "@/store/organization-store";
-import type { SystemUser } from "@/utils/types/organization";
+import type { SystemUser, UpdateSystemUserAssignmentData } from "@/utils/types/organization";
 import {
   Empty,
   ErrorNote,
@@ -16,6 +17,7 @@ import {
   useWorkforceQuery,
 } from "@/elements/restaurantworkforce/shared";
 import WorkforceFormDialog from "@/elements/restaurantworkforce/WorkforceFormDialog";
+import SystemLoginAssignmentFields from "./SystemLoginAssignmentFields";
 
 export default function ManageSystemLogins() {
   const user = useOrganizationStore((state) => state.currentUser?.systemUser);
@@ -39,7 +41,7 @@ export default function ManageSystemLogins() {
               Manage system logins
             </span>
             <span className="mt-1 block text-[11px] text-zinc-500">
-              Activate or deactivate user sign-in access
+              Manage roles, restaurant assignments, and sign-in access
             </span>
           </span>
         </span>
@@ -47,16 +49,23 @@ export default function ManageSystemLogins() {
           <ArrowRight className="size-3 transition-transform group-hover:translate-x-0.5" aria-hidden />
         </span>
       </button>
-      {open && <ManageLoginsDialog onClose={() => setOpen(false)} />}
+      {open && <ManageLoginsDialog actor={user} onClose={() => setOpen(false)} />}
     </div>
   );
 }
 
-function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
+function ManageLoginsDialog({
+  actor,
+  onClose,
+}: {
+  actor: SystemUser;
+  onClose: () => void;
+}) {
   const [search, setSearch] = useState("");
   const [term, setTerm] = useState("");
   const [revision, setRevision] = useState(0);
   const [target, setTarget] = useState<SystemUser>();
+  const [assignment, setAssignment] = useState<UpdateSystemUserAssignmentData>();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -66,10 +75,17 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
     load,
     "Unable to load system logins.",
   );
+  const statusAction = target?.isActive ? "Deactivate login" : "Activate login";
+  const assignmentChanged = assignment && target && (
+    assignment.role !== target.role ||
+    assignment.franchiseId !== target.franchiseId ||
+    assignment.managedRestaurantId !== target.managedRestaurantId
+  );
+  const canSubmit = !saving && (!assignment || assignmentChanged);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (saving) return;
+    if (!canSubmit) return;
     if (!target) {
       setTerm(search.trim());
       setRevision((value) => value + 1);
@@ -78,11 +94,16 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
     setSaving(true);
     setError("");
     try {
-      const data = await setSystemUserActive(target.id, !target.isActive);
+      const data = assignment
+        ? await updateSystemUserAssignment(target.id, assignment)
+        : await setSystemUserActive(target.id, !target.isActive);
       setNotice(
-        `${data.email} was ${data.isActive ? "activated" : "deactivated"}.`,
+        assignment
+          ? `Assignment saved for ${data.email}.`
+          : `${data.email} was ${data.isActive ? "activated" : "deactivated"}.`,
       );
       setTarget(undefined);
+      setAssignment(undefined);
       setRevision((value) => value + 1);
     } catch (error) {
       const message: unknown = axios.isAxiosError(error)
@@ -99,11 +120,7 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
   return (
     <WorkforceFormDialog
       title={
-        target
-          ? target.isActive
-            ? "Deactivate login"
-            : "Activate login"
-          : "Manage system logins"
+        target ? (assignment ? "Edit login assignment" : statusAction) : "Manage system logins"
       }
       icon={KeyRound}
       saving={saving}
@@ -118,17 +135,14 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
               disabled={saving}
               onClick={() => {
                 setTarget(undefined);
+                setAssignment(undefined);
                 setError("");
               }}
             >
               Back
             </button>
-            <button type="submit" className={primary} disabled={saving}>
-              {saving
-                ? "Saving…"
-                : target.isActive
-                  ? "Deactivate login"
-                  : "Activate login"}
+            <button type="submit" className={primary} disabled={!canSubmit}>
+              {saving ? "Saving…" : assignment ? "Save assignment" : statusAction}
             </button>
           </>
         )
@@ -138,11 +152,20 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
       {target ? (
         <div className="space-y-2 text-xs text-zinc-300">
           <p className="break-all font-medium text-white">{target.email}</p>
-          <p>
-            {target.isActive
-              ? "Deactivation revokes sign-in sessions and blocks new sign-ins. Existing service tokens may work briefly."
-              : "Activation allows this user to sign in again."}
-          </p>
+          {assignment ? (
+            <SystemLoginAssignmentFields
+              actor={actor}
+              assignment={assignment}
+              onChange={setAssignment}
+              saving={saving}
+            />
+          ) : (
+            <p>
+              {target.isActive
+                ? "Deactivation ends active sessions and blocks new sign-ins."
+                : "Activation allows this user to sign in when their assignment is active."}
+            </p>
+          )}
         </div>
       ) : (
         <>
@@ -188,16 +211,34 @@ function ManageLoginsDialog({ onClose }: { onClose: () => void }) {
                     {account.email} · {account.isActive ? "Active" : "Inactive"}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className={secondary}
-                  onClick={() => {
-                    setTarget(account);
-                    setNotice("");
-                  }}
-                >
-                  {account.isActive ? "Deactivate" : "Activate"}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className={secondary}
+                    onClick={() => {
+                      if (account.role === "SUPER_ADMIN") return;
+                      setTarget(account);
+                      setAssignment({
+                        role: account.role,
+                        franchiseId: account.franchiseId ?? actor.franchiseId ?? "",
+                        managedRestaurantId: account.managedRestaurantId,
+                      });
+                      setNotice("");
+                    }}
+                  >
+                    Edit assignment
+                  </button>
+                  <button
+                    type="button"
+                    className={secondary}
+                    onClick={() => {
+                      setTarget(account);
+                      setNotice("");
+                    }}
+                  >
+                    {account.isActive ? "Deactivate" : "Activate"}
+                  </button>
+                </div>
               </li>
             ))}
           </ul>

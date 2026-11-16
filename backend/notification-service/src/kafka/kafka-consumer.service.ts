@@ -40,11 +40,21 @@ import type {
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KafkaConsumerService.name);
+  private retryTimer?: ReturnType<typeof setInterval>;
+  private connecting?: Promise<void>;
+  private subscribed = false;
+  private closing = false;
 
   private readonly kafka = new Kafka({
     clientId: 'notification-service-consumer',
 
-    brokers: ['localhost:9094', 'localhost:9095', 'localhost:9096'],
+    brokers: (
+      process.env.KAFKA_BROKERS ||
+      'localhost:9094,localhost:9095,localhost:9096'
+    )
+      .split(',')
+      .map((broker) => broker.trim())
+      .filter(Boolean),
   });
 
   private readonly consumer = this.kafka.consumer({
@@ -273,7 +283,31 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
    * Connect to Kafka, subscribe to all supported topics,
    * and start consuming messages.
    */
-  async onModuleInit(): Promise<void> {
+  onModuleInit() {
+    this.consumer.on(this.consumer.events.CRASH, ({ payload }) => {
+      if (!payload.restart) this.subscribed = false;
+    });
+    this.retryTimer = setInterval(() => this.connect(), 15_000);
+    this.retryTimer.unref();
+    this.connect();
+  }
+
+  private connect() {
+    if (this.closing || this.subscribed || this.connecting) return;
+    this.connecting = this.subscribe()
+      .catch(async (error: unknown) => {
+        this.logger.warn(
+          'Notification Kafka consumer will retry its connection.',
+          error,
+        );
+        await this.consumer.disconnect().catch(() => undefined);
+      })
+      .finally(() => {
+        this.connecting = undefined;
+      });
+  }
+
+  private async subscribe() {
     await this.consumer.connect();
 
     const topics = [
@@ -282,6 +316,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
       'inventory.stock-request-created',
       'inventory.stock-request-approved',
       'inventory.stock-shipped',
+      'inventory.stock-in-transit',
       'inventory.stock-received',
 
       // HR
@@ -295,19 +330,27 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
     for (const topic of topics) {
       await this.consumer.subscribe({
         topic,
-        fromBeginning: false,
+        fromBeginning: true,
       });
     }
 
     await this.consumer.run({
-      eachMessage: async ({ topic, message }) => {
+      eachMessage: async ({ topic, partition, message }) => {
         if (!message.value) {
           return;
         }
 
+        let event: unknown;
         try {
-          const event: unknown = JSON.parse(message.value.toString());
+          event = JSON.parse(message.value.toString()) as unknown;
+        } catch {
+          this.logger.warn(
+            `Invalid JSON from ${topic} at ${partition}:${message.offset}`,
+          );
+          return;
+        }
 
+        try {
           switch (topic) {
             // ==================================================
             // INVENTORY
@@ -319,7 +362,11 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
                 return;
               }
 
-              await this.lowStockHandler.handle(event);
+              await this.lowStockHandler.handle(
+                event,
+                message.key?.toString() ||
+                  `${topic}:${partition}:${message.offset}`,
+              );
 
               break;
             }
@@ -350,6 +397,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
               break;
             }
 
+            case 'inventory.stock-in-transit':
             case 'inventory.stock-shipped': {
               if (!this.isStockShippedEvent(event)) {
                 this.logger.warn(
@@ -445,12 +493,14 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
             error instanceof Error ? error.message : String(error);
 
           this.logger.error(
-            `Failed to process Kafka message from ${topic}: ${errorMessage}`,
+            `Failed to process Kafka message from ${topic} at ${partition}:${message.offset}: ${errorMessage}`,
           );
+          throw error;
         }
       },
     });
 
+    this.subscribed = true;
     this.logger.log('Notification Kafka consumer connected');
   }
 
@@ -462,6 +512,9 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
    * Disconnect from Kafka when the Notification Service shuts down.
    */
   async onModuleDestroy(): Promise<void> {
+    this.closing = true;
+    clearInterval(this.retryTimer);
+    await this.connecting;
     await this.consumer.disconnect();
 
     this.logger.log('Notification Kafka consumer disconnected');

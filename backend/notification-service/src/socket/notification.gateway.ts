@@ -7,187 +7,133 @@ import {
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
-
-import { Logger } from '@nestjs/common';
-
 import type { Server, Socket } from 'socket.io';
+import {
+  NotificationAccessService,
+  type NotificationLocation,
+} from '../auth/notification-access.service.js';
 
 @WebSocketGateway({
-  cors: {
-    origin: '*',
-  },
+  cors: { origin: '*' },
   namespace: '/notifications',
 })
 export class NotificationGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
-  private readonly logger = new Logger(NotificationGateway.name);
-  private readonly organizationUrl = (
-    process.env.ORGANIZATION_SERVICE_URL ?? 'http://localhost:3001'
-  ).replace(/\/+$/, '');
-
   @WebSocketServer()
   private readonly server!: Server;
 
-  // ============================================================
-  // CONNECTION
-  // ============================================================
+  private readonly checks = new Map<Socket, ReturnType<typeof setInterval>>();
 
-  /**
-   * Handle a new Socket.IO connection.
-   */
+  constructor(private readonly access: NotificationAccessService) {}
+
   handleConnection(client: Socket): void {
-    this.logger.log(`Socket connected: ${client.id}`);
+    const timer = setInterval(() => void this.checkRooms(client), 60_000);
+    timer.unref();
+    this.checks.set(client, timer);
   }
 
-  // ============================================================
-  // DISCONNECTION
-  // ============================================================
-
-  /**
-   * Handle Socket.IO disconnection.
-   */
   handleDisconnect(client: Socket): void {
-    this.logger.log(`Socket disconnected: ${client.id}`);
+    clearInterval(this.checks.get(client));
+    this.checks.delete(client);
   }
 
-  // ============================================================
-  // JOIN RESTAURANT
-  // ============================================================
-
-  /**
-   * Join a restaurant notification room.
-   */
   @SubscribeMessage('join-restaurant')
-  async joinRestaurant(
+  joinRestaurant(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    body: { restaurantId?: string } | null,
-  ): Promise<{ joined: boolean }> {
-    const cookie = client.handshake.headers.cookie;
-    const restaurantId = body?.restaurantId;
-    if (!cookie || typeof restaurantId !== 'string' || !restaurantId) {
-      return { joined: false };
-    }
-
-    try {
-      const response = await fetch(`${this.organizationUrl}/auth/me`, {
-        headers: { Cookie: cookie, Accept: 'application/json' },
-        redirect: 'error',
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (!response.ok) return { joined: false };
-
-      const session = (await response.json()) as {
-        data?: {
-          systemUser?: {
-            isActive: boolean;
-            role: string;
-            managedRestaurantId: string | null;
-          };
-        };
-      };
-      const user = session.data?.systemUser;
-      if (
-        !client.connected ||
-        !user?.isActive ||
-        (user.role !== 'RESTAURANT_ADMIN' && user.role !== 'STAFF') ||
-        user.managedRestaurantId !== restaurantId
-      ) {
-        return { joined: false };
-      }
-
-      await client.join(`restaurant:${restaurantId}`);
-      return { joined: true };
-    } catch {
-      this.logger.warn('Could not verify a restaurant notification session');
-      return { joined: false };
-    }
+    @MessageBody() body: { restaurantId?: string } | null,
+  ) {
+    return this.join(client, 'restaurant', body?.restaurantId);
   }
 
-  // ============================================================
-  // JOIN WAREHOUSE
-  // ============================================================
-
-  /**
-   * Join a warehouse notification room.
-   */
   @SubscribeMessage('join-warehouse')
-  async joinWarehouse(
+  joinWarehouse(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    body: { warehouseId: string },
-  ): Promise<void> {
-    const room = `warehouse:${body.warehouseId}`;
-
-    await client.join(room);
-
-    this.logger.log(`Socket ${client.id} joined ${room}`);
+    @MessageBody() body: { warehouseId?: string } | null,
+  ) {
+    return this.join(client, 'warehouse', body?.warehouseId);
   }
 
-  // ============================================================
-  // LEAVE RESTAURANT
-  // ============================================================
-
-  /**
-   * Leave a restaurant notification room.
-   */
   @SubscribeMessage('leave-restaurant')
   async leaveRestaurant(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    body: { restaurantId: string },
-  ): Promise<void> {
-    const room = `restaurant:${body.restaurantId}`;
-
-    await client.leave(room);
+    @MessageBody() body: { restaurantId?: string } | null,
+  ) {
+    if (typeof body?.restaurantId === 'string')
+      await client.leave('restaurant:' + body.restaurantId.toLowerCase());
   }
 
-  // ============================================================
-  // LEAVE WAREHOUSE
-  // ============================================================
-
-  /**
-   * Leave a warehouse notification room.
-   */
   @SubscribeMessage('leave-warehouse')
   async leaveWarehouse(
     @ConnectedSocket() client: Socket,
-    @MessageBody()
-    body: { warehouseId: string },
-  ): Promise<void> {
-    const room = `warehouse:${body.warehouseId}`;
-
-    await client.leave(room);
+    @MessageBody() body: { warehouseId?: string } | null,
+  ) {
+    if (typeof body?.warehouseId === 'string')
+      await client.leave('warehouse:' + body.warehouseId.toLowerCase());
   }
 
-  // ============================================================
-  // EMIT RESTAURANT NOTIFICATION
-  // ============================================================
-
-  /**
-   * Send a new notification to all clients
-   * connected to a restaurant room.
-   */
   emitToRestaurant(restaurantId: string, notification: { id: string }): void {
-    this.server.to(`restaurant:${restaurantId}`).emit('notification:new', {
+    this.server.to('restaurant:' + restaurantId).emit('notification:new', {
       id: notification.id,
       scope: 'RESTAURANT',
       restaurantId,
     });
   }
 
-  // ============================================================
-  // EMIT WAREHOUSE NOTIFICATION
-  // ============================================================
+  emitToWarehouse(warehouseId: string, notification: { id: string }): void {
+    this.server.to('warehouse:' + warehouseId).emit('notification:new', {
+      id: notification.id,
+      scope: 'WAREHOUSE',
+      warehouseId,
+    });
+  }
 
-  /**
-   * Send a new notification to all clients
-   * connected to a warehouse room.
-   */
-  emitToWarehouse(warehouseId: string, notification: unknown): void {
-    this.server
-      .to(`warehouse:${warehouseId}`)
-      .emit('notification:new', notification);
+  private async join(
+    client: Socket,
+    location: NotificationLocation,
+    id: unknown,
+  ) {
+    if (typeof id !== 'string' || !id) return { joined: false };
+
+    try {
+      const actor = await this.access.fromCookie(
+        client.handshake.headers.cookie,
+      );
+      const normalizedId = id.toLowerCase();
+      if (
+        !client.connected ||
+        !this.access.allows(actor, location, normalizedId)
+      )
+        return { joined: false };
+
+      await client.join(location + ':' + normalizedId);
+      return { joined: true };
+    } catch {
+      return { joined: false };
+    }
+  }
+
+  private async checkRooms(client: Socket) {
+    const rooms = [...client.rooms].filter(
+      (room) => room.startsWith('restaurant:') || room.startsWith('warehouse:'),
+    );
+    if (!rooms.length) return;
+
+    try {
+      const actor = await this.access.fromCookie(
+        client.handshake.headers.cookie,
+      );
+      const staleRoom = rooms.some((room) => {
+        const [location, id] = room.split(':');
+        return !this.access.allows(
+          actor,
+          location === 'restaurant' ? 'restaurant' : 'warehouse',
+          id,
+        );
+      });
+      if (staleRoom) client.disconnect();
+    } catch {
+      client.disconnect();
+    }
   }
 }

@@ -8,7 +8,7 @@ export type NotificationPriority =
   | "HIGH"
   | "CRITICAL";
 
-export type NotificationType =
+type NotificationType =
   | "SYSTEM"
   | "LOW_STOCK"
   | "STOCK_REQUEST_CREATED"
@@ -45,7 +45,7 @@ export interface NotificationItem {
   updatedAt: string;
 }
 
-export interface NotificationPaginationData {
+interface NotificationPaginationData {
   page: number;
   limit: number;
   total: number;

@@ -86,12 +86,20 @@ async function proxyRequest(
     // 3. Exchange session cookie for JWT
     // --------------------------------------------------
 
+    const origin = process.env.FRONTEND_ORIGIN ?? request.nextUrl.origin;
+    if (
+      !['GET', 'HEAD'].includes(request.method) &&
+      request.headers.get('origin') !== origin
+    ) {
+      return NextResponse.json({ message: 'Request origin is not allowed' }, { status: 403 });
+    }
+
     const tokenResponse = await axios.get<TokenResponse>(
       `${API_URL}/api/auth/token`,
       {
         headers: {
           Cookie: cookie,
-          Origin: request.headers.get("origin") ?? request.nextUrl.origin,
+          Origin: origin,
         },
         timeout: 15_000,
         maxRedirects: 0,
@@ -139,14 +147,6 @@ async function proxyRequest(
       Authorization: `Bearer ${token}`,
     });
 
-    // Stock-request actions resolve warehouse scope from the authenticated session.
-    if (
-      path[0] === "stock-requests" &&
-      ["POST", "PATCH", "DELETE"].includes(request.method)
-    ) {
-      headers.set("Cookie", cookie);
-    }
-
     const contentType = request.headers.get("content-type");
 
     if (contentType) {
@@ -176,7 +176,7 @@ async function proxyRequest(
       headers,
       body,
       cache: "no-store",
-      redirect: "manual",
+      redirect: "error",
       signal: AbortSignal.timeout(30_000),
     });
 

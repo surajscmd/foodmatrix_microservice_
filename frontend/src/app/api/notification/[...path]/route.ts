@@ -1,6 +1,4 @@
-import axios from "axios";
 import { NextRequest, NextResponse } from "next/server";
-import type { CurrentUserResponse } from "@/utils/types/organization";
 
 const API_URL = (
   process.env.FOODMATRIX_API_URL ?? "http://localhost:8000"
@@ -81,69 +79,30 @@ async function proxyRequest(
 
     const sessionHeaders = { Cookie: cookie, Origin: origin };
     const signal = AbortSignal.any([request.signal, AbortSignal.timeout(15_000)]);
-    const session = await fetch(`${API_URL}/api/organization/auth/me`, {
+    const tokenResponse = await fetch(`${API_URL}/api/auth/token`, {
       headers: sessionHeaders,
       cache: "no-store",
+      redirect: "error",
       signal,
     });
-    if (!session.ok) {
-      const status = session.status === 401 || session.status === 403 ? session.status : 502;
-      return NextResponse.json({ message: "Unable to verify your session" }, { status });
+    if (!tokenResponse.ok) {
+      const status = tokenResponse.status === 401 || tokenResponse.status === 403
+        ? tokenResponse.status
+        : 502;
+      return NextResponse.json({ message: "Unable to authenticate request" }, { status });
     }
 
-    const { data } = (await session.json()) as CurrentUserResponse;
-    const user = data?.systemUser;
-    const restaurantUser = user?.role === "RESTAURANT_ADMIN" || user?.role === "STAFF";
-    if (!user?.isActive ||
-      (path[1] === "restaurant" && (!restaurantUser || path[2] !== user.managedRestaurantId)) ||
-      (restaurantUser && (path[1] === "warehouse" || !user.managedRestaurantId))
-    ) {
-      return NextResponse.json({ message: "Notification location is not available to this account" }, { status: 403 });
-    }
-
-    const tokenResponse = await axios.get<{
-      token?: string;
-    }>(`${API_URL}/api/auth/token`, {
-      headers: sessionHeaders,
-      timeout: 15000,
-      signal,
-      validateStatus: () => true,
-    });
-
-    if (
-      tokenResponse.status < 200 ||
-      tokenResponse.status >= 300 ||
-      typeof tokenResponse.data?.token !== "string" ||
-      !tokenResponse.data.token
-    ) {
-      return NextResponse.json(
-        { message: "Unable to authenticate request" },
-        { status: 401 },
-      );
+    const session = (await tokenResponse.json()) as { token?: unknown } | null;
+    if (typeof session?.token !== "string" || !session.token) {
+      return NextResponse.json({ message: "Unable to authenticate request" }, { status: 401 });
     }
 
     const pathname = path.map(encodeURIComponent).join("/");
     const query = request.nextUrl.searchParams.toString();
     const headers = {
       Accept: "application/json",
-      Authorization: `Bearer ${tokenResponse.data.token}`,
+      Authorization: `Bearer ${session.token}`,
     };
-
-    const individual = path[1] !== "restaurant" && path[1] !== "warehouse";
-    if (restaurantUser && individual && request.method === "PATCH") {
-      const detail = await fetch(`${API_URL}/api/notification/notifications/${encodeURIComponent(path[1])}`, {
-        headers,
-        cache: "no-store",
-        signal,
-      });
-      if (!detail.ok) {
-        return NextResponse.json({ message: "Unable to verify notification" }, { status: detail.status });
-      }
-      const { data: item } = await detail.json();
-      if (item?.scope !== "RESTAURANT" || item.restaurantId !== user.managedRestaurantId) {
-        return NextResponse.json({ message: "Notification not found" }, { status: 404 });
-      }
-    }
 
     const response = await fetch(
       `${API_URL}/api/notification/${pathname}${
@@ -153,16 +112,10 @@ async function proxyRequest(
         method: request.method,
         headers,
         cache: "no-store",
+        redirect: "error",
         signal,
       },
     );
-
-    if (restaurantUser && individual && request.method === "GET" && response.ok) {
-      const { data: item } = await response.clone().json();
-      if (item?.scope !== "RESTAURANT" || item.restaurantId !== user.managedRestaurantId) {
-        return NextResponse.json({ message: "Notification not found" }, { status: 404 });
-      }
-    }
 
     const body = await response.text();
 
@@ -178,9 +131,7 @@ async function proxyRequest(
         },
       },
     );
-  } catch (error) {
-    console.error("Notification proxy error:", error);
-
+  } catch {
     return NextResponse.json(
       { message: "Unable to connect to Notification Service" },
       { status: 502 },

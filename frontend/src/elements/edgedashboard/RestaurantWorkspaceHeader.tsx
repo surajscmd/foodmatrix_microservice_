@@ -9,6 +9,7 @@ import {
   Utensils,
 } from "lucide-react";
 import type { Restaurant } from "@/utils/types/organization";
+import glass from "@/elements/branding/restaurant-glass.module.css";
 
 const stations = [
   {
@@ -55,20 +56,20 @@ export default function RestaurantWorkspaceHeader({
     .join(", ");
 
   return (
-    <header className="@container relative overflow-hidden rounded-2xl border border-zinc-700/80 bg-[#191b20] bg-linear-to-b from-[#222429] to-[#191b20] shadow-[0_8px_24px_#05080e4a] motion-safe:animate-slide-up">
+    <header className={`${glass.surface} @container relative overflow-hidden rounded-2xl motion-safe:animate-slide-up`}>
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-emerald-300/35 via-white/12 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-emerald-300/35 via-emerald-200/10 to-transparent"
       />
       <div className="grid @3xl:grid-cols-[minmax(0,1fr)_auto]">
         <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3.5 px-4 py-4 sm:gap-4 sm:px-5 @3xl:px-6 @3xl:py-6">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-300/20 bg-[#23352f] text-emerald-200/85 shadow-[0_2px_8px_#090f0d45,inset_0_1px_0_#d1fae517] @3xl:size-12">
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-200/25 bg-linear-to-br from-emerald-300/15 to-emerald-300/5 text-emerald-200 shadow-[0_2px_8px_#090f0d45,inset_0_1px_0_#d1fae517] @3xl:size-12">
             <Store size={20} aria-hidden />
           </span>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <h1 className="min-w-0 text-[1.25rem] leading-tight font-semibold tracking-tight text-zinc-100 wrap-anywhere sm:text-[1.5rem]">
+              <h1 className="min-w-0 text-[1.25rem] leading-tight font-semibold tracking-tight text-zinc-50 wrap-anywhere sm:text-[1.5rem]">
                 {restaurant.name}
               </h1>
               <span
@@ -111,7 +112,7 @@ export default function RestaurantWorkspaceHeader({
 
         <nav
           aria-label="Restaurant stations"
-          className="grid grid-cols-[repeat(auto-fit,minmax(4.75rem,1fr))] items-center gap-2 border-t border-white/9 bg-black/10 px-4 py-3 sm:px-5 @3xl:grid-cols-3 @3xl:border-t-0 @3xl:border-l"
+          className="grid grid-cols-[repeat(auto-fit,minmax(4.75rem,1fr))] items-center gap-2 border-t border-emerald-100/10 bg-black/15 px-4 py-3 sm:px-5 @3xl:grid-cols-3 @3xl:border-t-0 @3xl:border-l"
         >
           {stations.map(({ label, href, Icon, button, icon }) => (
             <Link

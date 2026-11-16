@@ -11,9 +11,22 @@ import { ModifierModule } from './modules/modifier/modifier.module';
 import { ItemModifierGroupModule } from './modules/item-modifier-group/item-modifier-group.module';
 import { RecipeItemModule } from './modules/recipe-item/recipe-item.module';
 import { InternalCatalogModule } from './modules/internal-catalog/internal-catalog.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, MenuCategoryModule, MenuItemModule, IngredientModule, RestaurantMenuItemModule, ModifierGroupModule, ModifierModule, ItemModifierGroupModule, RecipeItemModule, InternalCatalogModule],
+  imports: [
+    AuthModule,
+    PrismaModule,
+    MenuCategoryModule,
+    MenuItemModule,
+    IngredientModule,
+    RestaurantMenuItemModule,
+    ModifierGroupModule,
+    ModifierModule,
+    ItemModifierGroupModule,
+    RecipeItemModule,
+    InternalCatalogModule,
+  ],
   controllers: [AppController],
   providers: [AppService],
 })

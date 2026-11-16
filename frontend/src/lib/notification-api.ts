@@ -10,7 +10,7 @@ export type * from "@/utils/types/notification";
 
 const API_BASE = "/api/notification/notifications";
 
-export class NotificationApiError extends Error {
+class NotificationApiError extends Error {
   readonly status: number;
 
   constructor(message: string, status: number) {
@@ -159,22 +159,6 @@ export async function getUnreadNotificationCount(
   );
 
   return response.pagination.total;
-}
-
-export async function getNotification(
-  notificationId: string,
-  options?: NotificationRequestOptions,
-): Promise<NotificationItem> {
-  const response = await request<{
-    message: string;
-    data: NotificationItem;
-  }>(
-    `/${segment(notificationId)}`,
-    "GET",
-    options,
-  );
-
-  return response.data;
 }
 
 export async function markNotificationRead(

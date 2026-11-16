@@ -264,25 +264,22 @@ describe('RestaurantMenuItemService', () => {
       expect(restaurantMenuItemCreate).not.toHaveBeenCalled();
     });
 
-    it('should throw ConflictException when price is same as base price', async () => {
-      const dto: CreateRestaurantMenuItemDto = {
-        restaurantId: 'restaurant-2',
-        menuItemId: 'menu-item-1',
-        price: 79,
-        isAvailable: true,
-      };
-
+    it('uses the base price when an availability override omits its price', async () => {
       menuItemFindUnique.mockResolvedValue(menuItem);
-
-      await expect(service.create(dto)).rejects.toThrow(
-        new ConflictException(
-          'Restaurant price is the same as the default price. No override is required.',
-        ),
-      );
-
-      expect(restaurantMenuItemFindUnique).not.toHaveBeenCalled();
-
-      expect(restaurantMenuItemCreate).not.toHaveBeenCalled();
+      restaurantMenuItemFindUnique.mockResolvedValue(null);
+      await service.create({
+        restaurantId: 'restaurant-2',
+        menuItemId: menuItem.id,
+        isAvailable: false,
+      });
+      expect(restaurantMenuItemCreate.mock.calls[0]?.[0]).toMatchObject({
+        data: {
+          restaurantId: 'restaurant-2',
+          menuItemId: menuItem.id,
+          price: menuItem.basePrice,
+          isAvailable: false,
+        },
+      });
     });
   });
 
@@ -318,12 +315,11 @@ describe('RestaurantMenuItemService', () => {
       expect(menuItemFindMany).toHaveBeenCalledWith({
         where: {
           isAvailable: true,
+          category: { isActive: true },
         },
         skip: 0,
         take: 10,
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         include: {
           category: true,
           restaurantMenus: {
@@ -337,6 +333,7 @@ describe('RestaurantMenuItemService', () => {
       expect(menuItemCount).toHaveBeenCalledWith({
         where: {
           isAvailable: true,
+          category: { isActive: true },
         },
       });
 
@@ -787,73 +784,6 @@ describe('RestaurantMenuItemService', () => {
       expect(result).toEqual(updatedItem);
     });
 
-    it('should update restaurantId and menuItemId', async () => {
-      const updatedItem: RestaurantMenuItemWithMenuItem = {
-        ...restaurantMenuItemWithMenuItem,
-        restaurantId: 'restaurant-2',
-        menuItemId: 'menu-item-2',
-        menuItem: {
-          ...secondMenuItem,
-          category,
-        },
-      };
-
-      restaurantMenuItemFindUnique
-        .mockResolvedValueOnce(restaurantMenuItem)
-        .mockResolvedValueOnce(null);
-
-      menuItemFindUnique.mockResolvedValue(secondMenuItem);
-
-      restaurantMenuItemUpdate.mockResolvedValue(updatedItem);
-
-      const dto: UpdateRestaurantMenuItemDto = {
-        restaurantId: 'restaurant-2',
-        menuItemId: 'menu-item-2',
-      };
-
-      const result = await service.update('restaurant-menu-item-1', dto);
-
-      expect(restaurantMenuItemFindUnique).toHaveBeenNthCalledWith(1, {
-        where: {
-          id: 'restaurant-menu-item-1',
-        },
-      });
-
-      expect(restaurantMenuItemFindUnique).toHaveBeenNthCalledWith(2, {
-        where: {
-          restaurantId_menuItemId: {
-            restaurantId: 'restaurant-2',
-            menuItemId: 'menu-item-2',
-          },
-        },
-      });
-
-      expect(menuItemFindUnique).toHaveBeenCalledWith({
-        where: {
-          id: 'menu-item-2',
-        },
-      });
-
-      expect(restaurantMenuItemUpdate).toHaveBeenCalledWith({
-        where: {
-          id: 'restaurant-menu-item-1',
-        },
-        data: {
-          restaurantId: 'restaurant-2',
-          menuItemId: 'menu-item-2',
-        },
-        include: {
-          menuItem: {
-            include: {
-              category: true,
-            },
-          },
-        },
-      });
-
-      expect(result).toEqual(updatedItem);
-    });
-
     it('should throw NotFoundException when item does not exist', async () => {
       restaurantMenuItemFindUnique.mockResolvedValue(null);
 
@@ -864,52 +794,6 @@ describe('RestaurantMenuItemService', () => {
       await expect(service.update('missing-id', dto)).rejects.toThrow(
         new NotFoundException('Restaurant menu item not found'),
       );
-
-      expect(restaurantMenuItemUpdate).not.toHaveBeenCalled();
-    });
-
-    it('should throw ConflictException when new combination already exists', async () => {
-      const duplicate: RestaurantMenuItem = {
-        ...restaurantMenuItem,
-        id: 'duplicate-id',
-        restaurantId: 'restaurant-2',
-        menuItemId: 'menu-item-2',
-      };
-
-      restaurantMenuItemFindUnique
-        .mockResolvedValueOnce(restaurantMenuItem)
-        .mockResolvedValueOnce(duplicate);
-
-      const dto: UpdateRestaurantMenuItemDto = {
-        restaurantId: 'restaurant-2',
-        menuItemId: 'menu-item-2',
-      };
-
-      await expect(
-        service.update('restaurant-menu-item-1', dto),
-      ).rejects.toThrow(
-        new ConflictException(
-          'This menu item is already configured for this restaurant',
-        ),
-      );
-
-      expect(restaurantMenuItemUpdate).not.toHaveBeenCalled();
-    });
-
-    it('should throw NotFoundException when new menu item does not exist', async () => {
-      restaurantMenuItemFindUnique
-        .mockResolvedValueOnce(restaurantMenuItem)
-        .mockResolvedValueOnce(null);
-
-      menuItemFindUnique.mockResolvedValue(null);
-
-      const dto: UpdateRestaurantMenuItemDto = {
-        menuItemId: 'missing-menu-item',
-      };
-
-      await expect(
-        service.update('restaurant-menu-item-1', dto),
-      ).rejects.toThrow(new NotFoundException('Menu item not found'));
 
       expect(restaurantMenuItemUpdate).not.toHaveBeenCalled();
     });

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { getIngredients } from "@/lib/catalog-api";
 import { getRestaurants } from "@/lib/organization-api";
@@ -68,21 +68,20 @@ export default function StockAuditScreen({
   const [error, setError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [restaurants, setRestaurants] =
-    useState<InventoryRestaurant[]>([]);
-
-  const [ingredients, setIngredients] =
-    useState<Ingredient[]>([]);
-
-  const [restaurantsLoading, setRestaurantsLoading] =
-    useState(true);
-
-  const [ingredientsLoading, setIngredientsLoading] =
-    useState(true);
-
-  const [restaurantsError, setRestaurantsError] = useState("");
-  const [ingredientsError, setIngredientsError] = useState("");
   const [sourcesKey, setSourcesKey] = useState(0);
+  const sourcesRequest = useMemo(
+    () => ({ warehouseId, sourcesKey }),
+    [warehouseId, sourcesKey],
+  );
+  type SourceResult<T> = {
+    request: typeof sourcesRequest;
+    data: T[];
+    error: string;
+  };
+  const [restaurantsResult, setRestaurantsResult] =
+    useState<SourceResult<InventoryRestaurant>>();
+  const [ingredientsResult, setIngredientsResult] =
+    useState<SourceResult<Ingredient>>();
 
   const [selectedMovement, setSelectedMovement] =
     useState<StockMovementView | null>(null);
@@ -94,35 +93,36 @@ export default function StockAuditScreen({
   useEffect(() => {
     let cancelled = false;
 
-    setRestaurantsLoading(true);
-    setIngredientsLoading(true);
-    setRestaurantsError("");
-    setIngredientsError("");
-
     const loadRestaurants = async () => {
       try {
         const data = await getRestaurants();
 
         if (cancelled) return;
 
-        setRestaurants(
-          data
+        setRestaurantsResult({
+          request: sourcesRequest,
+          data: data
             .filter((restaurant) => restaurant.franchiseId === warehouseId)
             .map((restaurant) => ({
               id: restaurant.id,
               name: restaurant.name,
             })),
-        );
+          error: "",
+        });
       } catch (error) {
         if (!cancelled) {
-          setRestaurantsError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load restaurants.",
-          );
+          setRestaurantsResult((previous) => ({
+            request: sourcesRequest,
+            data:
+              previous?.request.warehouseId === warehouseId
+                ? previous.data
+                : [],
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to load restaurants.",
+          }));
         }
-      } finally {
-        if (!cancelled) setRestaurantsLoading(false);
       }
     };
 
@@ -161,17 +161,22 @@ export default function StockAuditScreen({
           page++;
         } while (page <= totalPages);
 
-        setIngredients([...records.values()]);
+        setIngredientsResult({
+          request: sourcesRequest,
+          data: [...records.values()],
+          error: "",
+        });
       } catch (error) {
         if (!cancelled) {
-          setIngredientsError(
-            error instanceof Error
-              ? error.message
-              : "Unable to load stock items.",
-          );
+          setIngredientsResult((previous) => ({
+            request: sourcesRequest,
+            data: previous?.data ?? [],
+            error:
+              error instanceof Error
+                ? error.message
+                : "Unable to load stock items.",
+          }));
         }
-      } finally {
-        if (!cancelled) setIngredientsLoading(false);
       }
     };
 
@@ -180,7 +185,7 @@ export default function StockAuditScreen({
     return () => {
       cancelled = true;
     };
-  }, [warehouseId, sourcesKey]);
+  }, [warehouseId, sourcesRequest]);
 
   // ======================================================
   // LOAD AUDIT PAGE
@@ -295,6 +300,12 @@ export default function StockAuditScreen({
     onUpdated,
   ]);
 
+  const restaurants =
+    restaurantsResult?.request.warehouseId === warehouseId
+      ? restaurantsResult.data
+      : [];
+  const restaurantsLoading = restaurantsResult?.request !== sourcesRequest;
+  const ingredientsLoading = ingredientsResult?.request !== sourcesRequest;
   const locationName =
     query.filters.location === "WAREHOUSE"
       ? "Warehouse"
@@ -314,11 +325,11 @@ export default function StockAuditScreen({
       <StockAuditFilters
         value={query.filters}
         restaurants={restaurants}
-        ingredients={ingredients}
+        ingredients={ingredientsResult?.data ?? []}
         restaurantsLoading={restaurantsLoading}
         ingredientsLoading={ingredientsLoading}
-        restaurantsError={restaurantsError}
-        ingredientsError={ingredientsError}
+        restaurantsError={restaurantsLoading ? "" : restaurantsResult.error}
+        ingredientsError={ingredientsLoading ? "" : ingredientsResult.error}
         loading={loading}
         onRetrySources={() => setSourcesKey((value) => value + 1)}
         onApply={(filters) => {

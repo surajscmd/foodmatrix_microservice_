@@ -4,7 +4,7 @@
 
 export type DecimalValue = string | number;
 
-export type LocationType =
+type LocationType =
   | "WAREHOUSE"
   | "RESTAURANT"
   | "TRANSIT";
@@ -37,7 +37,7 @@ export type TransferStatus =
   | "REJECTED"
   | "CANCELLED";
 
-export type TransferDiscrepancyType =
+type TransferDiscrepancyType =
   | "SHORT_RECEIPT"
   | "DAMAGED"
   | "MISSING"
@@ -117,7 +117,7 @@ export interface WarehouseStockView extends WarehouseStock {
 // RESTAURANT STOCK
 // ======================================================
 
-export interface RestaurantStock {
+interface RestaurantStock {
   id: string;
   restaurantId: string;
   ingredientId: string;
@@ -135,7 +135,7 @@ export interface RestaurantStockView extends RestaurantStock {
 // STOCK MOVEMENTS
 // ======================================================
 
-export interface StockMovement {
+interface StockMovement {
   id: string;
   locationType: LocationType;
   locationId: string;
@@ -185,7 +185,7 @@ export interface AdjustStockInput {
 // STOCK REQUESTS
 // ======================================================
 
-export interface StockRequestItem {
+interface StockRequestItem {
   id: string;
   stockRequestId: string;
   ingredientId: string;
@@ -229,7 +229,7 @@ export interface StockRequest {
   >;
 }
 
-export interface StockRequestItemInput {
+interface StockRequestItemInput {
   ingredientId: string;
   requestedQty: number;
 }
@@ -241,30 +241,12 @@ export interface CreateStockRequestInput {
   items: StockRequestItemInput[];
 }
 
-export interface UpdateStockRequestInput {
-  reason?: string;
-  items: StockRequestItemInput[];
-}
-
 export interface ApproveStockRequestInput {
   items: {
     ingredientId: string;
     approvedQty: number;
   }[];
 }
-
-export interface DeleteStockRequestResult {
-  message: string;
-  requestId: string;
-}
-
-// ======================================================
-// OPERATIONS STOCK REQUEST VIEWS
-// ======================================================
-
-export type RequestStatus = StockRequestStatus;
-
-export type StockRequestLine = StockRequestItem;
 
 export type OperationsStockRequest = Omit<
   StockRequest,
@@ -273,17 +255,11 @@ export type OperationsStockRequest = Omit<
   items: StockRequestItem[];
 };
 
-export type StockRequestPage =
-  PaginatedResult<OperationsStockRequest>;
-
-export type ApproveRequestPayload =
-  ApproveStockRequestInput;
-
 // ======================================================
 // STOCK TRANSFERS
 // ======================================================
 
-export interface StockTransferItem {
+interface StockTransferItem {
   id: string;
   transferId: string;
   ingredientId: string;
@@ -421,7 +397,7 @@ export interface ReceiveTransferInput {
 // TRANSFER DISCREPANCIES
 // ======================================================
 
-export interface TransferDiscrepancy {
+interface TransferDiscrepancy {
   id: string;
   transferId: string;
   transferItemId: string;
@@ -439,36 +415,6 @@ export interface TransferDiscrepancy {
 
   createdAt: string;
   resolvedAt: string | null;
-}
-
-// ======================================================
-// WASTE
-// ======================================================
-
-export interface WasteLog {
-  id: string;
-  restaurantId: string;
-  ingredientId: string;
-  qty: DecimalValue;
-  reason: string;
-  createdAt: string;
-}
-
-export interface WasteLogView extends WasteLog {
-  ingredient: Ingredient | null;
-}
-
-export interface CreateWasteInput {
-  restaurantId: string;
-  ingredientId: string;
-  qty: number;
-  reason: string;
-}
-
-export interface WasteResult {
-  wasteLog: WasteLog;
-  stockMovement: StockMovement;
-  stock: RestaurantStock | null;
 }
 // ======================================================
 // STOCK AUDIT FILTERS

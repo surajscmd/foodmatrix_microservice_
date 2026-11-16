@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { RefreshCw } from "lucide-react";
 
 import {
@@ -17,6 +17,7 @@ import MenuTable from "@/elements/menu/MenuTable";
 import AddMenuItemDrawer from "@/elements/menu/AddMenuItemDrawer";
 import MenuItemInformationView from "@/elements/menu/MenuItemInformationView";
 
+import { useOrganizationStore } from "@/store/organization-store";
 import type { Restaurant } from "@/utils/types/organization";
 
 interface MenuScreenProps {
@@ -32,6 +33,9 @@ export default function MenuScreen({
   onAddMenuItem,
   onRefresh,
 }: MenuScreenProps) {
+  const canEditSharedCatalog = useOrganizationStore(
+    (state) => state.currentUser?.systemUser.role === "SUPER_ADMIN",
+  );
   const [isAddDrawerOpen, setIsAddDrawerOpen] = useState(false);
 
   const [editingMenuItem, setEditingMenuItem] = useState<MenuItem | null>(null);
@@ -107,6 +111,7 @@ export default function MenuScreen({
   if (selectedMenuItem) {
     return (
       <MenuItemInformationView
+        canEditSharedCatalog={canEditSharedCatalog}
         menuItem={selectedMenuItem}
         restaurants={restaurants}
         onBack={() => setSelectedMenuItem(null)}
@@ -165,9 +170,12 @@ export default function MenuScreen({
       <main className="animate-fade-in space-y-6 p-6">
         <MenuMetrics refreshKey={metricsRefreshKey} />
 
-        <MenuControls onOpenDrawer={openCreateDrawer} />
+        {canEditSharedCatalog && (
+          <MenuControls onOpenDrawer={openCreateDrawer} />
+        )}
 
         <MenuTable
+          canEditSharedCatalog={canEditSharedCatalog}
           restaurants={restaurants}
           refreshKey={menuTableRefreshKey}
           onSelectMenuItem={setSelectedMenuItem}
@@ -175,7 +183,7 @@ export default function MenuScreen({
           onDeactivateMenuItem={handleDeactivateMenuItem}
         />
 
-        {isAddDrawerOpen && (
+        {canEditSharedCatalog && isAddDrawerOpen && (
           <AddMenuItemDrawer
             key={editingMenuItem?.id ?? "create-menu-item"}
             isOpen={isAddDrawerOpen}

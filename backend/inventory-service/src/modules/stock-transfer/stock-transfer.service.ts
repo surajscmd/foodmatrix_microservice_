@@ -14,14 +14,12 @@ import { ShipTransferDto } from './dto/ship-transfer.dto.js';
 import { ReceiveTransferDto } from './dto/receive-transfer.dto.js';
 import { ResolveDiscrepancyDto } from './dto/resolve-discrepancy.dto.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
-import { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 
 @Injectable()
 export class StockTransferService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalogGatewayService: CatalogGatewayService,
-    private readonly kafkaProducer: KafkaProducerService,
   ) {}
 
   // ======================================================
@@ -779,7 +777,7 @@ export class StockTransferService {
         throw new ConflictException('Transfer has already been processed');
       }
 
-      return tx.stockTransfer.findUnique({
+      const updatedTransfer = await tx.stockTransfer.findUniqueOrThrow({
         where: {
           id: transferId,
         },
@@ -789,26 +787,23 @@ export class StockTransferService {
           shipment: true,
         },
       });
-    });
+      await tx.inventoryOutbox.create({
+        data: {
+          topic: 'inventory.stock-in-transit',
+          payload: {
+            stockTransferId: updatedTransfer.id,
+            stockRequestId: updatedTransfer.stockRequestId,
+            restaurantId: updatedTransfer.toRestaurantId,
+            warehouseId: updatedTransfer.fromWarehouseId,
 
-    // ------------------------------------------------
-    // PUBLISH STOCK IN-TRANSIT EVENT
-    // ------------------------------------------------
-
-    if (!transfer) {
-      throw new NotFoundException('Stock transfer not found');
-    }
-
-    await this.kafkaProducer.publish('inventory.stock-in-transit', {
-      stockTransferId: transfer.id,
-      stockRequestId: transfer.stockRequestId,
-      restaurantId: transfer.toRestaurantId,
-      warehouseId: transfer.fromWarehouseId,
-
-      items: transfer.items.map((item) => ({
-        ingredientId: item.ingredientId,
-        shippedQty: item.shippedQty,
-      })),
+            items: updatedTransfer.items.map((item) => ({
+              ingredientId: item.ingredientId,
+              shippedQty: item.shippedQty?.toJSON() ?? null,
+            })),
+          },
+        },
+      });
+      return updatedTransfer;
     });
 
     return transfer;
@@ -1110,29 +1105,28 @@ export class StockTransferService {
           );
         }
 
+        await tx.inventoryOutbox.create({
+          data: {
+            topic: 'inventory.stock-received',
+            payload: {
+              stockTransferId: completedTransfer.id,
+              stockRequestId: completedTransfer.stockRequestId,
+              restaurantId: completedTransfer.toRestaurantId,
+              warehouseId: completedTransfer.fromWarehouseId,
+
+              items: completedTransfer.items.map((item) => ({
+                ingredientId: item.ingredientId,
+                receivedQty: item.receivedQty?.toJSON() ?? null,
+              })),
+            },
+          },
+        });
         return completedTransfer;
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
-
-    // ==================================================
-    // PUBLISH STOCK RECEIVED EVENT
-    // AFTER TRANSACTION SUCCESS
-    // ==================================================
-
-    await this.kafkaProducer.publish('inventory.stock-received', {
-      stockTransferId: completedTransfer.id,
-      stockRequestId: completedTransfer.stockRequestId,
-      restaurantId: completedTransfer.toRestaurantId,
-      warehouseId: completedTransfer.fromWarehouseId,
-
-      items: completedTransfer.items.map((item) => ({
-        ingredientId: item.ingredientId,
-        receivedQty: item.receivedQty,
-      })),
-    });
 
     return completedTransfer;
   }

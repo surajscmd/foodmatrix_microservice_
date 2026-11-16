@@ -23,6 +23,7 @@ import {
 } from "@/lib/catalog-api";
 
 interface MenuTableProps {
+  canEditSharedCatalog: boolean;
   onSelectMenuItem: (item: MenuItem) => void;
   onEditMenuItem: (item: MenuItem) => void;
   onDeactivateMenuItem: (item: MenuItem) => Promise<void>;
@@ -32,6 +33,7 @@ interface MenuTableProps {
 }
 
 export default function MenuTable({
+  canEditSharedCatalog,
   onSelectMenuItem,
   onEditMenuItem,
   onDeactivateMenuItem,
@@ -125,7 +127,7 @@ export default function MenuTable({
         });
 
         setItems(responseItems);
-        setPagination(selectedCategory ? null : response.pagination);
+        setPagination("pagination" in response ? response.pagination : null);
         setError(null);
       })
       .catch((err) => {
@@ -705,75 +707,79 @@ export default function MenuTable({
                         {/* ACTIONS */}
                         <td className="px-5 py-4 text-right">
                           <div className="flex items-center justify-end gap-2">
-                            <button
-                              type="button"
-                              disabled={isUpdating || isDeactivating}
-                              onClick={(event) =>
-                                handleToggleAvailability(event, item)
-                              }
-                              className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider transition-all duration-200 disabled:cursor-wait disabled:opacity-50 ${
-                                item.isAvailable
-                                  ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/[0.08]"
-                                  : "border-sky-500/20 bg-sky-500/[0.04] text-sky-400 hover:border-sky-500/40 hover:bg-sky-500/[0.08]"
-                              }`}
-                            >
-                              {isUpdating ? (
-                                <>
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  Updating
-                                </>
-                              ) : item.isAvailable ? (
-                                "Disable"
-                              ) : (
-                                "Enable"
-                              )}
-                            </button>
+                            {canEditSharedCatalog && (
+                              <button
+                                type="button"
+                                disabled={isUpdating || isDeactivating}
+                                onClick={(event) =>
+                                  handleToggleAvailability(event, item)
+                                }
+                                className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider transition-all duration-200 disabled:cursor-wait disabled:opacity-50 ${
+                                  item.isAvailable
+                                    ? "border-amber-500/20 bg-amber-500/[0.04] text-amber-400 hover:border-amber-500/40 hover:bg-amber-500/[0.08]"
+                                    : "border-sky-500/20 bg-sky-500/[0.04] text-sky-400 hover:border-sky-500/40 hover:bg-sky-500/[0.08]"
+                                }`}
+                              >
+                                {isUpdating ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    Updating
+                                  </>
+                                ) : item.isAvailable ? (
+                                  "Disable"
+                                ) : (
+                                  "Enable"
+                                )}
+                              </button>
+                            )}
 
                             {/* EDIT */}
-                            <button
-                              type="button"
-                              title="Edit menu item"
-                              aria-label={`Edit ${item.name}`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                onEditMenuItem(item);
-                              }}
-                              className="
-    group
-    flex
-    h-8
-    w-8
-    shrink-0
-    items-center
-    justify-center
-    rounded-lg
-    border
-    border-cyan-500/20
-    bg-gradient-to-br
-    from-cyan-500/[0.10]
-    to-cyan-500/[0.03]
-    text-cyan-400/80
-    shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]
-    transition-all
-    duration-200
-    hover:border-cyan-400/40
-    hover:from-cyan-500/20
-    hover:to-cyan-500/[0.08]
-    hover:text-cyan-300
-    hover:shadow-[0_0_14px_rgba(34,211,238,0.12)]
-    active:scale-95
-    focus-visible:outline-none
-    focus-visible:ring-2
-    focus-visible:ring-cyan-500/40
-    focus-visible:ring-offset-2
-    focus-visible:ring-offset-zinc-950
-  "
-                            >
-                              <Pencil className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-[-8deg] group-hover:scale-110" />
-                            </button>
+                            {canEditSharedCatalog && (
+                              <button
+                                type="button"
+                                title="Edit menu item"
+                                aria-label={`Edit ${item.name}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  onEditMenuItem(item);
+                                }}
+                                className="
+      group
+      flex
+      h-8
+      w-8
+      shrink-0
+      items-center
+      justify-center
+      rounded-lg
+      border
+      border-cyan-500/20
+      bg-gradient-to-br
+      from-cyan-500/[0.10]
+      to-cyan-500/[0.03]
+      text-cyan-400/80
+      shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]
+      transition-all
+      duration-200
+      hover:border-cyan-400/40
+      hover:from-cyan-500/20
+      hover:to-cyan-500/[0.08]
+      hover:text-cyan-300
+      hover:shadow-[0_0_14px_rgba(34,211,238,0.12)]
+      active:scale-95
+      focus-visible:outline-none
+      focus-visible:ring-2
+      focus-visible:ring-cyan-500/40
+      focus-visible:ring-offset-2
+      focus-visible:ring-offset-zinc-950
+    "
+                              >
+                                <Pencil className="h-3.5 w-3.5 transition-transform duration-200 group-hover:rotate-[-8deg] group-hover:scale-110" />
+                              </button>
+                            )}
 
                             {/* DEACTIVATE */}
-                            {item.isAvailable && (
+                            {canEditSharedCatalog && item.isAvailable && (
                               <button
                                 type="button"
                                 title="Deactivate menu item"
@@ -834,7 +840,7 @@ export default function MenuTable({
                           fragment and tbody as its menu item.
                       ================================================= */}
 
-                      {isConfirmingDeactivate && (
+                      {canEditSharedCatalog && isConfirmingDeactivate && (
                         <tr className="border-b border-zinc-900">
                           <td colSpan={8} className="p-0">
                             <div className="border-t border-rose-500/10 bg-rose-500/[0.035] px-4 py-3">

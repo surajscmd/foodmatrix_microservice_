@@ -66,25 +66,26 @@ describe('IngredientController', () => {
           isActive: true,
         },
       ],
-      pagination: {
-        page: 2,
-        limit: 10,
-        totalItems: 47,
-        totalPages: 5,
-        hasNextPage: true,
-        hasPreviousPage: true,
-      },
+      page: 2,
+      limit: 10,
+      total: 47,
+      totalPages: 5,
     };
 
     ingredientServiceMock.findAll.mockResolvedValue(serviceResult);
 
     const result = await controller.findAll('2', '10');
 
-    expect(ingredientServiceMock.findAll).toHaveBeenCalledWith(2, 10);
+    expect(ingredientServiceMock.findAll).toHaveBeenCalledWith(
+      2,
+      10,
+      undefined,
+    );
 
     expect(result).toEqual({
       message: 'Ingredients fetched successfully',
-      ...serviceResult,
+      data: serviceResult.data,
+      pagination: { page: 2, limit: 10, total: 47, totalPages: 5 },
     });
   });
   // ============================================================

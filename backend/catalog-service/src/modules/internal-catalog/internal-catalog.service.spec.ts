@@ -1,239 +1,122 @@
-import { InternalCatalogService } from './internal-catalog.service';
-import { PrismaService } from '../../lib/prisma/prisma.service';
+import { Prisma } from '@prisma/client';
+import type { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { InternalCatalogService } from './internal-catalog.service.js';
 
-describe('InternalCatalogService', () => {
-  let service: InternalCatalogService;
+const menuItem = {
+  id: 'item',
+  name: 'Dosa',
+  sku: 'DOSA',
+  basePrice: new Prisma.Decimal(99.95),
+  isAvailable: true,
+  category: { isActive: true },
+  modifierGroups: [{ groupId: 'group' }],
+};
+const override = {
+  menuItemId: menuItem.id,
+  price: new Prisma.Decimal(109.5),
+  isAvailable: true,
+};
+const modifier = {
+  id: 'extra',
+  name: 'Extra chutney',
+  extraPrice: new Prisma.Decimal(12.5),
+  group: { isActive: true },
+  groupId: 'group',
+  isActive: true,
+};
 
-  const prismaMock = {
-    restaurantMenuItem: {
-      findMany: jest.fn(),
-    },
-    modifier: {
-      findMany: jest.fn(),
-    },
+function pricing({
+  menuItems = [menuItem],
+  overrides = [],
+  modifiers = [],
+}: {
+  menuItems?: (typeof menuItem)[];
+  overrides?: (typeof override)[];
+  modifiers?: (typeof modifier)[];
+} = {}) {
+  const prisma = {
+    restaurantMenuItem: { findMany: jest.fn().mockResolvedValue(overrides) },
+    menuItem: { findMany: jest.fn().mockResolvedValue(menuItems) },
+    modifier: { findMany: jest.fn().mockResolvedValue(modifiers) },
   };
+  return {
+    service: new InternalCatalogService(prisma as unknown as PrismaService),
+    prisma,
+  };
+}
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-
-    service = new InternalCatalogService(
-      prismaMock as unknown as PrismaService,
-    );
+it('prices a unique item and modifier at the restaurant override', async () => {
+  const { service, prisma } = pricing({
+    overrides: [override],
+    modifiers: [modifier],
   });
-
-  describe('getBulkPricing', () => {
-    it('should return menu items and modifiers with correct pricing', async () => {
-      const restaurantId = 'restaurant-1';
-
-      const menuItemIds = ['menu-item-1', 'menu-item-2'];
-
-      const modifierIds = ['modifier-1', 'modifier-2'];
-
-      prismaMock.restaurantMenuItem.findMany.mockResolvedValue([
-        {
-          menuItemId: 'menu-item-1',
-          price: 149.5,
-          isAvailable: true,
-          menuItem: {
-            name: 'Masala Dosa',
-            sku: 'DOS-MAS-001',
-            isAvailable: true,
-          },
-        },
-        {
-          menuItemId: 'menu-item-2',
-          price: 299,
-          isAvailable: false,
-          menuItem: {
-            name: 'Chicken Biryani',
-            sku: 'BIR-CHK-001',
-            isAvailable: true,
-          },
-        },
-      ]);
-
-      prismaMock.modifier.findMany.mockResolvedValue([
-        {
-          id: 'modifier-1',
-          name: 'Extra Butter',
-          extraPrice: 20.0,
-          isActive: true,
-        },
-        {
-          id: 'modifier-2',
-          name: 'Extra Cheese',
-          extraPrice: 40.0,
-          isActive: false,
-        },
-      ]);
-
-      const result = await service.getBulkPricing(
-        restaurantId,
-        menuItemIds,
-        modifierIds,
-      );
-
-      expect(prismaMock.restaurantMenuItem.findMany).toHaveBeenCalledWith({
-        where: {
-          restaurantId,
-          menuItemId: {
-            in: menuItemIds,
-          },
-        },
-        include: {
-          menuItem: true,
-        },
-      });
-
-      expect(prismaMock.modifier.findMany).toHaveBeenCalledWith({
-        where: {
-          id: {
-            in: modifierIds,
-          },
-        },
-      });
-
-      expect(result).toEqual({
-        menuItems: [
-          {
-            menuItemId: 'menu-item-1',
-            name: 'Masala Dosa',
-            sku: 'DOS-MAS-001',
-            price: 149.5,
-            isAvailable: true,
-          },
-          {
-            menuItemId: 'menu-item-2',
-            name: 'Chicken Biryani',
-            sku: 'BIR-CHK-001',
-            price: 299,
-            isAvailable: false,
-          },
-        ],
-        modifiers: [
-          {
-            id: 'modifier-1',
-            name: 'Extra Butter',
-            extraPrice: 20,
-            isActive: true,
-          },
-          {
-            id: 'modifier-2',
-            name: 'Extra Cheese',
-            extraPrice: 40,
-            isActive: false,
-          },
-        ],
-      });
-    });
-
-    it('should return empty arrays when no menu items or modifiers are found', async () => {
-      prismaMock.restaurantMenuItem.findMany.mockResolvedValue([]);
-      prismaMock.modifier.findMany.mockResolvedValue([]);
-
-      const result = await service.getBulkPricing('restaurant-1', [], []);
-
-      expect(result).toEqual({
-        menuItems: [],
-        modifiers: [],
-      });
-
-      expect(prismaMock.restaurantMenuItem.findMany).toHaveBeenCalledWith({
-        where: {
-          restaurantId: 'restaurant-1',
-          menuItemId: {
-            in: [],
-          },
-        },
-        include: {
-          menuItem: true,
-        },
-      });
-
-      expect(prismaMock.modifier.findMany).toHaveBeenCalledWith({
-        where: {
-          id: {
-            in: [],
-          },
-        },
-      });
-    });
-
-    it('should set menu item unavailable when restaurant item is unavailable', async () => {
-      prismaMock.restaurantMenuItem.findMany.mockResolvedValue([
-        {
-          menuItemId: 'menu-item-1',
-          price: 199,
-          isAvailable: false,
-          menuItem: {
-            name: 'Plain Dosa',
-            sku: 'DOS-PLA-001',
-            isAvailable: true,
-          },
-        },
-      ]);
-
-      prismaMock.modifier.findMany.mockResolvedValue([]);
-
-      const result = await service.getBulkPricing(
-        'restaurant-1',
-        ['menu-item-1'],
-        [],
-      );
-
-      expect(result.menuItems[0]).toEqual({
-        menuItemId: 'menu-item-1',
-        name: 'Plain Dosa',
-        sku: 'DOS-PLA-001',
-        price: 199,
-        isAvailable: false,
-      });
-    });
-
-    it('should set menu item unavailable when the menu item itself is unavailable', async () => {
-      prismaMock.restaurantMenuItem.findMany.mockResolvedValue([
-        {
-          menuItemId: 'menu-item-1',
-          price: 199,
-          isAvailable: true,
-          menuItem: {
-            name: 'Plain Dosa',
-            sku: 'DOS-PLA-001',
-            isAvailable: false,
-          },
-        },
-      ]);
-
-      prismaMock.modifier.findMany.mockResolvedValue([]);
-
-      const result = await service.getBulkPricing(
-        'restaurant-1',
-        ['menu-item-1'],
-        [],
-      );
-
-      expect(result.menuItems[0]).toEqual({
-        menuItemId: 'menu-item-1',
-        name: 'Plain Dosa',
-        sku: 'DOS-PLA-001',
-        price: 199,
-        isAvailable: false,
-      });
-    });
-
-    it('should run both Prisma queries', async () => {
-      prismaMock.restaurantMenuItem.findMany.mockResolvedValue([]);
-      prismaMock.modifier.findMany.mockResolvedValue([]);
-
-      await service.getBulkPricing(
-        'restaurant-1',
-        ['menu-item-1'],
-        ['modifier-1'],
-      );
-
-      expect(prismaMock.restaurantMenuItem.findMany).toHaveBeenCalledTimes(1);
-
-      expect(prismaMock.modifier.findMany).toHaveBeenCalledTimes(1);
-    });
+  const result = await service.getBulkPricing(
+    'restaurant',
+    [menuItem.id, menuItem.id],
+    [modifier.id, modifier.id],
+  );
+  expect(result.menuItems).toEqual([
+    {
+      menuItemId: 'item',
+      name: 'Dosa',
+      sku: 'DOSA',
+      price: 109.5,
+      isAvailable: true,
+      modifierGroupIds: ['group'],
+    },
+  ]);
+  expect(result.modifiers).toHaveLength(1);
+  expect(result.modifiers[0]).toMatchObject({
+    id: modifier.id,
+    extraPrice: 12.5,
+    groupId: 'group',
   });
+  expect(prisma.restaurantMenuItem.findMany).toHaveBeenCalledWith({
+    where: { restaurantId: 'restaurant', menuItemId: { in: ['item'] } },
+  });
+});
+
+it('falls back to the global price when the restaurant has no override', async () => {
+  const { service } = pricing();
+  const result = await service.getBulkPricing('restaurant', ['item'], []);
+  expect(result.menuItems[0]).toMatchObject({
+    price: 99.95,
+    isAvailable: true,
+  });
+});
+
+it('returns empty arrays for an empty request', async () => {
+  const { service } = pricing({ menuItems: [] });
+  await expect(service.getBulkPricing('restaurant', [], [])).resolves.toEqual({
+    menuItems: [],
+    modifiers: [],
+  });
+});
+
+it('reports an item missing from the global menu', async () => {
+  const { service } = pricing({ menuItems: [] });
+  await expect(
+    service.getBulkPricing('restaurant', ['item'], []),
+  ).rejects.toThrow('was not found');
+});
+
+it.each([
+  { overrides: [{ ...override, isAvailable: false }] },
+  { menuItems: [{ ...menuItem, isAvailable: false }], overrides: [override] },
+  { menuItems: [{ ...menuItem, category: { isActive: false } }] },
+])('rejects unavailable menu items', async (scenario) => {
+  const { service } = pricing(scenario);
+  await expect(
+    service.getBulkPricing('restaurant', ['item'], []),
+  ).rejects.toThrow('not currently available');
+});
+
+it.each([
+  { ...modifier, isActive: false },
+  { ...modifier, group: { isActive: false } },
+])('rejects unavailable modifiers', async (candidate) => {
+  const { service } = pricing({ modifiers: [candidate] });
+  await expect(
+    service.getBulkPricing('restaurant', ['item'], ['extra']),
+  ).rejects.toThrow('not currently available');
 });

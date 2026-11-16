@@ -361,3 +361,22 @@ model WasteLog {
   @@index([ingredientId])
   @@index([createdAt])
 }
+
+model InventoryOutbox {
+  id        String   @id @default(uuid())
+  topic     String
+  payload   Json
+  createdAt DateTime @default(now()) @db.Timestamp(3)
+
+  @@index([createdAt])
+}
+
+model InventoryPendingDeduction {
+  orderItemId String   @id
+  payload     Json
+  retryAt     DateTime @db.Timestamp(3)
+  attempts    Int      @default(0)
+  lastError   String
+
+  @@index([retryAt])
+}

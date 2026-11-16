@@ -1,3 +1,4 @@
+import { InventoryAccess } from '../../auth/inventory-access.js';
 import { Controller, Get, Param, Query } from '@nestjs/common';
 
 import { StockMovementService } from './stock-movement.service.js';
@@ -23,6 +24,7 @@ export class StockMovementController {
   // ======================================================
 
   @Get()
+  @InventoryAccess('admin')
   async findAll(@Query() dto: GetStockMovementsDto) {
     const data = await this.stockMovementService.findAll(dto);
 
@@ -39,6 +41,7 @@ export class StockMovementController {
   // ======================================================
 
   @Get('restaurant/:restaurantId')
+  @InventoryAccess('restaurant-read')
   async findByRestaurant(
     @Param('restaurantId') restaurantId: string,
     @Query() dto: GetStockMovementsDto,
@@ -61,6 +64,7 @@ export class StockMovementController {
   // ======================================================
 
   @Get('warehouse/:warehouseId')
+  @InventoryAccess('warehouse')
   async findByWarehouse(
     @Param('warehouseId') warehouseId: string,
     @Query() dto: GetStockMovementsDto,

@@ -14,11 +14,14 @@ it('deactivates scoped accounts and deletes their sessions inside the same trans
     .mockResolvedValue({ count: 2 });
   const target = { id: 'target', authUserId: 'login', isActive: false };
   const tx = {
-    systemUser: { updateMany, findUniqueOrThrow: async () => target },
+    systemUser: {
+      updateMany,
+      findUniqueOrThrow: () => Promise.resolve(target),
+    },
     session: { deleteMany },
   };
   const service = new SystemUserService({
-    $transaction: async (work: (client: typeof tx) => unknown) => work(tx),
+    $transaction: (work: (client: typeof tx) => Promise<unknown>) => work(tx),
   } as unknown as PrismaService);
   const actor = {
     id: 'caller',

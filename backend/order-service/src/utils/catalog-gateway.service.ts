@@ -11,6 +11,7 @@ export interface CatalogMenuItem {
   sku: string;
   price: number;
   isAvailable: boolean;
+  modifierGroupIds: string[];
 }
 
 export interface CatalogModifier {
@@ -18,6 +19,7 @@ export interface CatalogModifier {
   name: string;
   extraPrice: number;
   isActive: boolean;
+  groupId: string;
 }
 
 export interface BulkCatalogResponse {
@@ -28,7 +30,7 @@ export interface BulkCatalogResponse {
 @Injectable()
 export class CatalogGatewayService {
   private readonly baseUrl =
-    process.env.CATALOG_SERVICE_URL ?? 'http://localhost:3002';
+    process.env.CATALOG_SERVICE_URL ?? 'http://localhost:3004';
 
   private readonly internalApiKey = process.env.INTERNAL_API_KEY ?? '';
 
@@ -42,6 +44,8 @@ export class CatalogGatewayService {
         `${this.baseUrl}/internal/catalog/bulk-pricing`,
         {
           method: 'POST',
+          signal: AbortSignal.timeout(5000),
+          redirect: 'error',
 
           headers: {
             'Content-Type': 'application/json',

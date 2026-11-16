@@ -1,3 +1,4 @@
+import { InventoryAccess } from '../../auth/inventory-access.js';
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { WarehouseStockService } from './warehouse-stock.service.js';
@@ -17,6 +18,7 @@ export class WarehouseStockController {
   // ======================================================
 
   @Post('receive')
+  @InventoryAccess('warehouse')
   async receiveStock(@Body() dto: ReceiveWarehouseStockDto) {
     const data = await this.warehouseStockService.receiveStock(dto);
 
@@ -32,6 +34,7 @@ export class WarehouseStockController {
   // POST /warehouse-stock/receive/bulk
   // ======================================================
   @Post('receive/bulk')
+  @InventoryAccess('warehouse')
   async bulkReceiveStock(@Body() dto: BulkReceiveWarehouseStockDto) {
     const data = await this.warehouseStockService.bulkReceiveStock(dto);
 
@@ -51,6 +54,7 @@ export class WarehouseStockController {
   // ======================================================
 
   @Get('warehouse/:warehouseId')
+  @InventoryAccess('warehouse')
   async findByWarehouse(
     @Param('warehouseId') warehouseId: string,
     @Query('page') page = '1',
@@ -75,6 +79,7 @@ export class WarehouseStockController {
   // ======================================================
 
   @Get('warehouse/:warehouseId/ingredient/:ingredientId')
+  @InventoryAccess('warehouse')
   async findByWarehouseAndIngredient(
     @Param('warehouseId') warehouseId: string,
     @Param('ingredientId') ingredientId: string,
@@ -103,6 +108,7 @@ export class WarehouseStockController {
   // ======================================================
 
   @Post(':warehouseId/:ingredientId/adjust')
+  @InventoryAccess('warehouse')
   async adjustStock(
     @Param('warehouseId') warehouseId: string,
     @Param('ingredientId') ingredientId: string,

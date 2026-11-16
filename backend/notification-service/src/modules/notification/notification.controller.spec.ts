@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationController } from './notification.controller';
 import { NotificationService } from './notification.service';
+import { NotificationGuard } from '../../auth/notification.guard';
 
 describe('NotificationController', () => {
   let controller: NotificationController;
@@ -8,8 +9,11 @@ describe('NotificationController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [NotificationController],
-      providers: [NotificationService],
-    }).compile();
+      providers: [{ provide: NotificationService, useValue: {} }],
+    })
+      .overrideGuard(NotificationGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<NotificationController>(NotificationController);
   });

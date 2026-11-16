@@ -1,12 +1,13 @@
-import { IsBoolean, IsNumber, IsOptional, Min } from 'class-validator';
+import { IsBoolean, IsNumber, Max, Min, ValidateIf } from 'class-validator';
 
 export class UpdateRestaurantMenuItemDto {
-  @IsOptional()
-  @IsNumber()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
+  @Max(99_999_999.99)
   price?: number;
 
-  @IsOptional()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isAvailable?: boolean;
 }

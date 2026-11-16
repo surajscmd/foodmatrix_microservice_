@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { SystemUserRole } from '@prisma/client';
+import { RestaurantStatus, SystemUserRole } from '@prisma/client';
 import type { AuthenticatedUser } from './auth.guard.js';
 
 export function requiredFranchise(user: AuthenticatedUser, requested?: string) {
@@ -20,5 +20,9 @@ export function restaurantScope(user: AuthenticatedUser) {
   if (user.role === SystemUserRole.FRANCHISE_ADMIN) return { franchiseId };
   if (!user.managedRestaurantId)
     throw new ForbiddenException('No restaurant is assigned to this account');
-  return { id: user.managedRestaurantId, franchiseId };
+  return {
+    id: user.managedRestaurantId,
+    franchiseId,
+    status: RestaurantStatus.ACTIVE,
+  };
 }

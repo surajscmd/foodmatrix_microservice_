@@ -8,6 +8,7 @@ import { KafkaConsumerService } from './kafka-consumer.service.js';
 // INVENTORY HANDLERS
 // ============================================================
 
+import { NotificationDeliveryService } from './handlers/notification-delivery.service.js';
 import { InventoryLowStockHandler } from './handlers/inventory-low-stock.handler.js';
 
 import { StockRequestCreatedHandler } from './handlers/stock-request-created.handler.js';
@@ -46,6 +47,7 @@ import { SocketModule } from '../socket/socket.module.js';
     // Inventory Handlers
     // ----------------------------------------------------------
 
+    NotificationDeliveryService,
     InventoryLowStockHandler,
 
     StockRequestCreatedHandler,

@@ -177,6 +177,17 @@ describe('MenuItemService', () => {
   // FIND ALL
   // ============================================================
 
+  const menuListInclude = {
+    category: true,
+    _count: {
+      select: { restaurantMenus: true, recipe: true, modifierGroups: true },
+    },
+    restaurantMenus: {
+      where: { isAvailable: false },
+      select: { restaurantId: true },
+    },
+  };
+
   describe('findAll', () => {
     it('should return paginated menu items', async () => {
       const menuItems = [
@@ -202,7 +213,13 @@ describe('MenuItemService', () => {
         },
       ];
 
-      prismaMock.menuItem.findMany.mockResolvedValue(menuItems);
+      prismaMock.menuItem.findMany.mockResolvedValue(
+        menuItems.map((item) => ({
+          ...item,
+          _count: { restaurantMenus: 2, recipe: 1, modifierGroups: 3 },
+          restaurantMenus: [{ restaurantId: 'unavailable-location' }],
+        })),
+      );
       prismaMock.menuItem.count.mockResolvedValue(25);
 
       const result = await service.findAll(2, 10);
@@ -210,9 +227,7 @@ describe('MenuItemService', () => {
       expect(prismaMock.menuItem.findMany).toHaveBeenCalledWith({
         skip: 10,
         take: 10,
-        include: {
-          category: true,
-        },
+        include: menuListInclude,
         orderBy: {
           createdAt: 'desc',
         },
@@ -221,7 +236,13 @@ describe('MenuItemService', () => {
       expect(prismaMock.menuItem.count).toHaveBeenCalledWith();
 
       expect(result).toEqual({
-        data: menuItems,
+        data: menuItems.map((item) => ({
+          ...item,
+          configuredRestaurantCount: 2,
+          recipeIngredientCount: 1,
+          modifierGroupCount: 3,
+          unavailableRestaurantIds: ['unavailable-location'],
+        })),
         pagination: {
           page: 2,
           limit: 10,
@@ -240,9 +261,7 @@ describe('MenuItemService', () => {
       expect(prismaMock.menuItem.findMany).toHaveBeenCalledWith({
         skip: 0,
         take: 10,
-        include: {
-          category: true,
-        },
+        include: menuListInclude,
         orderBy: {
           createdAt: 'desc',
         },
@@ -268,9 +287,7 @@ describe('MenuItemService', () => {
       expect(prismaMock.menuItem.findMany).toHaveBeenCalledWith({
         skip: 75,
         take: 25,
-        include: {
-          category: true,
-        },
+        include: menuListInclude,
         orderBy: {
           createdAt: 'desc',
         },
@@ -351,7 +368,7 @@ describe('MenuItemService', () => {
   // ============================================================
 
   describe('findByCategory', () => {
-    it('should return category once and all its menu items', async () => {
+    it('should return the category and its menu items', async () => {
       const category = {
         id: 'category-1',
         name: 'South Indian Breakfast',
@@ -377,7 +394,14 @@ describe('MenuItemService', () => {
       ];
 
       prismaMock.menuCategory.findUnique.mockResolvedValue(category);
-      prismaMock.menuItem.findMany.mockResolvedValue(menuItems);
+      prismaMock.menuItem.findMany.mockResolvedValue(
+        menuItems.map((item) => ({
+          ...item,
+          category,
+          _count: { restaurantMenus: 2, recipe: 1, modifierGroups: 3 },
+          restaurantMenus: [{ restaurantId: 'unavailable-location' }],
+        })),
+      );
 
       const result = await service.findByCategory('category-1');
 
@@ -391,6 +415,7 @@ describe('MenuItemService', () => {
         where: {
           categoryId: 'category-1',
         },
+        include: menuListInclude,
         orderBy: {
           createdAt: 'desc',
         },
@@ -398,7 +423,14 @@ describe('MenuItemService', () => {
 
       expect(result).toEqual({
         category,
-        data: menuItems,
+        data: menuItems.map((item) => ({
+          ...item,
+          category,
+          configuredRestaurantCount: 2,
+          recipeIngredientCount: 1,
+          modifierGroupCount: 3,
+          unavailableRestaurantIds: ['unavailable-location'],
+        })),
       });
     });
 

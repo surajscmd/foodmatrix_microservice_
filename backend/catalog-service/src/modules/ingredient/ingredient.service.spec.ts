@@ -121,6 +121,7 @@ describe('IngredientService', () => {
     let service: IngredientService;
 
     const prismaMock = {
+      $transaction: (queries: Promise<unknown>[]) => Promise.all(queries),
       ingredient: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
@@ -256,23 +257,22 @@ describe('IngredientService', () => {
         const result = await service.findAll(2, 10);
 
         expect(prismaMock.ingredient.findMany).toHaveBeenCalledWith({
+          where: {},
           skip: 10,
           take: 10,
           orderBy: {
-            createdAt: 'desc',
+            name: 'asc',
           },
         });
 
-        expect(prismaMock.ingredient.count).toHaveBeenCalledWith();
+        expect(prismaMock.ingredient.count).toHaveBeenCalledWith({ where: {} });
 
         expect(result).toEqual({
           data: ingredients,
-          pagination: {
-            page: 2,
-            limit: 10,
-            total: 47,
-            totalPages: 5,
-          },
+          page: 2,
+          limit: 10,
+          total: 47,
+          totalPages: 5,
         });
       });
 
@@ -283,23 +283,22 @@ describe('IngredientService', () => {
         const result = await service.findAll();
 
         expect(prismaMock.ingredient.findMany).toHaveBeenCalledWith({
+          where: {},
           skip: 0,
           take: 10,
           orderBy: {
-            createdAt: 'desc',
+            name: 'asc',
           },
         });
 
-        expect(prismaMock.ingredient.count).toHaveBeenCalledWith();
+        expect(prismaMock.ingredient.count).toHaveBeenCalledWith({ where: {} });
 
         expect(result).toEqual({
           data: [],
-          pagination: {
-            page: 1,
-            limit: 10,
-            total: 0,
-            totalPages: 0,
-          },
+          page: 1,
+          limit: 10,
+          total: 0,
+          totalPages: 0,
         });
       });
 
@@ -311,12 +310,10 @@ describe('IngredientService', () => {
 
         expect(result).toEqual({
           data: [],
-          pagination: {
-            page: 5,
-            limit: 10,
-            total: 47,
-            totalPages: 5,
-          },
+          page: 5,
+          limit: 10,
+          total: 47,
+          totalPages: 5,
         });
       });
 
@@ -327,10 +324,11 @@ describe('IngredientService', () => {
         await service.findAll(4, 25);
 
         expect(prismaMock.ingredient.findMany).toHaveBeenCalledWith({
+          where: {},
           skip: 75,
           take: 25,
           orderBy: {
-            createdAt: 'desc',
+            name: 'asc',
           },
         });
       });

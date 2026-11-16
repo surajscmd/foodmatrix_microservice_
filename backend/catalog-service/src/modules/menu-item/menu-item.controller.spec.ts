@@ -1,7 +1,14 @@
+import type { CatalogActor } from '../../auth/catalog-access';
 import { MenuItemController } from './menu-item.controller';
 import { MenuItemService } from './menu-item.service';
 
 describe('MenuItemController', () => {
+  const actor: CatalogActor = {
+    id: 'admin',
+    role: 'SUPER_ADMIN',
+    managedRestaurantId: null,
+    restaurants: [{ id: 'restaurant-1' }],
+  };
   let controller: MenuItemController;
 
   const menuItemServiceMock = {
@@ -85,9 +92,13 @@ describe('MenuItemController', () => {
 
       menuItemServiceMock.findAll.mockResolvedValue(serviceResult);
 
-      const result = await controller.findAll('2', '10');
+      const result = await controller.findAll(actor, '2', '10');
 
-      expect(menuItemServiceMock.findAll).toHaveBeenCalledWith(2, 10);
+      expect(menuItemServiceMock.findAll).toHaveBeenCalledWith(
+        2,
+        10,
+        undefined,
+      );
 
       expect(result).toEqual({
         message: 'Menu items retrieved successfully',
@@ -108,9 +119,13 @@ describe('MenuItemController', () => {
 
       menuItemServiceMock.findAll.mockResolvedValue(serviceResult);
 
-      const result = await controller.findAll();
+      const result = await controller.findAll(actor);
 
-      expect(menuItemServiceMock.findAll).toHaveBeenCalledWith(1, 10);
+      expect(menuItemServiceMock.findAll).toHaveBeenCalledWith(
+        1,
+        10,
+        undefined,
+      );
 
       expect(result).toEqual({
         message: 'Menu items retrieved successfully',
@@ -176,10 +191,11 @@ describe('MenuItemController', () => {
 
       menuItemServiceMock.findByCategory.mockResolvedValue(serviceResult);
 
-      const result = await controller.findByCategory('category-1');
+      const result = await controller.findByCategory(actor, 'category-1');
 
       expect(menuItemServiceMock.findByCategory).toHaveBeenCalledWith(
         'category-1',
+        undefined,
       );
 
       expect(result).toEqual({

@@ -54,6 +54,7 @@ import RecipeItemPopup from "./RecipeItemPopup";
 // ============================================================
 
 interface MenuItemInformationViewProps {
+  canEditSharedCatalog: boolean;
   menuItem: MenuItem;
   restaurants: Restaurant[];
   onBack: () => void;
@@ -552,6 +553,7 @@ function formatDate(value?: string) {
 // ============================================================
 
 export default function MenuItemInformationView({
+  canEditSharedCatalog,
   menuItem,
   restaurants,
   onBack,
@@ -1345,33 +1347,35 @@ export default function MenuItemInformationView({
                     {recipes.length} ingredients
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => void openAddRecipePopup()}
-                    disabled={isSavingRecipe}
-                    className="
-                      inline-flex
-                      items-center
-                      gap-1.5
-                      rounded-lg
-                      border
-                      border-emerald-500/20
-                      bg-emerald-500/10
-                      px-3
-                      py-2
-                      text-xs
-                      font-medium
-                      text-emerald-300
-                      transition
-                      hover:border-emerald-500/30
-                      hover:bg-emerald-500/15
-                      disabled:cursor-not-allowed
-                      disabled:opacity-40
-                    "
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add Ingredient
-                  </button>
+                  {canEditSharedCatalog && (
+                    <button
+                      type="button"
+                      onClick={() => void openAddRecipePopup()}
+                      disabled={isSavingRecipe}
+                      className="
+                        inline-flex
+                        items-center
+                        gap-1.5
+                        rounded-lg
+                        border
+                        border-emerald-500/20
+                        bg-emerald-500/10
+                        px-3
+                        py-2
+                        text-xs
+                        font-medium
+                        text-emerald-300
+                        transition
+                        hover:border-emerald-500/30
+                        hover:bg-emerald-500/15
+                        disabled:cursor-not-allowed
+                        disabled:opacity-40
+                      "
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Ingredient
+                    </button>
+                  )}
                 </div>
               }
             >
@@ -1386,37 +1390,39 @@ export default function MenuItemInformationView({
                   </p>
 
                   <p className="mx-auto mt-1 max-w-sm text-xs text-zinc-600">
-                    Add ingredients and define the quantity required to prepare
-                    this menu item.
+                    Ingredients and quantities will appear here when a recipe is
+                    configured.
                   </p>
 
-                  <button
-                    type="button"
-                    onClick={() => void openAddRecipePopup()}
-                    disabled={isSavingRecipe}
-                    className="
-                      mt-4
-                      inline-flex
-                      items-center
-                      gap-2
-                      rounded-lg
-                      border
-                      border-emerald-500/20
-                      bg-emerald-500/10
-                      px-3
-                      py-2
-                      text-xs
-                      font-medium
-                      text-emerald-300
-                      transition
-                      hover:bg-emerald-500/15
-                      disabled:cursor-not-allowed
-                      disabled:opacity-40
-                    "
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    Add First Ingredient
-                  </button>
+                  {canEditSharedCatalog && (
+                    <button
+                      type="button"
+                      onClick={() => void openAddRecipePopup()}
+                      disabled={isSavingRecipe}
+                      className="
+                        mt-4
+                        inline-flex
+                        items-center
+                        gap-2
+                        rounded-lg
+                        border
+                        border-emerald-500/20
+                        bg-emerald-500/10
+                        px-3
+                        py-2
+                        text-xs
+                        font-medium
+                        text-emerald-300
+                        transition
+                        hover:bg-emerald-500/15
+                        disabled:cursor-not-allowed
+                        disabled:opacity-40
+                      "
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Add First Ingredient
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="overflow-hidden rounded-xl border border-zinc-800">
@@ -1475,75 +1481,79 @@ export default function MenuItemInformationView({
                             </div>
 
                             <div className="flex shrink-0 items-center gap-4">
-                              <button
-                                type="button"
-                                onClick={() => void openEditRecipePopup(recipe)}
-                                disabled={
-                                  isSavingRecipe ||
-                                  deletingRecipeId === recipe.id
-                                }
-                                title="Edit recipe ingredient"
-                                aria-label={`Edit ${recipe.ingredientName}`}
-                                className="
-                                  group
-                                  flex
-                                  h-8
-                                  w-8
-                                  items-center
-                                  justify-center
-                                  rounded-lg
-                                  border
-                                  border-cyan-500/20
-                                  bg-cyan-500/5
-                                  text-cyan-400
-                                  transition-all
-                                  duration-200
-                                  hover:border-cyan-400/40
-                                  hover:bg-cyan-500/15
-                                  hover:text-cyan-300
-                                  hover:shadow-[0_0_16px_rgba(34,211,238,0.08)]
-                                  disabled:cursor-not-allowed
-                                  disabled:opacity-40
-                                "
-                              >
-                                <Edit3 className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
-                              </button>
+                              {canEditSharedCatalog && (
+                                <button
+                                  type="button"
+                                  onClick={() => void openEditRecipePopup(recipe)}
+                                  disabled={
+                                    isSavingRecipe ||
+                                    deletingRecipeId === recipe.id
+                                  }
+                                  title="Edit recipe ingredient"
+                                  aria-label={`Edit ${recipe.ingredientName}`}
+                                  className="
+                                    group
+                                    flex
+                                    h-8
+                                    w-8
+                                    items-center
+                                    justify-center
+                                    rounded-lg
+                                    border
+                                    border-cyan-500/20
+                                    bg-cyan-500/5
+                                    text-cyan-400
+                                    transition-all
+                                    duration-200
+                                    hover:border-cyan-400/40
+                                    hover:bg-cyan-500/15
+                                    hover:text-cyan-300
+                                    hover:shadow-[0_0_16px_rgba(34,211,238,0.08)]
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-40
+                                  "
+                                >
+                                  <Edit3 className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
+                                </button>
+                              )}
 
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setConfirmDeleteRecipeId(recipe.id)
-                                }
-                                disabled={
-                                  deletingRecipeId === recipe.id ||
-                                  isSavingRecipe
-                                }
-                                title="Remove recipe ingredient"
-                                aria-label={`Remove ${recipe.ingredientName}`}
-                                className="
-                                  group
-                                  flex
-                                  h-8
-                                  w-8
-                                  items-center
-                                  justify-center
-                                  rounded-lg
-                                  border
-                                  border-rose-500/20
-                                  bg-rose-500/5
-                                  text-rose-400
-                                  transition-all
-                                  duration-200
-                                  hover:border-rose-400/40
-                                  hover:bg-rose-500/15
-                                  hover:text-rose-300
-                                  hover:shadow-[0_0_16px_rgba(244,63,94,0.08)]
-                                  disabled:cursor-not-allowed
-                                  disabled:opacity-40
-                                "
-                              >
-                                <XCircle className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
-                              </button>
+                              {canEditSharedCatalog && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setConfirmDeleteRecipeId(recipe.id)
+                                  }
+                                  disabled={
+                                    deletingRecipeId === recipe.id ||
+                                    isSavingRecipe
+                                  }
+                                  title="Remove recipe ingredient"
+                                  aria-label={`Remove ${recipe.ingredientName}`}
+                                  className="
+                                    group
+                                    flex
+                                    h-8
+                                    w-8
+                                    items-center
+                                    justify-center
+                                    rounded-lg
+                                    border
+                                    border-rose-500/20
+                                    bg-rose-500/5
+                                    text-rose-400
+                                    transition-all
+                                    duration-200
+                                    hover:border-rose-400/40
+                                    hover:bg-rose-500/15
+                                    hover:text-rose-300
+                                    hover:shadow-[0_0_16px_rgba(244,63,94,0.08)]
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-40
+                                  "
+                                >
+                                  <XCircle className="h-3.5 w-3.5 transition-transform duration-200 group-hover:scale-110" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1758,37 +1768,39 @@ export default function MenuItemInformationView({
                     {modifierGroups.length === 1 ? "group" : "groups"}
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => void openModifierGroupPopup()}
-                    disabled={isLoadingModifierGroupCatalog}
-                    className="
-                      inline-flex
-                      items-center
-                      gap-2
-                      rounded-lg
-                      border
-                      border-emerald-500/20
-                      bg-emerald-500/10
-                      px-3
-                      py-2
-                      text-xs
-                      font-medium
-                      text-emerald-300
-                      transition
-                      hover:border-emerald-500/30
-                      hover:bg-emerald-500/15
-                      disabled:cursor-not-allowed
-                      disabled:opacity-40
-                    "
-                  >
-                    {isLoadingModifierGroupCatalog ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Plus className="h-3.5 w-3.5" />
-                    )}
-                    Add Group
-                  </button>
+                  {canEditSharedCatalog && (
+                    <button
+                      type="button"
+                      onClick={() => void openModifierGroupPopup()}
+                      disabled={isLoadingModifierGroupCatalog}
+                      className="
+                        inline-flex
+                        items-center
+                        gap-2
+                        rounded-lg
+                        border
+                        border-emerald-500/20
+                        bg-emerald-500/10
+                        px-3
+                        py-2
+                        text-xs
+                        font-medium
+                        text-emerald-300
+                        transition
+                        hover:border-emerald-500/30
+                        hover:bg-emerald-500/15
+                        disabled:cursor-not-allowed
+                        disabled:opacity-40
+                      "
+                    >
+                      {isLoadingModifierGroupCatalog ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Plus className="h-3.5 w-3.5" />
+                      )}
+                      Add Group
+                    </button>
+                  )}
                 </div>
               }
             >
@@ -1852,42 +1864,44 @@ export default function MenuItemInformationView({
                             </p>
                           </div>
 
-                          <button
-                            type="button"
-                            title="Remove modifier group"
-                            aria-label={`Remove ${group.name} from this menu item`}
-                            onClick={() =>
-                              void handleRemoveModifierGroup(group.id)
-                            }
-                            disabled={removingModifierGroupId === group.id}
-                            className="
-                              flex
-                              h-8
-                              w-8
-                              shrink-0
-                              items-center
-                              justify-center
-                              rounded-lg
-                              border
-                              border-rose-500/15
-                              bg-rose-500/5
-                              text-rose-400
-                              transition-all
-                              duration-200
-                              hover:border-rose-500/40
-                              hover:bg-rose-500/15
-                              hover:text-rose-300
-                              active:scale-95
-                              disabled:cursor-not-allowed
-                              disabled:opacity-40
-                            "
-                          >
-                            {removingModifierGroupId === group.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Unlink2 className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                          {canEditSharedCatalog && (
+                            <button
+                              type="button"
+                              title="Remove modifier group"
+                              aria-label={`Remove ${group.name} from this menu item`}
+                              onClick={() =>
+                                void handleRemoveModifierGroup(group.id)
+                              }
+                              disabled={removingModifierGroupId === group.id}
+                              className="
+                                flex
+                                h-8
+                                w-8
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                border
+                                border-rose-500/15
+                                bg-rose-500/5
+                                text-rose-400
+                                transition-all
+                                duration-200
+                                hover:border-rose-500/40
+                                hover:bg-rose-500/15
+                                hover:text-rose-300
+                                active:scale-95
+                                disabled:cursor-not-allowed
+                                disabled:opacity-40
+                              "
+                            >
+                              {removingModifierGroupId === group.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Unlink2 className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -2028,7 +2042,7 @@ export default function MenuItemInformationView({
       )}
 
       <AddModifierGroupPopup
-        isOpen={isModifierGroupPopupOpen}
+        isOpen={canEditSharedCatalog && isModifierGroupPopupOpen}
         groups={availableModifierGroups}
         selectedGroupId={selectedModifierGroupId}
         searchTerm={modifierGroupSearch}
@@ -2046,7 +2060,7 @@ export default function MenuItemInformationView({
       />
 
       <RecipeItemPopup
-        isOpen={isRecipePopupOpen}
+        isOpen={canEditSharedCatalog && isRecipePopupOpen}
         mode={recipePopupMode}
         ingredients={recipeIngredients}
         selectedIngredientId={selectedRecipeIngredientId}

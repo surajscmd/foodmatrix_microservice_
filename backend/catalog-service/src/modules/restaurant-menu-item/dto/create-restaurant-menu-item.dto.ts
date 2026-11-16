@@ -1,4 +1,11 @@
-import { IsBoolean, IsNumber, IsUUID, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsUUID,
+  Max,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 
 export class CreateRestaurantMenuItemDto {
   @IsUUID()
@@ -7,10 +14,13 @@ export class CreateRestaurantMenuItemDto {
   @IsUUID()
   menuItemId!: string;
 
-  @IsNumber()
+  @ValidateIf((_object, value: unknown) => value !== undefined)
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  price!: number;
+  @Max(99_999_999.99)
+  price?: number;
 
+  @ValidateIf((_object, value: unknown) => value !== undefined)
   @IsBoolean()
   isAvailable?: boolean;
 }

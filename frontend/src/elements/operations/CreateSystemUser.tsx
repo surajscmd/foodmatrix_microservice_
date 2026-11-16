@@ -75,7 +75,11 @@ export default function CreateSystemUser() {
     "OPERATIONS",
   ].includes(userRole);
 
-  const selectedRestaurant = restaurants.find(
+  const activeRestaurants = restaurants.filter(
+    (restaurant) =>
+      restaurant.status === "ACTIVE" && restaurant.franchiseId === franchise?.id,
+  );
+  const selectedRestaurant = activeRestaurants.find(
     (restaurant) => restaurant.id === managedRestaurantId,
   );
 
@@ -534,7 +538,7 @@ export default function CreateSystemUser() {
                       : "Not required for this role"}
                   </option>
 
-                  {restaurants.map((restaurant) => (
+                  {activeRestaurants.map((restaurant) => (
                     <option
                       key={restaurant.id}
                       value={restaurant.id}

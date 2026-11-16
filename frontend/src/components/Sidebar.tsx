@@ -5,7 +5,7 @@ import SidebarFooter from "@/elements/sidebar/SidebarFooter";
 import SidebarSection from "@/elements/sidebar/SidebarSection";
 
 import { useOrganizationStore } from "@/store/organization-store";
-import type { SidebarNavSection } from "@/utils/types";
+import type { SidebarNavSection } from "@/utils/types/platform-settings";
 import type { OrganizationSidebarUser } from "@/utils/types/organization";
 
 import axios from "axios";

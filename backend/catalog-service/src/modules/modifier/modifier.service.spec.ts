@@ -301,9 +301,7 @@ describe('ModifierService', () => {
       const result = await service.findAll();
 
       expect(modifierFindMany).toHaveBeenCalledWith({
-        where: {
-          isActive: true,
-        },
+        where: {},
         include: {
           group: true,
         },
@@ -384,7 +382,6 @@ describe('ModifierService', () => {
 
       expect(modifierFindMany).toHaveBeenCalledWith({
         where: {
-          isActive: true,
           groupId: 'group-1',
         },
         include: {
@@ -682,20 +679,25 @@ describe('ModifierService', () => {
       expect(modifierUpdate).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when modifier is inactive', async () => {
+    it('should reject reactivating a modifier under an inactive group', async () => {
       const inactiveModifier: Modifier = {
         ...existingModifier,
         isActive: false,
       };
 
       const updateDto: UpdateModifierDto = {
-        name: 'Updated Modifier',
+        isActive: true,
       };
 
       modifierFindUnique.mockResolvedValue(inactiveModifier);
+      modifierGroupFindUnique.mockResolvedValue({
+        isActive: false,
+      } as ModifierGroup);
 
       await expect(service.update('modifier-1', updateDto)).rejects.toThrow(
-        new BadRequestException('Cannot update an inactive modifier'),
+        new BadRequestException(
+          'Cannot activate a modifier under an inactive modifier group',
+        ),
       );
 
       expect(modifierUpdate).not.toHaveBeenCalled();

@@ -8,8 +8,6 @@ import type {
   BulkReceiveStockInput,
   CreateShipmentInput,
   CreateStockRequestInput,
-  CreateWasteInput,
-  DeleteStockRequestResult,
   InventoryRestaurant,
   MovementQuery,
   PageQuery,
@@ -18,7 +16,6 @@ import type {
   ReceiveTransferInput,
   RequestOptions,
   RequestQuery,
-  RestaurantStock,
   RestaurantStockView,
   Shipment,
   ShipTransferInput,
@@ -26,11 +23,8 @@ import type {
   StockRequest,
   StockTransfer,
   TransferQuery,
-  UpdateStockRequestInput,
   WarehouseStock,
   WarehouseStockView,
-  WasteLogView,
-  WasteResult,
 } from "@/utils/types/inventory";
 
 export type * from "@/utils/types/inventory";
@@ -51,12 +45,6 @@ export class InventoryApiError extends Error {
     this.name = "InventoryApiError";
     this.status = status;
   }
-}
-
-export function stockRequestError(error: unknown): string {
-  return error instanceof Error
-    ? error.message
-    : "Unable to process this stock request.";
 }
 
 function isRecord(
@@ -386,19 +374,6 @@ export async function getWarehouseStocks(
   };
 }
 
-export function getWarehouseIngredientStock(
-  warehouseId: string,
-  ingredientId: string,
-  options?: RequestOptions,
-): Promise<WarehouseStockView> {
-  return getData<WarehouseStockView>(
-    `warehouse-stock/warehouse/${segment(
-      warehouseId,
-    )}/ingredient/${segment(ingredientId)}`,
-    options,
-  );
-}
-
 export function receiveWarehouseStock(
   input: ReceiveStockInput,
 ): Promise<WarehouseStock> {
@@ -483,46 +458,6 @@ export function getRestaurantLowStock(
   );
 }
 
-export function getRestaurantIngredientStock(
-  restaurantId: string,
-  ingredientId: string,
-  options?: RequestOptions,
-): Promise<RestaurantStockView> {
-  return getData<RestaurantStockView>(
-    `restaurant-stock/${segment(restaurantId)}/${segment(
-      ingredientId,
-    )}`,
-    options,
-  );
-}
-
-export function adjustRestaurantStock(
-  restaurantId: string,
-  ingredientId: string,
-  input: AdjustStockInput,
-): Promise<AdjustmentResult<RestaurantStock>> {
-  return mutate<AdjustmentResult<RestaurantStock>>(
-    `restaurant-stock/${segment(restaurantId)}/${segment(
-      ingredientId,
-    )}/adjust`,
-    input,
-  );
-}
-
-// ======================================================
-// STOCK MOVEMENTS
-// ======================================================
-
-export function getStockMovements(
-  query: MovementQuery = {},
-  options?: RequestOptions,
-): Promise<PaginatedResult<StockMovementView>> {
-  return getData<PaginatedResult<StockMovementView>>(
-    `stock-movements${queryString(query)}`,
-    options,
-  );
-}
-
 export function getRestaurantStockMovements(
   restaurantId: string,
   query: MovementQuery = {},
@@ -555,16 +490,6 @@ export function createStockRequest(
   input: CreateStockRequestInput,
 ): Promise<StockRequest> {
   return mutate<StockRequest>("stock-requests", input);
-}
-
-export function getStockRequests(
-  query: RequestQuery = {},
-  options?: RequestOptions,
-): Promise<PaginatedResult<StockRequest>> {
-  return getEnrichedRequestPage(
-    `stock-requests${queryString(query)}`,
-    options,
-  );
 }
 
 export async function getStockRequest(
@@ -608,36 +533,6 @@ export function getWarehouseStockRequests(
   );
 }
 
-// ======================================================
-// STOCK REQUESTS — ACTIONS
-// ======================================================
-
-export function updateStockRequest(
-  requestId: string,
-  input: UpdateStockRequestInput,
-): Promise<StockRequest | null> {
-  return mutate<StockRequest | null>(
-    `stock-requests/${segment(requestId)}`,
-    input,
-    "PATCH",
-  );
-}
-
-export function deleteStockRequest(
-  requestId: string,
-  restaurantId: string,
-  userId: string,
-): Promise<DeleteStockRequestResult> {
-  // This endpoint returns its result without a data envelope.
-  return request<DeleteStockRequestResult>(
-    `stock-requests/${segment(
-      requestId,
-    )}/restaurant/${segment(restaurantId)}` +
-      queryString({ userId }),
-    "DELETE",
-  );
-}
-
 export function cancelStockRequest(
   requestId: string,
 ): Promise<StockRequest | null> {
@@ -664,29 +559,6 @@ export function rejectStockRequest(
   return mutate<StockRequest | null>(
     `stock-requests/${segment(requestId)}/reject`,
     { reason },
-  );
-}
-
-export function createStockRequestFromLowStock(
-  restaurantId: string,
-): Promise<StockRequest> {
-  return mutate<StockRequest>(
-    `stock-requests/restaurant/${segment(
-      restaurantId,
-    )}/from-low-stock`,
-  );
-}
-
-export function getStockRequestLowStock(
-  restaurantId: string,
-  query: PageQuery = {},
-  options?: RequestOptions,
-): Promise<PaginatedResult<RestaurantStockView>> {
-  return getData<PaginatedResult<RestaurantStockView>>(
-    `stock-requests/restaurant/${segment(
-      restaurantId,
-    )}/low-stock${queryString(query)}`,
-    options,
   );
 }
 
@@ -820,97 +692,5 @@ export function resolveTransferDiscrepancy(
       transferId,
     )}/resolve-discrepancy`,
     { resolution },
-  );
-}
-
-// ======================================================
-// WASTE LOGS
-// ======================================================
-
-export function createWasteLog(
-  input: CreateWasteInput,
-): Promise<WasteResult> {
-  return mutate<WasteResult>("waste-logs", input);
-}
-
-export function getRestaurantWasteLogs(
-  restaurantId: string,
-  query: PageQuery = {},
-  options?: RequestOptions,
-): Promise<PaginatedResult<WasteLogView>> {
-  return getData<PaginatedResult<WasteLogView>>(
-    `waste-logs/restaurant/${segment(restaurantId)}` +
-      queryString(query),
-    options,
-  );
-}
-
-export function getWasteLog(
-  wasteLogId: string,
-  options?: RequestOptions,
-): Promise<WasteLogView> {
-  return getData<WasteLogView>(
-    `waste-logs/${segment(wasteLogId)}`,
-    options,
-  );
-}
-
-// ======================================================
-// LOAD ALL WAREHOUSE STOCK
-// ======================================================
-
-export async function loadAllWarehouseStock(
-  warehouseId: string,
-  signal: AbortSignal,
-): Promise<WarehouseStockView[]> {
-  const records = new Map<string, WarehouseStockView>();
-
-  let page = 1;
-  let totalPages = 1;
-
-  do {
-    checkAborted({ signal });
-
-    const result = await getWarehouseStocks(
-      warehouseId,
-      { page, limit: 50 },
-      { signal },
-    );
-
-    if (
-      !Array.isArray(result?.data) ||
-      !result.pagination ||
-      !Number.isInteger(result.pagination.totalPages) ||
-      result.pagination.totalPages < 0
-    ) {
-      throw new Error("Invalid warehouse stock response.");
-    }
-
-    for (const stock of result.data) {
-      records.set(stock.id, stock);
-    }
-
-    totalPages = result.pagination.totalPages;
-    page++;
-  } while (page <= totalPages);
-
-  checkAborted({ signal });
-
-  return [...records.values()];
-}
-
-// ======================================================
-// LOAD WAREHOUSE MOVEMENT PAGE
-// ======================================================
-
-export function loadStockMovements(
-  warehouseId: string,
-  filters: MovementQuery,
-  signal: AbortSignal,
-): Promise<PaginatedResult<StockMovementView>> {
-  return getWarehouseStockMovements(
-    warehouseId,
-    filters,
-    { signal },
   );
 }

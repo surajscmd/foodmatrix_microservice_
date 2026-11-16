@@ -12,9 +12,14 @@ import {
   Patch,
   Post,
   Query,
-  UnauthorizedException,
 } from '@nestjs/common';
-import { timingSafeEqual } from 'node:crypto';
+import { createHash } from 'node:crypto';
+import {
+  OrderAccess,
+  OrderActorRole,
+  OrderRestaurant,
+  type OrderActor,
+} from '../../auth/order-access';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { AddOrderItemsDto } from './dto/add-order-items.dto';
 import { CancelOrderDto } from './dto/cancel-order.dto';
@@ -25,6 +30,7 @@ import { OrderService } from './orders.service';
 import { OrderItemsService } from './order-items.service';
 
 @Controller('orders')
+@OrderAccess('order')
 export class OrderController {
   constructor(
     private readonly orderService: OrderService,
@@ -37,16 +43,23 @@ export class OrderController {
   // ============================================================
 
   @Post()
+  @OrderAccess('create-order')
   async create(
     @Body() dto: CreateOrderDto,
     @Headers('idempotency-key')
     idempotencyKey?: string,
   ) {
-    if (!idempotencyKey?.trim()) {
-      throw new BadRequestException('Idempotency-Key header is required.');
+    const key = idempotencyKey?.trim();
+    if (!key || key.length > 255) {
+      throw new BadRequestException(
+        'Idempotency-Key must contain 1 to 255 characters.',
+      );
     }
 
-    return this.orderService.create(dto, idempotencyKey);
+    const scopedKey = createHash('sha256')
+      .update(dto.restaurantId + ':' + key)
+      .digest('hex');
+    return this.orderService.create(dto, scopedKey);
   }
 
   // ============================================================
@@ -55,8 +68,9 @@ export class OrderController {
   // ============================================================
 
   @Get('kitchen/upcoming')
+  @OrderAccess('restaurant')
   async getUpcomingOrders(
-    @Query('restaurantId')
+    @OrderRestaurant()
     restaurantId: string,
 
     @Query('page', new DefaultValuePipe(1), ParseIntPipe)
@@ -72,8 +86,9 @@ export class OrderController {
     return this.orderService.getUpcomingOrders(restaurantId, page, limit);
   }
   @Get()
+  @OrderAccess('restaurant')
   async listRegisterOrders(
-    @Query('restaurantId') restaurantId: string,
+    @OrderRestaurant() restaurantId: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('view', new DefaultValuePipe('open')) view: string,
   ) {
@@ -91,26 +106,8 @@ export class OrderController {
   }
 
   @Get('dashboard')
-  async getDashboard(
-    @Headers('x-dashboard-key') providedKey: string | undefined,
-    @Query('restaurantId') restaurantId: string,
-  ) {
-    const configuredKey = process.env.RESTAURANT_DASHBOARD_KEY;
-    const expected = Buffer.from(configuredKey ?? '');
-    const provided = Buffer.from(providedKey ?? '');
-
-    if (
-      expected.length === 0 ||
-      expected.length !== provided.length ||
-      !timingSafeEqual(expected, provided)
-    ) {
-      throw new UnauthorizedException();
-    }
-
-    if (!restaurantId?.trim()) {
-      throw new BadRequestException('restaurantId is required.');
-    }
-
+  @OrderAccess('dashboard')
+  async getDashboard(@OrderRestaurant() restaurantId: string) {
     return this.orderService.getRestaurantDashboard(restaurantId);
   }
 
@@ -120,7 +117,7 @@ export class OrderController {
   // ============================================================
 
   @Get(':id')
-  async findOne(@Param('id') id: string) {
+  async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.orderService.findOne(id);
   }
 
@@ -130,7 +127,10 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/items')
-  async addItems(@Param('id') id: string, @Body() dto: AddOrderItemsDto) {
+  async addItems(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddOrderItemsDto,
+  ) {
     return this.orderItemsService.addItems(id, dto);
   }
 
@@ -141,8 +141,8 @@ export class OrderController {
 
   @Patch(':id/kitchen/items/:itemId/status')
   async updateItemStatus(
-    @Param('id') orderId: string,
-    @Param('itemId') orderItemId: string,
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) orderItemId: string,
     @Body() dto: UpdateOrderItemStatusDto,
   ) {
     return this.orderItemsService.updateItemStatus(
@@ -185,8 +185,8 @@ export class OrderController {
 
   @Delete(':id/items/:itemId')
   async removeItem(
-    @Param('id') orderId: string,
-    @Param('itemId') orderItemId: string,
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) orderItemId: string,
   ) {
     return this.orderItemsService.removeItem(orderId, orderItemId);
   }
@@ -198,8 +198,8 @@ export class OrderController {
 
   @Delete(':id/items/:itemId/modifiers/:modifierId')
   async removeModifier(
-    @Param('id') orderId: string,
-    @Param('itemId') orderItemId: string,
+    @Param('id', ParseUUIDPipe) orderId: string,
+    @Param('itemId', ParseUUIDPipe) orderItemId: string,
     @Param('modifierId')
     orderItemModifierId: string,
   ) {
@@ -216,7 +216,7 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/confirm')
-  async confirm(@Param('id') id: string) {
+  async confirm(@Param('id', ParseUUIDPipe) id: string) {
     return this.orderService.confirm(id);
   }
 
@@ -226,7 +226,7 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/prepare')
-  async prepare(@Param('id') id: string) {
+  async prepare(@Param('id', ParseUUIDPipe) id: string) {
     return this.orderService.prepare(id);
   }
 
@@ -236,7 +236,7 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/ready')
-  async ready(@Param('id') id: string) {
+  async ready(@Param('id', ParseUUIDPipe) id: string) {
     return this.orderService.ready(id);
   }
 
@@ -246,7 +246,7 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/complete')
-  async complete(@Param('id') id: string) {
+  async complete(@Param('id', ParseUUIDPipe) id: string) {
     return this.orderService.complete(id);
   }
 
@@ -256,7 +256,15 @@ export class OrderController {
   // ============================================================
 
   @Post(':id/cancel')
-  async cancel(@Param('id') id: string, @Body() dto: CancelOrderDto) {
-    return this.orderService.cancel(id, dto.reason);
+  async cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelOrderDto,
+    @OrderActorRole() role: OrderActor['role'],
+  ) {
+    return this.orderService.cancel(
+      id,
+      dto.reason,
+      role === 'RESTAURANT_ADMIN',
+    );
   }
 }

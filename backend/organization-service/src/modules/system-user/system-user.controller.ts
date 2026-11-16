@@ -13,13 +13,11 @@ import {
 
 import { SystemUserRole, type SystemUser } from '@prisma/client';
 
-import {
-  AuthGuard,
-  AuthenticatedRequest,
-  Roles,
-} from '../../auth/auth.guard.js';
+import { AuthGuard, Roles } from '../../auth/auth.guard.js';
+import type { AuthenticatedRequest } from '../../auth/auth.guard.js';
 
 import { SystemUserService } from './system-user.service.js';
+import { UpdateAssignmentDto } from './dto/update-assignment.dto.js';
 import { IsBoolean } from 'class-validator';
 
 class UpdateLoginStatusDto {
@@ -65,6 +63,18 @@ export class SystemUserController {
   ) {
     return {
       data: await this.systemUserService.setActive(req.user!, id, dto.isActive),
+    };
+  }
+
+  @Patch(':id/assignment')
+  @Roles(SystemUserRole.SUPER_ADMIN, SystemUserRole.FRANCHISE_ADMIN)
+  async updateAssignment(
+    @Req() req: AuthenticatedRequest,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAssignmentDto,
+  ) {
+    return {
+      data: await this.systemUserService.updateAssignment(req.user!, id, dto),
     };
   }
 

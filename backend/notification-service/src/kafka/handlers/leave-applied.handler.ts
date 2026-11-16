@@ -1,19 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { NotificationDeliveryService } from './notification-delivery.service.js';
 
 import type { LeaveAppliedEvent } from '../types/hr-events.js';
 
-import { PrismaService } from '../../lib/prisma/prisma.service.js';
-
-import { NotificationGateway } from '../../socket/notification.gateway.js';
-
 @Injectable()
 export class LeaveAppliedHandler {
-  private readonly logger = new Logger(LeaveAppliedHandler.name);
-
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly notificationGateway: NotificationGateway,
-  ) {}
+  constructor(private readonly delivery: NotificationDeliveryService) {}
 
   /**
    * Create a notification when an employee applies for leave.
@@ -21,12 +13,8 @@ export class LeaveAppliedHandler {
   async handle(event: LeaveAppliedEvent): Promise<void> {
     const message = `An employee has applied for ${event.type} leave from ${event.startDate} to ${event.endDate}.`;
 
-    // ============================================================
-    // 1. CREATE NOTIFICATION IN DATABASE
-    // ============================================================
-
-    const notification = await this.prisma.notification.create({
-      data: {
+    await this.delivery.sendOnce(event.leaveId, [
+      {
         scope: 'RESTAURANT',
 
         restaurantId: event.restaurantId,
@@ -45,16 +33,6 @@ export class LeaveAppliedHandler {
 
         referenceType: 'Leave',
       },
-    });
-
-    // ============================================================
-    // 2. EMIT REAL-TIME NOTIFICATION
-    // ============================================================
-
-    this.notificationGateway.emitToRestaurant(event.restaurantId, notification);
-
-    this.logger.log(
-      `Leave notification created and emitted for staff ${event.staffId}`,
-    );
+    ]);
   }
 }

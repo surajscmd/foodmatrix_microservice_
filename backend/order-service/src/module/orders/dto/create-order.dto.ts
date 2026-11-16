@@ -8,9 +8,12 @@ import {
   IsString,
   IsUUID,
   Matches,
+  Max,
+  MaxLength,
   Min,
   ValidateNested,
 } from 'class-validator';
+import { MAX_ORDER_QUANTITY } from '../../../utils/order-item.util';
 import { Type } from 'class-transformer';
 
 import { OrderType } from '@prisma/client';
@@ -21,6 +24,7 @@ export class CreateOrderModifierDto {
 
   @IsInt()
   @Min(1)
+  @Max(MAX_ORDER_QUANTITY)
   quantity: number = 1;
 }
 
@@ -30,6 +34,7 @@ export class CreateOrderItemDto {
 
   @IsInt()
   @Min(1)
+  @Max(MAX_ORDER_QUANTITY)
   quantity: number = 1;
 
   @IsOptional()
@@ -52,6 +57,7 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(255)
   name?: string;
 
   @IsEnum(OrderType)
@@ -60,6 +66,7 @@ export class CreateOrderDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
+  @MaxLength(50)
   tableId?: string;
 
   @IsArray()

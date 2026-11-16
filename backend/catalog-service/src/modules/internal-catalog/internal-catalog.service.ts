@@ -71,6 +71,10 @@ export class InternalCatalogService {
           in: menuItemIds,
         },
       },
+      include: {
+        category: { select: { isActive: true } },
+        modifierGroups: { select: { groupId: true } },
+      },
     });
   }
 
@@ -85,6 +89,7 @@ export class InternalCatalogService {
           in: modifierIds,
         },
       },
+      include: { group: { select: { isActive: true } } },
     });
   }
 
@@ -113,38 +118,11 @@ export class InternalCatalogService {
       }
 
       const restaurantItem = restaurantItemMap.get(menuItemId);
-
-      // --------------------------------------------------------
-      // RESTAURANT-SPECIFIC PRICE
-      // --------------------------------------------------------
-
-      if (restaurantItem) {
-        const isAvailable = restaurantItem.isAvailable && menuItem.isAvailable;
-
-        if (!isAvailable) {
-          throw new NotFoundException(
-            `Menu item ${menuItemId} is not currently available.`,
-          );
-        }
-
-        return {
-          menuItemId: menuItem.id,
-
-          name: menuItem.name,
-
-          sku: menuItem.sku,
-
-          price: Number(restaurantItem.price),
-
-          isAvailable,
-        };
-      }
-
-      // --------------------------------------------------------
-      // GLOBAL FALLBACK PRICE
-      // --------------------------------------------------------
-
-      if (!menuItem.isAvailable) {
+      if (
+        !menuItem.isAvailable ||
+        !menuItem.category.isActive ||
+        restaurantItem?.isAvailable === false
+      ) {
         throw new NotFoundException(
           `Menu item ${menuItemId} is not currently available.`,
         );
@@ -157,9 +135,10 @@ export class InternalCatalogService {
 
         sku: menuItem.sku,
 
-        price: Number(menuItem.basePrice),
+        price: Number(restaurantItem?.price ?? menuItem.basePrice),
 
-        isAvailable: menuItem.isAvailable,
+        isAvailable: true,
+        modifierGroupIds: menuItem.modifierGroups.map(({ groupId }) => groupId),
       };
     });
   }
@@ -183,7 +162,7 @@ export class InternalCatalogService {
         throw new NotFoundException(`Modifier ${modifierId} was not found.`);
       }
 
-      if (!modifier.isActive) {
+      if (!modifier.isActive || !modifier.group.isActive) {
         throw new NotFoundException(
           `Modifier ${modifierId} is not currently available.`,
         );
@@ -197,6 +176,7 @@ export class InternalCatalogService {
         extraPrice: Number(modifier.extraPrice),
 
         isActive: modifier.isActive,
+        groupId: modifier.groupId,
       };
     });
   }

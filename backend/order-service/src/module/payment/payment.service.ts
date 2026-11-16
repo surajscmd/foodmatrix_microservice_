@@ -5,12 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import {
-  OrderStatus,
-  PaymentMethod,
-  PaymentStatus,
-  Prisma,
-} from '@prisma/client';
+import { OrderStatus, PaymentStatus, Prisma } from '@prisma/client';
 
 import { PrismaService } from '../../lib/prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
@@ -24,172 +19,161 @@ export class PaymentService {
   // ============================================================
 
   async create(dto: CreatePaymentDto) {
-    return this.prisma.$transaction(
-      async (tx) => {
-        // ------------------------------------------------------
-        // FIND ORDER
-        // ------------------------------------------------------
+    const transactionId = dto.transactionId?.trim();
+    const paymentAmount = new Prisma.Decimal(dto.amount);
+    if (paymentAmount.lte(0)) {
+      throw new BadRequestException(
+        'Payment amount must be greater than zero.',
+      );
+    }
 
-        const order = await tx.order.findUnique({
-          where: {
-            id: dto.orderId,
-          },
-        });
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const replay = transactionId
+            ? await this.findPaymentReplay(
+                tx,
+                transactionId,
+                dto,
+                paymentAmount,
+              )
+            : null;
+          if (replay) return replay;
 
-        if (!order) {
-          throw new NotFoundException('Order not found.');
-        }
+          const order = await tx.order.findUnique({
+            where: { id: dto.orderId },
+          });
+          if (!order) throw new NotFoundException('Order not found.');
 
-        // ------------------------------------------------------
-        // CHECK ORDER STATUS
-        // ------------------------------------------------------
+          if (order.status === OrderStatus.CANCELLED) {
+            throw new BadRequestException(
+              'Cannot make payment for a cancelled order.',
+            );
+          }
+          if (order.status === OrderStatus.COMPLETED) {
+            throw new ConflictException(
+              'Cannot make payment for a completed order.',
+            );
+          }
 
-        if (order.status === OrderStatus.CANCELLED) {
-          throw new BadRequestException(
-            'Cannot make payment for a cancelled order.',
-          );
-        }
-
-        if (order.status === OrderStatus.COMPLETED) {
-          throw new ConflictException(
-            'Cannot make payment for a completed order.',
-          );
-        }
-
-        const openRequest = await tx.orderItem.findFirst({
-          where: {
-            orderId: order.id,
-            unavailableRequestedAt: { not: null },
-            unavailableResolvedAt: null,
-          },
-          select: { id: true },
-        });
-        if (openRequest) {
-          throw new ConflictException(
-            'Review the unavailable dish before taking payment.',
-          );
-        }
-
-        // ------------------------------------------------------
-        // NORMALIZE AMOUNT
-        // ------------------------------------------------------
-
-        const paymentAmount = new Prisma.Decimal(dto.amount);
-
-        if (paymentAmount.lte(0)) {
-          throw new BadRequestException(
-            'Payment amount must be greater than zero.',
-          );
-        }
-
-        // ------------------------------------------------------
-        // GET COMPLETED PAYMENTS
-        // ------------------------------------------------------
-
-        const result = await tx.payment.aggregate({
-          where: {
-            orderId: order.id,
-            status: PaymentStatus.COMPLETED,
-          },
-
-          _sum: {
-            amount: true,
-          },
-        });
-
-        const paidAmount = new Prisma.Decimal(result._sum.amount ?? 0);
-
-        // ------------------------------------------------------
-        // CALCULATE REMAINING
-        // ------------------------------------------------------
-
-        const orderTotal = new Prisma.Decimal(order.total);
-
-        const remainingAmount = orderTotal.minus(paidAmount);
-
-        if (remainingAmount.lte(0)) {
-          throw new ConflictException('Order is already fully paid.');
-        }
-
-        // ------------------------------------------------------
-        // PREVENT OVERPAYMENT
-        // ------------------------------------------------------
-
-        if (paymentAmount.gt(remainingAmount)) {
-          throw new BadRequestException(
-            `Payment exceeds remaining amount. Remaining amount: ${remainingAmount.toFixed(
-              2,
-            )}.`,
-          );
-        }
-
-        // ------------------------------------------------------
-        // TRANSACTION ID
-        // ------------------------------------------------------
-
-        const transactionId = dto.transactionId?.trim();
-
-        if (transactionId) {
-          const existingPayment = await tx.payment.findUnique({
+          const openRequest = await tx.orderItem.findFirst({
             where: {
-              transactionId,
+              orderId: order.id,
+              unavailableRequestedAt: { not: null },
+              unavailableResolvedAt: null,
+            },
+            select: { id: true },
+          });
+          if (openRequest) {
+            throw new ConflictException(
+              'Review the unavailable dish before taking payment.',
+            );
+          }
+
+          const paidAmount = await this.sumCompletedPayments(tx, order.id);
+          const remainingAmount = order.total.minus(paidAmount);
+          if (remainingAmount.lte(0)) {
+            throw new ConflictException('Order is already fully paid.');
+          }
+          if (paymentAmount.gt(remainingAmount)) {
+            throw new BadRequestException(
+              'Payment exceeds remaining amount. Remaining amount: ' +
+                remainingAmount.toFixed(2) +
+                '.',
+            );
+          }
+
+          const payment = await tx.payment.create({
+            data: {
+              orderId: order.id,
+              amount: paymentAmount,
+              method: dto.method,
+              status: PaymentStatus.COMPLETED,
+              transactionId: transactionId || null,
             },
           });
 
-          if (existingPayment) {
-            throw new ConflictException(
-              'A payment with this transaction ID already exists.',
-            );
-          }
-        }
+          return this.paymentResult(
+            payment,
+            order.total,
+            paidAmount.plus(paymentAmount),
+          );
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        !(error instanceof Prisma.PrismaClientKnownRequestError) ||
+        (error.code !== 'P2034' && !(error.code === 'P2002' && transactionId))
+      ) {
+        throw error;
+      }
 
-        // ------------------------------------------------------
-        // CREATE PAYMENT
-        // ------------------------------------------------------
+      if (transactionId) {
+        const replay = await this.prisma.$transaction(
+          (tx) => this.findPaymentReplay(tx, transactionId, dto, paymentAmount),
+          { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead },
+        );
+        if (replay) return replay;
+      }
+      throw new ConflictException(
+        'The payment conflicted with another update. Refresh the order before retrying.',
+      );
+    }
+  }
 
-        const payment = await tx.payment.create({
-          data: {
-            orderId: order.id,
+  private async findPaymentReplay(
+    tx: Prisma.TransactionClient,
+    transactionId: string,
+    dto: CreatePaymentDto,
+    amount: Prisma.Decimal,
+  ) {
+    const saved = await tx.payment.findUnique({
+      where: { transactionId },
+      include: { order: { select: { total: true } } },
+    });
+    if (!saved) return null;
 
-            amount: paymentAmount,
+    const { order, ...payment } = saved;
+    if (
+      payment.orderId !== dto.orderId.toLowerCase() ||
+      payment.method !== dto.method ||
+      !payment.amount.equals(amount) ||
+      payment.status !== PaymentStatus.COMPLETED
+    ) {
+      throw new ConflictException(
+        'This transaction ID already belongs to another payment or has been refunded.',
+      );
+    }
 
-            method: dto.method,
+    const paidAmount = await this.sumCompletedPayments(tx, payment.orderId);
+    return this.paymentResult(payment, order.total, paidAmount);
+  }
 
-            status: PaymentStatus.COMPLETED,
+  private async sumCompletedPayments(
+    tx: Prisma.TransactionClient,
+    orderId: string,
+  ) {
+    const result = await tx.payment.aggregate({
+      where: { orderId, status: PaymentStatus.COMPLETED },
+      _sum: { amount: true },
+    });
+    return result._sum.amount ?? new Prisma.Decimal(0);
+  }
 
-            transactionId: transactionId || null,
-          },
-        });
-
-        // ------------------------------------------------------
-        // NEW PAID TOTAL
-        // ------------------------------------------------------
-
-        const newPaidAmount = paidAmount.plus(paymentAmount);
-
-        const fullyPaid = newPaidAmount.gte(orderTotal);
-
-        // ------------------------------------------------------
-        // RETURN
-        // ------------------------------------------------------
-
-        return {
-          payment,
-          orderTotal,
-          previousPaidAmount: paidAmount,
-          paidAmount: newPaidAmount,
-          remainingAmount: orderTotal.minus(newPaidAmount),
-          fullyPaid,
-        };
-      },
-      {
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-
-        maxWait: 5000,
-
-        timeout: 10000,
-      },
-    );
+  private paymentResult(
+    payment: Prisma.PaymentGetPayload<object>,
+    orderTotal: Prisma.Decimal,
+    paidAmount: Prisma.Decimal,
+  ) {
+    return {
+      payment,
+      orderTotal,
+      previousPaidAmount: paidAmount.minus(payment.amount),
+      paidAmount,
+      remainingAmount: orderTotal.minus(paidAmount),
+      fullyPaid: paidAmount.gte(orderTotal),
+    };
   }
 
   // ============================================================
