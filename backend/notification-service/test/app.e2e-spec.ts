@@ -225,4 +225,117 @@ describe('Notification workflows', () => {
     expect(restaurantEmission).toHaveBeenCalledTimes(1);
     expect(warehouseEmission).toHaveBeenCalledTimes(1);
   });
+
+  it('recovers notifications committed while the emission worker was stopped', async () => {
+    await delivery.onModuleDestroy();
+    const emitted = jest.spyOn(gateway, 'emitToRestaurant').mockClear();
+    const referenceId = randomUUID();
+    const input = {
+      scope: 'RESTAURANT' as const,
+      type: 'SYSTEM' as const,
+      restaurantId,
+      title: 'Durable alert',
+      message: 'Created before worker restart',
+      referenceId,
+    };
+    await delivery.sendOnce(referenceId, [input]);
+    const saved = await db.notification.findFirstOrThrow({
+      where: { referenceId },
+    });
+    expect(
+      await db.notificationSocketOutbox.count({
+        where: { notificationId: saved.id },
+      }),
+    ).toBe(1);
+    expect(emitted).not.toHaveBeenCalled();
+
+    const restarted = new NotificationDeliveryService(db, gateway);
+    await restarted.flushPending();
+    expect(emitted).toHaveBeenCalledTimes(1);
+    expect(emitted).toHaveBeenCalledWith(
+      restaurantId,
+      expect.objectContaining({ id: saved.id }),
+    );
+    expect(
+      await db.notificationSocketOutbox.count({
+        where: { notificationId: saved.id },
+      }),
+    ).toBe(0);
+
+    await delivery.sendOnce(referenceId, [input]);
+    expect(await db.notification.count({ where: { referenceId } })).toBe(1);
+    expect(
+      await db.notificationSocketOutbox.count({
+        where: { notificationId: saved.id },
+      }),
+    ).toBe(0);
+    emitted.mockRestore();
+  });
+
+  it('retains a failed emission until the lease expires and another worker retries it', async () => {
+    const emitted = jest
+      .spyOn(gateway, 'emitToRestaurant')
+      .mockImplementationOnce(() => {
+        throw new Error('Simulated socket failure');
+      });
+    const referenceId = randomUUID();
+    const worker = new NotificationDeliveryService(db, gateway);
+    await worker.sendOnce(referenceId, [
+      {
+        scope: 'RESTAURANT',
+        type: 'SYSTEM',
+        restaurantId,
+        title: 'Retry alert',
+        message: 'Retry after a failed emission',
+        referenceId,
+      },
+    ]);
+    const saved = await db.notification.findFirstOrThrow({
+      where: { referenceId },
+    });
+    expect(
+      await db.notificationSocketOutbox.count({
+        where: { notificationId: saved.id },
+      }),
+    ).toBe(1);
+    expect(emitted).toHaveBeenCalledTimes(1);
+    await worker.flushPending();
+    expect(emitted).toHaveBeenCalledTimes(1);
+
+    await db.notificationSocketOutbox.update({
+      where: { notificationId: saved.id },
+      data: { availableAt: new Date(0) },
+    });
+    const restarted = new NotificationDeliveryService(db, gateway);
+    await restarted.flushPending();
+    expect(emitted).toHaveBeenCalledTimes(2);
+    expect(
+      await db.notificationSocketOutbox.count({
+        where: { notificationId: saved.id },
+      }),
+    ).toBe(0);
+    expect(await db.notification.count({ where: { referenceId } })).toBe(1);
+    emitted.mockRestore();
+  });
+
+  it('lets only one of two workers claim the same pending emission', async () => {
+    const emitted = jest.spyOn(gateway, 'emitToRestaurant');
+    const referenceId = randomUUID();
+    await delivery.sendOnce(referenceId, [
+      {
+        scope: 'RESTAURANT',
+        type: 'SYSTEM',
+        restaurantId,
+        title: 'Concurrent workers',
+        message: 'Claim once',
+        referenceId,
+      },
+    ]);
+    const first = new NotificationDeliveryService(db, gateway);
+    const second = new NotificationDeliveryService(db, gateway);
+    await Promise.all([first.flushPending(), second.flushPending()]);
+    expect(emitted).toHaveBeenCalledTimes(1);
+    expect(await db.notificationSocketOutbox.count()).toBe(0);
+    emitted.mockRestore();
+  });
 });

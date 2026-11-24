@@ -11,8 +11,12 @@ import {
 } from "@/lib/hr-api";
 import { restaurantDateTime } from "./report-dates";
 
-const field =
-  "h-10 w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-white scheme-dark focus:border-emerald-400 focus:outline-none disabled:opacity-50";
+import {
+  attendanceField as field,
+  attendancePrimary,
+  attendanceButton,
+} from "./attendance-theme";
+
 const fieldLabel = "grid min-w-0 gap-1.5 text-xs font-medium text-zinc-300";
 
 type Pattern = "single" | "weekday" | "weekly" | "daily";
@@ -187,24 +191,32 @@ export default function ShiftPlanner({
   return (
     <section
       aria-labelledby="shift-planner"
-      className="min-w-0 overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950"
+      className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 bg-linear-to-r from-emerald-950 to-zinc-900 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-300/15 text-emerald-200">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
             <CalendarPlus size={17} aria-hidden />
           </span>
-          <h2 id="shift-planner" className="text-sm font-semibold text-white">
-            Add shifts
-          </h2>
+          <div>
+            <h2
+              id="shift-planner"
+              className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300"
+            >
+              Add shifts
+            </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              Assign a staff member, template and repeat pattern
+            </p>
+          </div>
         </div>
-        <span className="text-xs text-zinc-300">
+        <span className="rounded-md border border-zinc-800 bg-zinc-950/60 px-2 py-1 font-mono text-[10px] text-zinc-500">
           {timeZone.replaceAll("_", " ")}
         </span>
       </div>
       {loadError && (
         <div className="flex flex-wrap items-center gap-3 p-4">
-          <p role="alert" className="text-sm text-rose-200">
+          <p role="alert" className="text-xs text-rose-300">
             {loadError}
           </p>
           <button
@@ -213,7 +225,7 @@ export default function ShiftPlanner({
               setLoadError("");
               setRevision((value) => value + 1);
             }}
-            className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-700 px-3 text-xs font-medium text-white hover:bg-zinc-800"
+            className={attendanceButton}
           >
             <RefreshCw size={14} aria-hidden />
             Retry
@@ -221,7 +233,7 @@ export default function ShiftPlanner({
         </div>
       )}
       {!options && !loadError && (
-        <p role="status" className="p-4 text-sm text-zinc-300">
+        <p role="status" className="p-4 text-xs text-zinc-500">
           Loading staff and shift templates…
         </p>
       )}
@@ -321,17 +333,17 @@ export default function ShiftPlanner({
               </p>
             )}
             {saveError && (
-              <p role="alert" className="text-sm text-rose-200">
+              <p role="alert" className="text-xs text-rose-300">
                 {saveError}
               </p>
             )}
             {confirmedDates.length > 0 && (
-              <p role="status" className="text-sm text-emerald-200">
+              <p role="status" className="text-xs text-emerald-300">
                 {confirmedDates.length} of {dates.length} shifts saved.
               </p>
             )}
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-800 bg-[#18191d] px-4 py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-zinc-800 bg-zinc-950/60 px-4 py-3">
             {confirmedDates.length > 0 && (
               <button
                 type="button"
@@ -339,7 +351,7 @@ export default function ShiftPlanner({
                 onClick={() =>
                   onSaved(confirmedDates[0] ?? day, confirmedDates.length)
                 }
-                className="min-h-10 rounded-lg border border-zinc-700 px-3 text-sm text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                className={attendanceButton}
               >
                 View saved shifts
               </button>
@@ -347,7 +359,7 @@ export default function ShiftPlanner({
             <button
               type="submit"
               disabled={saving || !staffId || !template || !dates.length}
-              className="min-h-10 w-full rounded-lg bg-emerald-300 px-4 text-sm font-semibold text-emerald-950 enabled:hover:bg-emerald-200 disabled:opacity-50 @lg:w-auto"
+              className={attendancePrimary + " w-full @lg:w-auto"}
             >
               {saving
                 ? "Saving…"

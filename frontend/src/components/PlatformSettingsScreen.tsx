@@ -68,14 +68,14 @@ export default function PlatformSettingsScreen({ embedded = false }: { embedded?
 
   return (
     <div className="space-y-6">
-      <header className={embedded ? "rounded-2xl border border-zinc-700/75 bg-zinc-950 px-4 py-3" : "px-6 pt-4"}>
+      {!embedded && <header className="px-6 pt-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-4 w-1 rounded-full bg-emerald-400" />
 
             <div>
               <p className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
-                {embedded ? "Browser preferences" : "Platform Settings"}
+                Platform Settings
               </p>
 
               <p className="mt-0.5 text-[10px] text-zinc-600">
@@ -89,7 +89,7 @@ export default function PlatformSettingsScreen({ embedded = false }: { embedded?
             Saved on this browser
           </span>
         </div>
-      </header>
+      </header>}
 
       <div className={embedded ? "space-y-4" : "space-y-5 px-6 pb-6"}>
         {message && (

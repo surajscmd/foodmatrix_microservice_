@@ -1,0 +1,36 @@
+{{- if .Values.kafkaTopics.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-kafka-topics
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 180
+  backoffLimit: 2
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector: {{- toYaml .Values.nodeSelector | nindent 8 }}
+      containers:
+        - name: topics
+          image: {{ printf "%s/order-service:%s" .Values.imageRegistry .Values.imageTag | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["node", "kafka-topics.cjs"]
+          env:
+            - name: KAFKA_BROKERS
+              value: {{ required "kafkaBrokers is required" .Values.kafkaBrokers | quote }}
+            - name: KAFKA_TOPIC_PARTITIONS
+              value: {{ .Values.kafkaTopics.partitions | quote }}
+            - name: KAFKA_TOPIC_REPLICAS
+              value: {{ .Values.kafkaTopics.replicationFactor | quote }}
+          {{- if .Values.kafkaSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.kafkaSecret }}
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

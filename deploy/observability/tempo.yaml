@@ -1,0 +1,7 @@
+fullnameOverride: tempo
+tempo:
+  retention: 168h
+persistence:
+  enabled: true
+  storageClassName: foodmatrix-gp3
+  size: 20Gi

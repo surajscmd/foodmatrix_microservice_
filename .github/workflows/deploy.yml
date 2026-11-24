@@ -1,0 +1,43 @@
+name: Deploy FoodMatrix to EKS
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Published 40-character Git commit SHA
+        required: true
+        type: string
+
+concurrency: foodmatrix-staging
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: [self-hosted, linux, foodmatrix-deploy]
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Roll out published images
+        env:
+          CLUSTER_NAME: ${{ vars.EKS_CLUSTER_NAME }}
+          IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY }}
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          KAFKA_BROKERS: ${{ vars.KAFKA_BROKERS }}
+          RELEASE_VALUES: ${{ vars.RELEASE_VALUES }}
+        run: |
+          set -euo pipefail
+          [[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]
+          export KUBECONFIG="$RUNNER_TEMP/foodmatrix-kubeconfig"
+          export VALUES_FILE="$RUNNER_TEMP/foodmatrix-values.yaml"
+          trap 'rm -f "$KUBECONFIG" "$VALUES_FILE"' EXIT
+          printf '%s\n' "$RELEASE_VALUES" > "$VALUES_FILE"
+          aws eks update-kubeconfig --name "$CLUSTER_NAME"
+          bash deploy/scripts/deploy-app.sh

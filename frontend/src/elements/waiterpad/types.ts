@@ -1,4 +1,5 @@
 import type { Order } from "@/lib/order-api";
+import type { CartModifier } from "@/elements/Cash-pos/cashier-modifiers";
 
 export interface MenuItem {
   id: string;
@@ -9,8 +10,10 @@ export interface MenuItem {
 }
 
 export interface CartItem {
+  id: string;
   menuItem: MenuItem;
   quantity: number;
+  modifiers: CartModifier[];
 }
 
 export function canAddToTable(order: Order) {

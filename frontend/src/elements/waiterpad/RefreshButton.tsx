@@ -21,7 +21,7 @@ export default function RefreshButton({
       title={label}
       disabled={disabled || refreshing}
       onClick={onClick}
-      className="grid size-11 shrink-0 place-items-center rounded-lg border border-white/15 text-zinc-100 enabled:hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
+      className="grid size-11 shrink-0 place-items-center rounded-lg border border-zinc-800 bg-zinc-900/70 text-zinc-400 transition-colors enabled:hover:border-emerald-400/30 enabled:hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
     >
       <RefreshCw
         aria-hidden="true"

@@ -24,7 +24,7 @@ const itemColors = {
   CANCELLED: "text-zinc-400",
 };
 const itemAction =
-  "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-600 px-2.5 text-xs font-semibold text-zinc-100 enabled:hover:border-emerald-400/60 enabled:hover:bg-emerald-400/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
+  "inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-zinc-700 bg-zinc-900/70 px-2.5 text-[11px] font-semibold text-zinc-200 transition-colors enabled:hover:border-emerald-400/60 enabled:hover:bg-emerald-400/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
 
 interface Props {
   order: Order;
@@ -68,22 +68,24 @@ export default function KitchenTicket({
     <article
       aria-label={`Order #${order.orderNumber}`}
       aria-busy={busy}
-      className={`min-w-0 overflow-hidden rounded-xl border bg-[#1b1c21] shadow-sm shadow-black/25 ${tone.border}`}
+      className={`min-w-0 overflow-hidden rounded-2xl border bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_8px_24px_rgba(0,0,0,0.2)] transition-shadow duration-300 hover:shadow-[0_12px_32px_rgba(0,0,0,0.3)] ${tone.border}`}
     >
       <header
-        className={`flex items-start justify-between gap-3 border-b bg-linear-to-r px-3.5 py-3 ${tone.header}`}
+        className={`flex items-start justify-between gap-3 border-b bg-gradient-to-r px-4 py-4 ${tone.header}`}
       >
         <div className="min-w-0">
-          <p className={`font-mono text-xs font-semibold ${tone.accent}`}>
+          <p
+            className={`font-mono text-[10px] font-bold uppercase tracking-[0.14em] ${tone.accent}`}
+          >
             #{order.orderNumber}
           </p>
-          <h3 className="mt-1 break-words text-base font-semibold tracking-tight text-white">
+          <h3 className="mt-1.5 break-words text-lg font-semibold tracking-tight text-white">
             {order.tableId ? `Table ${order.tableId}` : types[order.type]}
           </h3>
         </div>
         {Number.isFinite(elapsed) && (
           <span
-            className="inline-flex shrink-0 items-center gap-1.5 pt-0.5 text-xs tabular-nums text-zinc-300"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-zinc-700/70 bg-zinc-950/40 px-2 py-1.5 font-mono text-[10px] tabular-nums text-zinc-400"
             title="Time since order was placed"
           >
             <Clock3 aria-hidden="true" className="size-3.5" />
@@ -92,29 +94,29 @@ export default function KitchenTicket({
         )}
       </header>
 
-      <ul className="divide-y divide-zinc-700/60 px-3.5">
+      <ul className="divide-y divide-zinc-800/80 px-4">
         {order.items.map((item) => {
           const awaiting = needsUnavailableReview(item);
           const canReport =
             (order.status === "CONFIRMED" || preparing) &&
             (item.status === "PENDING" || item.status === "PREPARING");
           return (
-            <li key={item.id} className="space-y-2 py-2.5">
+            <li key={item.id} className="space-y-2 py-3.5">
               <div className="flex items-center gap-2">
                 <div className="flex min-w-0 flex-1 items-start gap-2.5">
                   <span
-                    className={`min-w-6 shrink-0 text-right font-mono text-xs leading-5 ${tone.accent}`}
+                    className={`grid min-h-6 min-w-6 shrink-0 place-items-center rounded-md border border-zinc-800 bg-zinc-900/70 px-1 font-mono text-[10px] leading-5 ${tone.accent}`}
                   >
                     {item.quantity}×
                   </span>
                   <div className="min-w-0">
                     <p
-                      className={`break-words text-sm font-medium ${item.status === "CANCELLED" ? "text-zinc-400 line-through" : "text-white"}`}
+                      className={`break-words text-xs font-semibold leading-5 ${item.status === "CANCELLED" ? "text-zinc-500 line-through" : "text-zinc-100"}`}
                     >
                       {item.name}
                     </p>
                     {item.modifiers.length > 0 && (
-                      <p className="mt-0.5 break-words text-xs text-zinc-300">
+                      <p className="mt-1 break-words border-l border-violet-400/30 pl-2 text-[11px] leading-5 text-violet-300">
                         {item.modifiers
                           .map(({ name, quantity }) =>
                             quantity > 1 ? `${quantity}× ${name}` : name,
@@ -236,15 +238,15 @@ export default function KitchenTicket({
             type="button"
             disabled={disabled}
             onClick={() => onStart(order)}
-            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-sky-300 px-3 text-sm font-semibold text-sky-950 enabled:hover:bg-sky-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
+            className="inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-sky-400 px-3 text-xs font-semibold text-zinc-950 shadow-[0_4px_16px_rgba(56,189,248,0.12)] transition-colors enabled:hover:bg-sky-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-300 disabled:opacity-50"
           >
             <CookingPot aria-hidden="true" className="size-4" /> Start cooking
           </button>
         </footer>
       )}
       {preparing && (
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-700/70 px-3.5 py-2.5">
-          <span className="text-xs font-medium tabular-nums text-amber-200">
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800 bg-zinc-950/60 px-4 py-3">
+          <span className="font-mono text-[10px] font-medium tabular-nums text-amber-300">
             {ready} of {count} ready
           </span>
           {canFinish && (
@@ -260,7 +262,7 @@ export default function KitchenTicket({
         </footer>
       )}
       {order.status === "READY" && (
-        <footer className="flex items-center gap-2 border-t border-emerald-400/20 bg-emerald-400/10 px-3.5 py-2.5 text-xs font-semibold text-emerald-200">
+        <footer className="flex items-center gap-2 border-t border-emerald-400/20 bg-emerald-400/[0.08] px-4 py-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
           <Check aria-hidden="true" className="size-4" /> Ready for pickup
         </footer>
       )}

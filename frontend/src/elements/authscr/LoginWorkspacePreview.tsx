@@ -1,85 +1,135 @@
 import {
+  ArrowRight,
+  Bell,
+  BookOpen,
   Boxes,
-  CalendarDays,
   ChefHat,
   ClipboardList,
+  LayoutDashboard,
   ReceiptText,
   Store,
-  UtensilsCrossed,
+  Users,
 } from "lucide-react";
-import Image from "next/image";
-import servicePhoto from "../../../public/foodmatrix-login-service-hq.webp";
-import glass from "@/elements/branding/restaurant-glass.module.css";
-import styles from "./login-screen.module.css";
+import FoodMatrixMark from "@/elements/branding/FoodMatrixMark";
+import styles from "./login-workflow.module.css";
 
-const orderSteps = [
-  { label: "Waiter pad", status: "Order sent", Icon: ClipboardList },
-  { label: "Kitchen display", status: "Preparing", Icon: ChefHat },
-  { label: "Cashier POS", status: "Checkout", Icon: ReceiptText },
+const steps = [
+  {
+    title: "Take the order",
+    description: "Waiter pad & POS",
+    Icon: ClipboardList,
+  },
+  { title: "Prepare & serve", description: "Kitchen display", Icon: ChefHat },
+  {
+    title: "Settle the bill",
+    description: "Payments & receipts",
+    Icon: ReceiptText,
+  },
 ];
 
 const workspaceAreas = [
-  { label: "Inventory", Icon: Boxes },
-  { label: "Shifts & payroll", Icon: CalendarDays },
-  { label: "Franchise locations", Icon: Store },
+  {
+    title: "Menu management",
+    description: "Prices, modifiers & recipes",
+    Icon: BookOpen,
+  },
+  {
+    title: "Inventory & supply",
+    description: "Stock, requests & deliveries",
+    Icon: Boxes,
+  },
+  {
+    title: "Staff & payroll",
+    description: "Shifts, attendance, leave & pay",
+    Icon: Users,
+  },
+  {
+    title: "Multiple locations",
+    description: "Restaurants, roles & access",
+    Icon: Store,
+  },
+  {
+    title: "Live alerts",
+    description: "Stock, delivery & staff updates",
+    Icon: Bell,
+  },
+  {
+    title: "Business overview",
+    description: "Dashboards, reports & settings",
+    Icon: LayoutDashboard,
+  },
 ];
 
 export default function LoginWorkspacePreview() {
   return (
     <section
-      aria-labelledby="workspace-preview-heading"
       className={styles.showcase}
+      aria-labelledby="workspace-preview-heading"
     >
-      <header className={styles.showcaseHeading}>
+      <header className={styles.heading}>
+        <span className={styles.eyebrow}>Restaurant management, connected</span>
         <h2 id="workspace-preview-heading">
-          From the floor <span>to the kitchen.</span>
+          Your entire restaurant.
+          <br />
+          <span>One workspace.</span>
         </h2>
         <p>
-          Follow an order through service and manage stock and staff across your
-          restaurants.
+          Manage orders, kitchen, inventory and staff across your restaurants.
         </p>
       </header>
 
-      <figure className={styles.servicePreview}>
-        <Image
-          src={servicePhoto}
-          alt="A server and chef review a tablet order at the kitchen pass."
-          fill
-          unoptimized
-          className={styles.servicePhoto}
-        />
-
-        <figcaption className={`${glass.surface} ${styles.orderCard}`}>
-          <div className={styles.orderHeading}>
-            <span className={styles.orderTable}>
-              <UtensilsCrossed aria-hidden="true" size={14} strokeWidth={1.7} />
-              Table 07
-            </span>
-            <span className={styles.orderExample}>Example order</span>
-          </div>
-
-          <ol className={styles.orderSteps}>
-            {orderSteps.map(({ label, status, Icon }) => (
-              <li key={label} className={styles.orderStep}>
-                <span className={styles.stepIcon} aria-hidden="true">
-                  <Icon size={17} strokeWidth={1.7} />
+      <div className={styles.diagram}>
+        <div className={styles.brandHub}>
+          <span className={styles.orbit} aria-hidden="true" />
+          <span className={styles.hubLogo}>
+            <FoodMatrixMark size={72} />
+          </span>
+          <span className={styles.hubCaption}>
+            Connected from order to checkout
+          </span>
+        </div>
+        <div className={styles.serviceFlow}>
+          <ol className={styles.steps} aria-label="Restaurant service flow">
+            {steps.map(({ title, description, Icon }, index) => (
+              <li key={title}>
+                <span className={styles.stepIcon}>
+                  <Icon size={21} strokeWidth={1.6} aria-hidden="true" />
                 </span>
-                <span className={styles.stepLabel}>{label}</span>
-                <span className={styles.stepStatus}>{status}</span>
+                <strong>{title}</strong>
+                <span>{description}</span>
+                {index < steps.length - 1 && (
+                  <ArrowRight
+                    className={styles.arrow}
+                    size={16}
+                    aria-hidden="true"
+                  />
+                )}
               </li>
             ))}
           </ol>
-        </figcaption>
-      </figure>
-
-      <ul className={styles.workspaceAreas}>
-        {workspaceAreas.map(({ label, Icon }) => (
-          <li key={label}>
-            <Icon aria-hidden="true" size={17} strokeWidth={1.7} />
-            <span>{label}</span>
-          </li>
-        ))}
-      </ul>
+          <div className={styles.stockUpdate}>
+            <span className={styles.stepIcon}>
+              <Boxes size={21} strokeWidth={1.6} aria-hidden="true" />
+            </span>
+            <strong>Reduce restaurant stock</strong>
+            <small>When kitchen items are ready</small>
+          </div>
+        </div>
+        <ul
+          className={styles.workspaceAreas}
+          aria-label="Restaurant management tools"
+        >
+          {workspaceAreas.map(({ title, description, Icon }) => (
+            <li key={title}>
+              <Icon size={17} strokeWidth={1.7} aria-hidden="true" />
+              <span>
+                <strong>{title}</strong>
+                <small>{description}</small>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </div>
     </section>
   );
 }

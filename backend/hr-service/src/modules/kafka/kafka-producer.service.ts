@@ -8,12 +8,14 @@ import {
 import { Kafka } from 'kafkajs';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
+import { kafkaSecurity } from './kafka-security.js';
 
 @Injectable()
 export class KafkaProducerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KafkaProducerService.name);
 
   private readonly kafka = new Kafka({
+    ...kafkaSecurity(),
     clientId: 'hr-service-producer',
     connectionTimeout: 5_000,
     requestTimeout: 10_000,

@@ -18,7 +18,6 @@ const sections = [
 export type Section = (typeof sections)[number]["id"];
 
 interface Props {
-  restaurantName: string;
   section: Section;
   refreshing: boolean;
   busy: boolean;
@@ -31,7 +30,6 @@ interface Props {
 }
 
 export default function InventoryHeader({
-  restaurantName,
   section,
   refreshing,
   busy,
@@ -43,18 +41,16 @@ export default function InventoryHeader({
   onRequest,
 }: Props) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950 shadow-lg shadow-black/25">
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-linear-to-r from-[#213d34] via-[#212f29] to-[#232429] px-4 py-4 sm:px-5">
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-300/40 bg-emerald-300/15 text-emerald-200">
-            <Boxes aria-hidden="true" className="size-5" />
-          </span>
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-white">
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
               Restaurant inventory
             </h1>
-            <p className="mt-0.5 break-words text-xs text-zinc-200">
-              {restaurantName}
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Stock balances, warehouse requests and delivery tracking
             </p>
           </div>
         </div>
@@ -86,7 +82,7 @@ export default function InventoryHeader({
       </header>
       <nav
         aria-label="Inventory views"
-        className="flex gap-1 overflow-x-auto border-t border-white/10 bg-[#18191d] p-2 sm:px-4"
+        className="flex gap-2 overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950/80 p-2"
       >
         {sections.map(({ id, label, icon: Icon }) => (
           <button
@@ -95,7 +91,7 @@ export default function InventoryHeader({
             aria-pressed={section === id}
             disabled={busy || tabsDisabled}
             onClick={() => onSection(id)}
-            className={`inline-flex min-h-10 shrink-0 items-center gap-2 rounded-lg border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-300 ${section === id ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : "border-transparent text-zinc-300 enabled:hover:bg-white/8 enabled:hover:text-white disabled:opacity-50"}`}
+            className={`inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-50 ${section === id ? "border-emerald-400 bg-emerald-400 text-zinc-950" : "border-transparent text-zinc-400 enabled:hover:border-zinc-700 enabled:hover:bg-zinc-900 enabled:hover:text-white"}`}
           >
             <Icon aria-hidden="true" className="size-4" />
             {label}

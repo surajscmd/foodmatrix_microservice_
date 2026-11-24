@@ -4,7 +4,10 @@ import { useState, type FormEvent } from "react";
 
 import { updateRestaurant } from "@/lib/organization-api";
 import { useOrganizationStore } from "@/store/organization-store";
-import type { Restaurant, UpdateRestaurantData } from "@/utils/types/organization";
+import type {
+  Restaurant,
+  UpdateRestaurantData,
+} from "@/utils/types/organization";
 
 const fields = [
   { key: "name", label: "Restaurant name", min: 2, max: 100 },
@@ -28,7 +31,10 @@ function editableFields(restaurant: Restaurant): Record<FieldKey, string> {
   };
 }
 
-export default function RestaurantProfileForm({ restaurant, canEdit }: {
+export default function RestaurantProfileForm({
+  restaurant,
+  canEdit,
+}: {
   restaurant: Restaurant;
   canEdit: boolean;
 }) {
@@ -74,33 +80,62 @@ export default function RestaurantProfileForm({ restaurant, canEdit }: {
       const updated = await updateRestaurant(restaurant.id, updates);
       const next = { ...restaurant, ...updated };
       const session = useOrganizationStore.getState();
-      if (session.currentUser?.systemUser.managedRestaurantId === restaurant.id) {
+      if (
+        session.currentUser?.systemUser.managedRestaurantId === restaurant.id
+      ) {
         updateStore(next);
       }
       setDraft(editableFields(next));
       setSaved(true);
     } catch (cause) {
-      const message: unknown = isAxiosError(cause) ? cause.response?.data?.message : undefined;
-      setError(typeof message === "string" ? message : Array.isArray(message) ? message.join(" ") : "Unable to save restaurant details.");
+      const message: unknown = isAxiosError(cause)
+        ? cause.response?.data?.message
+        : undefined;
+      setError(
+        typeof message === "string"
+          ? message
+          : Array.isArray(message)
+            ? message.join(" ")
+            : "Unable to save restaurant details.",
+      );
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <section aria-labelledby="restaurant-profile" className="overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950">
-      <div className="flex items-center gap-3 border-b border-zinc-800 bg-linear-to-r from-emerald-950 to-zinc-900 px-4 py-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-emerald-300/15 text-emerald-200"><Building2 size={17} aria-hidden /></span>
+    <section
+      aria-labelledby="restaurant-profile"
+      className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80"
+    >
+      <div className="flex items-start gap-3 border-b border-zinc-800 px-5 py-4">
+        <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-500/15 bg-emerald-500/10 text-emerald-400">
+          <Building2 size={16} aria-hidden />
+        </span>
         <div>
-          <h2 id="restaurant-profile" className="text-sm font-semibold text-white">Restaurant profile</h2>
-          <p className="text-xs text-zinc-300">{canEdit ? "Shared across your restaurant" : "Only the restaurant admin can edit these details."}</p>
+          <h2
+            id="restaurant-profile"
+            className="text-xs font-semibold text-zinc-200"
+          >
+            Restaurant profile
+          </h2>
+          <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
+            {canEdit
+              ? "Update your restaurant's name, address and time zone details."
+              : "Only the restaurant admin can edit these details."}
+          </p>
         </div>
       </div>
       <form onSubmit={(event) => void save(event)}>
-        <fieldset disabled={saving} className="grid min-w-0 gap-3 p-4 @lg:grid-cols-2 @5xl:grid-cols-3">
+        <fieldset
+          disabled={saving}
+          className="grid min-w-0 gap-5 p-5 @lg:grid-cols-2 @5xl:grid-cols-3"
+        >
           {fields.map(({ key, label, min, max }) => (
-            <label key={key} className="grid min-w-0 gap-1.5 text-xs font-medium text-zinc-300">
-              {label}
+            <label key={key} className="grid min-w-0 gap-2">
+              <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+                {label}
+              </span>
               <input
                 value={canEdit ? draft[key] : current[key]}
                 readOnly={!canEdit}
@@ -114,27 +149,46 @@ export default function RestaurantProfileForm({ restaurant, canEdit }: {
                   setError("");
                   setSaved(false);
                 }}
-                className="h-10 w-full min-w-0 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm text-white focus:border-emerald-400 focus:outline-none read-only:text-zinc-300"
+                className="w-full min-w-0 rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2.5 text-xs text-zinc-200 outline-none transition-colors focus:border-emerald-500/50 read-only:text-zinc-400"
               />
             </label>
           ))}
         </fieldset>
         {canEdit && (
-          <div className="flex flex-wrap items-center justify-end gap-3 border-t border-zinc-800 bg-[#18191d] px-4 py-3">
-            {error && <p role="alert" className="mr-auto text-xs text-rose-200">{error}</p>}
-            {saved && <p role="status" className="mr-auto text-xs text-emerald-200">Restaurant details saved.</p>}
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 px-5 py-4">
+            <div className="min-w-0 flex-1 basis-48 space-y-1">
+              <p className="font-mono text-[10px] text-zinc-500">
+                {dirty
+                  ? "Unsaved changes"
+                  : "Restaurant details are up to date"}
+              </p>
+              {error && (
+                <p role="alert" className="text-xs text-rose-300">
+                  {error}
+                </p>
+              )}
+              {saved && (
+                <p role="status" className="text-xs text-emerald-300">
+                  Restaurant details saved.
+                </p>
+              )}
+            </div>
             <button
               type="button"
               disabled={saving || !dirty}
-              onClick={() => { setDraft(current); setError(""); setSaved(false); }}
-              className="min-h-9 rounded-lg px-3 text-xs font-medium text-zinc-300 enabled:hover:bg-white/8 disabled:opacity-50"
+              onClick={() => {
+                setDraft(current);
+                setError("");
+                setSaved(false);
+              }}
+              className="inline-flex min-h-9 items-center rounded-xl border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-400 transition-colors enabled:hover:bg-zinc-800 enabled:hover:text-zinc-200 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50"
             >
               Reset
             </button>
             <button
               type="submit"
               disabled={saving || !dirty}
-              className="inline-flex min-h-9 items-center gap-2 rounded-lg bg-emerald-300 px-3 text-xs font-semibold text-emerald-950 enabled:hover:bg-emerald-200 disabled:opacity-50"
+              className="inline-flex min-h-9 items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 transition-colors enabled:hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-40"
             >
               <Save size={15} aria-hidden />
               {saving ? "Saving…" : "Save changes"}

@@ -70,10 +70,23 @@ model Notification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  socketDelivery NotificationSocketOutbox?
+
   @@index([restaurantId])
   @@index([warehouseId])
   @@index([scope])
   @@index([type])
   @@index([isRead])
   @@index([createdAt])
+}
+
+// Saved atomically with its notification. A lease allows multiple workers to
+// retry after a process exits between saving the notification and emitting it.
+model NotificationSocketOutbox {
+  notificationId String @id
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  availableAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([availableAt, createdAt])
 }

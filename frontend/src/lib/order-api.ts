@@ -201,6 +201,12 @@ export const orderApi = {
   getDashboard: (signal?: AbortSignal) =>
     request<OrderDashboard>("orders/dashboard", { signal }),
 
+  getRestaurantDashboard: (restaurantId: string, signal?: AbortSignal) =>
+    request<OrderDashboard>(
+      `orders/dashboard?${new URLSearchParams({ restaurantId })}`,
+      { signal },
+    ),
+
   getRegisterOrders: (
     view: RegisterOrderView,
     page: number,

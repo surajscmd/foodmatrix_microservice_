@@ -13,15 +13,18 @@ export default function LoginScreen() {
     <main className={styles.page}>
       <div className={styles.layout}>
         <section aria-labelledby="sign-in-heading" className={styles.signIn}>
-          <div className={styles.signInContent}>
-            <div className={styles.brand}>
-              <FoodMatrixMark size={32} />
+          <header className={styles.brand} aria-label="FoodMatrix">
+            <div>
               <span>FoodMatrix</span>
+              <small>Restaurant operations, connected.</small>
             </div>
-
+            <FoodMatrixMark size={48} />
+          </header>
+          <div className={styles.signInContent}>
             <header className={styles.formHeading}>
-              <h1 id="sign-in-heading">Sign in</h1>
-              <p>Use your work email and password.</p>
+              <span className={styles.eyebrow}>Your FoodMatrix workspace</span>
+              <h1 id="sign-in-heading">Ready for service?</h1>
+              <p>Sign in to bring your floor, kitchen and team together.</p>
             </header>
 
             <LoginForm />

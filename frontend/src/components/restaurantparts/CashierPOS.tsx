@@ -340,7 +340,9 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
           (line) =>
             line.item.id === item.id &&
             line.modifiers.length === modifiers.length &&
-            line.modifiers.every(({ id }) => modifiers.some((option) => option.id === id)),
+            line.modifiers.every(({ id }) =>
+              modifiers.some((option) => option.id === id),
+            ),
         );
         if (!matching) return [...current, newLine];
         return current.map((line) =>
@@ -355,7 +357,9 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
     if (!order || !editable) return;
 
     void runAction(async () => {
-      await orderApi.addItems(order.id, [cashierOrderItem(item.id, 1, modifiers)]);
+      await orderApi.addItems(order.id, [
+        cashierOrderItem(item.id, 1, modifiers),
+      ]);
       return `${item.name} added to order #${order.orderNumber}.`;
     });
   }
@@ -374,13 +378,16 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
   }
 
   function saveOptions(modifiers: CartModifier[]) {
-    if (!selection || lock.current || uncertain || (selectedId && !editable)) return;
+    if (!selection || lock.current || uncertain || (selectedId && !editable))
+      return;
     const { item, line } = selection;
     setSelection(null);
 
     if (line) {
       setCart((current) =>
-        current.map((entry) => entry.id === line.id ? { ...entry, modifiers } : entry),
+        current.map((entry) =>
+          entry.id === line.id ? { ...entry, modifiers } : entry,
+        ),
       );
     } else {
       addMenuItem(item, modifiers);
@@ -473,10 +480,22 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4 text-zinc-100">
+    <div className="mx-auto max-w-[1600px] space-y-5 text-zinc-100 motion-safe:animate-fade-in">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-2">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
+          <div>
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+              Cashier POS
+            </h1>
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Menu ordering, open tickets and payment settlement
+            </p>
+          </div>
+        </div>
+      </header>
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_25rem]">
         <MenuCatalog
-          restaurantName={restaurant.name}
           items={menu}
           error={menuError}
           optionsError={modifierCatalog.error}
@@ -491,10 +510,13 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
 
         <aside
           aria-labelledby="pos-current-title"
-          className="min-w-0 rounded-2xl border border-violet-400/40 bg-slate-900 shadow-lg shadow-black/20"
+          className="min-w-0 rounded-2xl border border-violet-400/20 bg-zinc-950/80 shadow-lg shadow-black/20"
         >
-          <div className="flex min-h-12 items-center justify-between gap-2 rounded-t-2xl border-b border-violet-400/30 bg-linear-to-r from-violet-900 to-slate-800 px-4 py-2">
-            <h2 id="pos-current-title" className="text-sm font-semibold">
+          <div className="flex min-h-12 items-center justify-between gap-2 rounded-t-2xl border-b border-violet-400/20 bg-gradient-to-r from-violet-500/25 via-violet-500/10 to-zinc-950 px-4 py-2">
+            <h2
+              id="pos-current-title"
+              className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-violet-200"
+            >
               Current order
             </h2>
             {selectedId && (
@@ -585,12 +607,12 @@ function Register({ restaurant }: { restaurant: Restaurant }) {
             ref={details}
             tabIndex={-1}
             aria-labelledby="pos-order-details-title"
-            className="min-w-0 scroll-mt-4 rounded-xl border border-sky-400/40 bg-slate-950"
+            className="min-w-0 scroll-mt-4 rounded-xl border border-sky-400/20 bg-zinc-950"
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-sky-400/30 bg-sky-950 px-4 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-xl border-b border-sky-400/20 bg-gradient-to-r from-sky-500/20 via-sky-500/5 to-zinc-950 px-4 py-2">
               <h3
                 id="pos-order-details-title"
-                className="text-sm font-semibold text-sky-100"
+                className="font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200"
               >
                 Order details
               </h3>

@@ -10,6 +10,7 @@ import { KafkaConsumerService } from '../src/kafka/kafka-consumer.service.js';
 import { KafkaProducerService } from '../src/kafka/kafka-producer.service.js';
 import { PrismaService } from '../src/lib/prisma/prisma.service.js';
 import { OrderDeductionRetryService } from '../src/modules/order-inventory/order-deduction-retry.service.js';
+import { InventorySchedulerService } from '../src/modules/schedule/schedule.service.js';
 import { CatalogGatewayService } from '../src/utils/caltalog-gateway.service.js';
 
 describe('Inventory workflows', () => {
@@ -17,6 +18,7 @@ describe('Inventory workflows', () => {
   let db: PrismaService;
   let outbox: InventoryOutboxService;
   let deductions: OrderDeductionRetryService;
+  let scheduler: InventorySchedulerService;
   const restaurantId = randomUUID();
   const warehouseId = randomUUID();
   const otherWarehouseId = randomUUID();
@@ -112,6 +114,7 @@ describe('Inventory workflows', () => {
     db = module.get(PrismaService);
     outbox = module.get(InventoryOutboxService);
     deductions = module.get(OrderDeductionRetryService);
+    scheduler = module.get(InventorySchedulerService);
     // Run workers explicitly so timing and Kafka failure are deterministic.
     jest.spyOn(outbox, 'publishPending');
     jest.spyOn(deductions, 'retryPending');
@@ -281,5 +284,44 @@ describe('Inventory workflows', () => {
     expect(
       movements.map((movement) => movement.quantityChange.toNumber()),
     ).toEqual([-6]);
+  });
+
+  it('persists low-stock alerts through a Kafka outage and delivers them after recovery', async () => {
+    const location = randomUUID();
+    await db.restaurantStock.create({
+      data: {
+        restaurantId: location,
+        ingredientId,
+        quantityOnHand: 1,
+        reorderLevel: 5,
+        reorderQuantity: 10,
+      },
+    });
+    publish.mockReset().mockRejectedValue(new Error('Kafka unavailable'));
+    await scheduler.checkLowStock();
+    const queued = await db.inventoryOutbox.findMany({
+      where: { topic: 'inventory.low-stock' },
+    });
+    const event = queued.find(
+      (row) =>
+        (row.payload as { restaurantId?: string }).restaurantId === location,
+    );
+    expect(event).toBeDefined();
+    expect(publish).not.toHaveBeenCalled();
+    await outbox.publishPending();
+    expect(
+      await db.inventoryOutbox.findUnique({ where: { id: event!.id } }),
+    ).not.toBeNull();
+
+    publish.mockReset().mockResolvedValue(undefined);
+    await outbox.publishPending();
+    expect(publish).toHaveBeenCalledWith(
+      'inventory.low-stock',
+      event!.payload,
+      event!.id,
+    );
+    expect(
+      await db.inventoryOutbox.findUnique({ where: { id: event!.id } }),
+    ).toBeNull();
   });
 });

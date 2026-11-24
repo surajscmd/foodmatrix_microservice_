@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import type { AttendanceShift, ShiftSchedule } from "@/lib/hr-api";
-import { Empty, input, panel } from "@/elements/restaurantworkforce/shared";
+import { Empty, input } from "@/elements/restaurantworkforce/shared";
 import ShiftRosterTable from "./ShiftRosterTable";
 import { restaurantDate } from "./report-dates";
 
@@ -54,13 +54,13 @@ export default function ShiftRoster({
     },
     {
       id: "attendance",
-      label: "All punches",
+      label: "Attendance records",
       count: punches.length,
       Icon: LogIn,
     },
     {
       id: "open",
-      label: "Open punches",
+      label: "Currently clocked in",
       count: openPunches.length,
       Icon: Clock3,
     },
@@ -97,7 +97,8 @@ export default function ShiftRoster({
             const start = Date.parse(shift.scheduledStart);
             const end = Date.parse(shift.scheduledEnd);
             const hasAttendance = punches.some((punch) => {
-              if (punch.shiftScheduleId) return punch.shiftScheduleId === shift.id;
+              if (punch.shiftScheduleId)
+                return punch.shiftScheduleId === shift.id;
               return (
                 punch.staffId === shift.staffId &&
                 Date.parse(punch.clockInAt) < end &&
@@ -152,17 +153,34 @@ export default function ShiftRoster({
           }));
 
   return (
-    <section aria-labelledby="daily-roster" className={panel + " @container"}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/15 bg-linear-to-r from-teal-900/60 via-[#172623] to-[#141821] px-4 py-3">
-        <h2
-          id="daily-roster"
-          className="flex items-center gap-2.5 text-sm font-semibold text-white"
-        >
-          <span className="grid size-9 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/12 text-teal-100">
+    <section
+      aria-labelledby="daily-roster"
+      className="@container min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
             <ClipboardList size={17} aria-hidden />
           </span>
-          Daily roster
-        </h2>
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2
+                id="daily-roster"
+                className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300"
+              >
+                Daily roster
+              </h2>
+              <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                {rows.length} {rows.length === 1 ? "record" : "records"}
+              </span>
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              {view === "schedule"
+                ? "Scheduled hours and staff assignments"
+                : "Clock-in records and working hours"}
+            </p>
+          </div>
+        </div>
         <div className="relative w-full @sm:w-60">
           <Search
             size={15}
@@ -193,7 +211,7 @@ export default function ShiftRoster({
       </div>
       <nav
         aria-label="Roster views"
-        className="flex flex-wrap gap-1 border-b border-white/8 bg-[#191c22] p-2"
+        className="flex flex-wrap gap-1 border-b border-zinc-800/80 bg-zinc-950/80 p-2"
       >
         {views.map(({ id, label, count, Icon }) => (
           <button
@@ -213,6 +231,13 @@ export default function ShiftRoster({
           </button>
         ))}
       </nav>
+      {view !== "schedule" && (
+        <p className="border-b border-zinc-800/80 px-4 py-2 text-[10px] text-zinc-500">
+          {view === "open"
+            ? "Clock-ins started on this date that have no clock-out recorded."
+            : "All clock-ins started on this date, including completed shifts."}
+        </p>
+      )}
       {rows.length > 0 ? (
         <ShiftRosterTable rows={rows} scheduled={view === "schedule"} />
       ) : (
@@ -222,7 +247,7 @@ export default function ShiftRoster({
             : view === "schedule"
               ? "No shifts scheduled for this date."
               : view === "open"
-                ? "No open punches for this date."
+                ? "No staff remain clocked in from this date."
                 : "No clock-ins recorded for this date."}
         </Empty>
       )}

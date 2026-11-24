@@ -102,7 +102,9 @@ export default function RestaurantMenuEditDrawer({
     try {
       await onSaved();
     } catch {
-      setError("Changes were saved. Refresh the menu to see the latest values.");
+      setError(
+        "Changes were saved. Refresh the menu to see the latest values.",
+      );
     }
   }
 
@@ -119,11 +121,14 @@ export default function RestaurantMenuEditDrawer({
       }}
       className={`fixed max-w-md overflow-hidden border-zinc-700 bg-[#111217] p-0 text-zinc-100 shadow-2xl shadow-black/50 backdrop:bg-black/65 backdrop:backdrop-blur-sm ${
         centered
-          ? "inset-0 m-auto w-[calc(100%-2rem)] rounded-2xl border"
+          ? "inset-0 m-auto w-[calc(100%-2rem)] rounded-3xl border bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c]"
           : "inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full border-l"
       }`}
     >
-      <form onSubmit={handleSave} className={`flex flex-col ${centered ? "max-h-[calc(100dvh-2rem)]" : "h-full"}`}>
+      <form
+        onSubmit={handleSave}
+        className={`flex flex-col ${centered ? "max-h-[calc(100dvh-2rem)]" : "h-full"}`}
+      >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-400/20 bg-linear-to-r from-[#213d34] to-[#232429] px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="rounded-lg bg-emerald-500/10 p-2">
@@ -135,8 +140,8 @@ export default function RestaurantMenuEditDrawer({
                 Edit restaurant menu item
               </h2>
 
-              <p className="mt-0.5 text-xs text-zinc-300">
-                {restaurant.name}
+              <p className="mt-0.5 text-[10px] text-zinc-400">
+                {centered ? "Pricing and availability" : restaurant.name}
               </p>
             </div>
           </div>
@@ -158,10 +163,15 @@ export default function RestaurantMenuEditDrawer({
           </p>
 
           <div>
-            <label htmlFor={priceId} className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-zinc-300">
+            <label
+              htmlFor={priceId}
+              className="mb-2 flex items-center justify-between gap-2 text-xs font-medium text-zinc-300"
+            >
               <span>Selling price</span>
               {restaurant.defaultCurrency && (
-                <span className="text-zinc-400">{restaurant.defaultCurrency}</span>
+                <span className="text-zinc-400">
+                  {restaurant.defaultCurrency}
+                </span>
               )}
             </label>
 
@@ -211,7 +221,10 @@ export default function RestaurantMenuEditDrawer({
           </div>
 
           {error && (
-            <div role="alert" className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-400">
+            <div
+              role="alert"
+              className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-3 text-xs text-rose-400"
+            >
               {error}
             </div>
           )}

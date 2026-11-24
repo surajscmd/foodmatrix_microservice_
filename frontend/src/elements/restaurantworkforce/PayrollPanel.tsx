@@ -153,12 +153,12 @@ export default function PayrollPanel({
           <ArrowLeft size={14} /> Payroll runs
         </button>
         <section className={panel}>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 bg-linear-to-r from-sky-500/12 to-transparent px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 bg-linear-to-r from-sky-500/12 to-transparent px-4 py-3">
             <div>
               <p className="flex items-center gap-1.5 text-xs text-sky-200">
                 <CalendarDays size={14} /> Pay period
               </p>
-              <h2 className="mt-1 text-sm font-semibold text-white">
+              <h2 className="mt-1 font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
                 {dayLabel(selected.periodStartDate)} –{" "}
                 {dayLabel(selected.periodEndDate)}
               </h2>
@@ -189,7 +189,7 @@ export default function PayrollPanel({
             ].map(([label, value, color]) => (
               <div
                 key={label}
-                className="rounded-xl border border-white/8 bg-black/20 px-3 py-2"
+                className="rounded-xl border border-zinc-800/80 bg-black/20 px-3 py-2"
               >
                 <p className="text-[11px] text-zinc-400">{label}</p>
                 <p
@@ -201,7 +201,7 @@ export default function PayrollPanel({
             ))}
           </div>
           {selected.status !== "PAID" && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/8 px-4 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 px-4 py-3">
               <p className="text-xs text-zinc-400">
                 {confirm === "approve"
                   ? "Confirm that you reviewed the payslips for this run."
@@ -291,13 +291,13 @@ export default function PayrollPanel({
             </div>
           )}
           {selected.paidAt && (
-            <p className="border-t border-white/8 px-4 py-3 text-xs text-zinc-300">
+            <p className="border-t border-zinc-800/80 px-4 py-3 text-xs text-zinc-300">
               Recorded {dayLabel(selected.paidAt)} · Reference{" "}
               <span className="break-all">{selected.paymentReference}</span>
             </p>
           )}
           {selected.reopenReason && (
-            <p className="border-t border-white/8 px-4 py-3 text-xs text-zinc-300">
+            <p className="border-t border-zinc-800/80 px-4 py-3 text-xs text-zinc-300">
               Last correction: {selected.reopenReason}
             </p>
           )}
@@ -338,13 +338,15 @@ export default function PayrollPanel({
 
   return (
     <section className={panel} aria-label="Payroll runs">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800/80 px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="grid size-9 place-items-center rounded-xl bg-sky-400/12 text-sky-300">
             <Banknote size={17} />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-white">Payroll runs</h2>
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Payroll runs
+            </h2>
             <p className="text-xs text-zinc-400">
               {data
                 ? `${data.length} recorded runs`
@@ -426,7 +428,7 @@ export default function PayrollPanel({
         </div>
       )}
       {data?.length === 0 && <Empty>No payroll runs yet.</Empty>}
-      <ul className="divide-y divide-white/8">
+      <ul className="divide-y divide-zinc-800/80">
         {data?.map((run) => (
           <li key={run.id}>
             <button

@@ -370,6 +370,7 @@ export default function RestaurantScreen({
           restaurant={selectedRestaurant}
           canEdit={canEdit}
           canChangeStatus={canCreate}
+          updatingStatus={isUpdatingStatus}
           onEdit={handleOpenEdit}
           onUpdateStatus={requestStatusUpdate}
           onBack={handleBack}

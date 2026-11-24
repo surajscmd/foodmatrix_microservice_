@@ -9,11 +9,13 @@ import { Kafka } from 'kafkajs';
 import { isOrderCompleteEvent } from '../modules/order-inventory/events/order-complete.event.js';
 import { OrderDeductionRetryService } from '../modules/order-inventory/order-deduction-retry.service.js';
 import { PrismaService } from '../lib/prisma/prisma.service.js';
+import { kafkaSecurity } from './kafka-security.js';
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(KafkaConsumerService.name);
   private readonly consumer = new Kafka({
+    ...kafkaSecurity(),
     clientId: 'inventory-service-consumer',
     brokers: (
       process.env.KAFKA_BROKERS ||

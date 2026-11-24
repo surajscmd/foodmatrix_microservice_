@@ -24,7 +24,6 @@ export interface RegisterMenuItem {
 }
 
 interface Props {
-  restaurantName: string;
   items: RegisterMenuItem[] | null;
   error: string;
   optionsError: string;
@@ -41,7 +40,6 @@ const focus =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300";
 
 export default function MenuCatalog({
-  restaurantName,
   items,
   error,
   optionsError,
@@ -78,9 +76,9 @@ export default function MenuCatalog({
     <section
       aria-labelledby="pos-menu-title"
       id="pos-menu"
-      className="min-w-0 scroll-mt-4 rounded-2xl border border-slate-700 bg-slate-900 shadow-lg shadow-black/20"
+      className="min-w-0 scroll-mt-4 rounded-2xl border border-zinc-800 bg-zinc-950/80 shadow-lg shadow-black/20"
     >
-      <div className="flex flex-wrap items-center gap-3 rounded-t-2xl border-b border-teal-400/30 bg-linear-to-r from-teal-800 to-slate-800 p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-t-2xl border-b border-emerald-400/20 bg-gradient-to-r from-emerald-500/25 via-emerald-500/10 to-zinc-950 p-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-300 text-emerald-950">
             <Utensils aria-hidden="true" className="size-5" />
@@ -88,12 +86,13 @@ export default function MenuCatalog({
           <div className="min-w-0">
             <h2
               id="pos-menu-title"
-              className="truncate text-sm font-semibold text-white"
-              title={restaurantName}
+              className="truncate text-base font-semibold tracking-tight text-white"
             >
-              {restaurantName}
+              Menu catalog
             </h2>
-            <p className="text-xs text-teal-100">Menu</p>
+            <p className="mt-1 font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-emerald-400">
+              Menu
+            </p>
           </div>
         </div>
 
@@ -109,7 +108,7 @@ export default function MenuCatalog({
             placeholder="Search menu…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className={`h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 pl-9 pr-10 text-sm text-white placeholder:text-zinc-400 ${focus}`}
+            className={`h-11 w-full rounded-xl border border-zinc-700 bg-zinc-950 pl-9 pr-10 text-xs text-white placeholder:text-zinc-400 ${focus}`}
           />
           {search && (
             <button
@@ -179,10 +178,10 @@ export default function MenuCatalog({
                         setCategoryId(id);
                         setSearch("");
                       }}
-                      className={`min-h-10 rounded-lg border px-3 text-sm font-medium ${focus} ${
+                      className={`min-h-10 rounded-lg border px-3 text-xs font-semibold transition-colors ${focus} ${
                         active
-                          ? "border-emerald-300 bg-emerald-300 text-emerald-950"
-                          : "border-slate-600 bg-slate-800 text-slate-100 hover:border-emerald-400 hover:bg-teal-950"
+                          ? "border-emerald-400 bg-emerald-400 text-zinc-950 shadow-[0_4px_16px_rgba(52,211,153,0.15)]"
+                          : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-emerald-400/50 hover:bg-emerald-400/10 hover:text-emerald-300"
                       }`}
                     >
                       {name}
@@ -203,24 +202,24 @@ export default function MenuCatalog({
                   return (
                     <li
                       key={item.id}
-                      className="flex min-w-0 rounded-xl border border-slate-600/70 bg-slate-800"
+                      className="flex min-w-0 overflow-hidden rounded-xl border border-zinc-800 bg-gradient-to-br from-zinc-900 to-zinc-950 transition-colors hover:border-emerald-400/40"
                     >
                       <button
                         type="button"
                         disabled={disabled}
                         onClick={() => onAdd(item)}
                         aria-label={`Add ${item.name} for ${formatMoney(item.price)}`}
-                        className={`group flex min-h-20 min-w-0 flex-1 items-center justify-between gap-2.5 p-3 text-left transition enabled:hover:bg-teal-950 ${hasOptions ? "rounded-s-xl" : "rounded-xl"} ${focus}`}
+                        className={`group flex min-h-20 min-w-0 flex-1 items-center justify-between gap-2.5 p-3 text-left transition enabled:hover:bg-emerald-400/[0.06] ${hasOptions ? "rounded-s-xl" : "rounded-xl"} ${focus}`}
                       >
                         <span className="min-w-0">
-                          <span className="block break-words text-sm font-semibold text-white">
+                          <span className="block break-words text-xs font-semibold leading-5 text-white">
                             {item.name}
                           </span>
-                          <span className="mt-1 block text-sm font-medium tabular-nums text-emerald-300">
+                          <span className="mt-1 block text-sm font-semibold tabular-nums text-emerald-400">
                             {formatMoney(item.price)}
                           </span>
                         </span>
-                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-300 text-emerald-950 group-disabled:bg-slate-700 group-disabled:text-slate-400">
+                        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-emerald-400 text-zinc-950 shadow-[0_3px_12px_rgba(52,211,153,0.12)] group-hover:bg-emerald-300 group-disabled:bg-zinc-800 group-disabled:text-zinc-500">
                           <Plus aria-hidden="true" className="size-4" />
                         </span>
                       </button>
@@ -230,9 +229,12 @@ export default function MenuCatalog({
                           disabled={disabled}
                           onClick={() => onOptions(item)}
                           aria-label={`Choose options for ${item.name}`}
-                          className={`flex w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-e-xl border-s border-slate-600/70 bg-slate-900/55 text-[11px] font-medium text-teal-100 transition enabled:hover:bg-teal-900/75 disabled:opacity-55 ${focus}`}
+                          className={`flex w-14 shrink-0 flex-col items-center justify-center gap-1 rounded-e-xl border-s border-zinc-800 bg-violet-500/[0.06] text-[10px] font-semibold text-violet-300 transition enabled:hover:bg-violet-500/15 disabled:opacity-55 ${focus}`}
                         >
-                          <SlidersHorizontal aria-hidden="true" className="size-4" />
+                          <SlidersHorizontal
+                            aria-hidden="true"
+                            className="size-4"
+                          />
                           Options
                         </button>
                       )}

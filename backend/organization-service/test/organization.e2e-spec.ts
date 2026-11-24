@@ -194,7 +194,9 @@ it('deactivates a restaurant without deleting it and blocks existing and new acc
   await server().get('/order-access').expect(401);
   await server().get('/inventory-access').expect(401);
   await server().get('/notification-access').expect(401);
-  await notificationAccess().expect('Cache-Control', 'private, no-store').expect(200);
+  await notificationAccess()
+    .expect('Cache-Control', 'private, no-store')
+    .expect(200);
   await inventoryAccess()
     .expect('Cache-Control', 'private, no-store')
     .expect(200)

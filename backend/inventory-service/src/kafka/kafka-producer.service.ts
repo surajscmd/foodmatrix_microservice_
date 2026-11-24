@@ -1,9 +1,11 @@
 import { Injectable, type OnApplicationShutdown } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
+import { kafkaSecurity } from './kafka-security.js';
 
 @Injectable()
 export class KafkaProducerService implements OnApplicationShutdown {
   private readonly producer = new Kafka({
+    ...kafkaSecurity(),
     clientId: 'inventory-service-producer',
     brokers: (
       process.env.KAFKA_BROKERS ||

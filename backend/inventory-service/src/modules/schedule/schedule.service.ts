@@ -1,7 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../../lib/prisma/prisma.service.js';
-import { KafkaProducerService } from '../../kafka/kafka-producer.service.js';
 import { CatalogGatewayService } from '../../utils/caltalog-gateway.service.js';
 
 @Injectable()
@@ -10,7 +9,6 @@ export class InventorySchedulerService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly kafkaProducer: KafkaProducerService,
     private readonly catalogGateway: CatalogGatewayService,
   ) {}
 
@@ -100,18 +98,18 @@ export class InventorySchedulerService {
       }
 
       // --------------------------------------------------
-      // ONE KAFKA EVENT PER RESTAURANT
+      // Persist the complete batch before the outbox worker contacts Kafka.
       // --------------------------------------------------
 
-      for (const [restaurantId, items] of restaurantMap) {
-        await this.kafkaProducer.publish('inventory.low-stock', {
-          restaurantId,
-          items,
-        });
-      }
+      await this.prisma.inventoryOutbox.createMany({
+        data: [...restaurantMap].map(([restaurantId, items]) => ({
+          topic: 'inventory.low-stock',
+          payload: { restaurantId, items },
+        })),
+      });
 
       this.logger.log(
-        `Published low-stock events for ${restaurantMap.size} restaurants`,
+        `Queued low-stock events for ${restaurantMap.size} restaurants`,
       );
     } catch (error) {
       this.logger.error('Low-stock check failed', error);

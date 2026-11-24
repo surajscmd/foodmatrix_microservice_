@@ -36,8 +36,8 @@ const orderTypes: { value: OrderType; label: string }[] = [
 ];
 
 const focus =
-  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-violet-300";
-const field = `mt-1 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-sm text-white ${focus}`;
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400";
+const field = `mt-1 h-10 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 text-xs text-white ${focus}`;
 const stepper = `grid size-9 place-items-center rounded-lg border border-zinc-700 bg-zinc-900 text-white enabled:hover:bg-zinc-800 disabled:opacity-50 ${focus}`;
 
 export default function CartPanel({
@@ -85,11 +85,11 @@ export default function CartPanel({
   return (
     <form onSubmit={submit} className="space-y-4 p-4">
       {lines.length === 0 && !uncertain ? (
-        <div className="rounded-xl border border-violet-400/30 bg-violet-950/40 p-5 text-center">
+        <div className="rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-500/15 to-zinc-950 p-5 text-center">
           <span className="mx-auto grid size-10 place-items-center rounded-xl bg-violet-300 text-violet-950">
             <ShoppingBag aria-hidden="true" className="size-5" />
           </span>
-          <p className="mt-2 text-sm font-medium text-white">
+          <p className="mt-2 text-xs font-medium leading-5 text-white">
             Start a new order
           </p>
           <p className="mt-1 text-xs text-zinc-400">
@@ -109,7 +109,7 @@ export default function CartPanel({
                   className="flex items-center justify-between gap-3 p-3"
                 >
                   <div className="min-w-0">
-                    <p className="break-words text-sm font-medium text-white">
+                    <p className="break-words text-xs font-medium leading-5 text-white">
                       {item.name}
                     </p>
                     <p className="mt-1 text-xs tabular-nums text-zinc-400">
@@ -174,7 +174,7 @@ export default function CartPanel({
                 onClick={() => setType(value)}
                 className={`min-h-10 rounded-lg border px-1 text-xs font-semibold disabled:opacity-50 ${focus} ${
                   type === value
-                    ? "border-violet-400/50 bg-violet-400/15 text-violet-200"
+                    ? "border-violet-400 bg-violet-400 text-zinc-950 shadow-[0_3px_12px_rgba(167,139,250,0.15)]"
                     : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-violet-400/40"
                 }`}
               >
@@ -212,8 +212,8 @@ export default function CartPanel({
             />
           </label>
 
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-violet-400/10 px-3 py-2.5">
-            <span className="text-sm text-violet-200">Estimated total</span>
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-400/20 bg-gradient-to-r from-emerald-500/15 to-emerald-500/5 px-3 py-3">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-300">Estimated total</span>
             <strong className="text-lg tabular-nums text-white">
               {formatMoney(estimate)}
             </strong>
@@ -222,7 +222,7 @@ export default function CartPanel({
           <button
             type="submit"
             disabled={lines.length === 0}
-            className={`min-h-11 w-full rounded-xl bg-violet-300 px-3 text-sm font-semibold text-violet-950 enabled:hover:bg-violet-200 disabled:opacity-50 ${focus}`}
+            className={`min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-xs font-bold text-zinc-950 shadow-[0_6px_20px_rgba(52,211,153,0.15)] transition-colors enabled:hover:bg-emerald-300 disabled:opacity-50 ${focus}`}
           >
             {busy ? "Working…" : "Place & confirm"}
           </button>

@@ -1,0 +1,45 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-admin-bootstrap
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 120
+  backoffLimit: 1
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector: {{- toYaml .Values.nodeSelector | nindent 8 }}
+      {{- if .Values.postgresCaConfigMap }}
+      volumes:
+        - name: postgres-ca
+          configMap:
+            name: {{ .Values.postgresCaConfigMap }}
+      {{- end }}
+      containers:
+        - name: bootstrap
+          image: {{ printf "%s/organization-service:%s" .Values.imageRegistry .Values.imageTag | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: ["npm", "run", "db:bootstrap"]
+          env:
+            - name: BETTER_AUTH_URL
+              value: {{ .Values.publicOrigin | quote }}
+            - name: BETTER_AUTH_TRUSTED_ORIGINS
+              value: {{ .Values.publicOrigin | quote }}
+          envFrom:
+            - secretRef:
+                name: {{ (index .Values.services "organization-service").secret }}
+            - secretRef:
+                name: {{ .Values.bootstrap.secret }}
+          {{- if .Values.postgresCaConfigMap }}
+          volumeMounts:
+            - name: postgres-ca
+              mountPath: /etc/foodmatrix/postgres
+              readOnly: true
+          {{- end }}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+{{- end }}

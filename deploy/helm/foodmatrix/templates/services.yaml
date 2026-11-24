@@ -1,0 +1,116 @@
+{{- $root := . }}
+{{- range $name, $config := .Values.services }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+  ports:
+    - name: http
+      port: {{ $config.port }}
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+spec:
+  replicas: {{ if eq $name "notification-service" }}1{{ else }}{{ $root.Values.replicas }}{{ end }}
+  {{- if eq $name "notification-service" }}
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+      {{- if $root.Values.observability.enabled }}
+      annotations:
+        instrumentation.opentelemetry.io/inject-nodejs: {{ $root.Values.observability.instrumentation | quote }}
+      {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector: {{- toYaml $root.Values.nodeSelector | nindent 8 }}
+      {{- if and $config.secret $root.Values.postgresCaConfigMap }}
+      volumes:
+        - name: postgres-ca
+          configMap:
+            name: {{ $root.Values.postgresCaConfigMap }}
+      {{- end }}
+      containers:
+        - name: {{ $name }}
+          image: {{ printf "%s/%s:%s" (required "imageRegistry is required" $root.Values.imageRegistry) $name (required "imageTag is required" $root.Values.imageTag) | quote }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $config.port }}
+          env:
+            - name: PORT
+              value: {{ $config.port | quote }}
+            - name: FRONTEND_ORIGIN
+              value: {{ $root.Values.publicOrigin | quote }}
+            {{- if eq $name "frontend" }}
+            - name: FOODMATRIX_API_URL
+              value: http://kong:8000
+            {{- else }}
+            - name: ORGANIZATION_SERVICE_URL
+              value: http://organization-service:3001
+            - name: CATALOG_SERVICE_URL
+              value: http://catalog-service:3004
+            {{- end }}
+            {{- if eq $name "organization-service" }}
+            - name: BETTER_AUTH_URL
+              value: {{ $root.Values.publicOrigin | quote }}
+            - name: BETTER_AUTH_TRUSTED_ORIGINS
+              value: {{ $root.Values.publicOrigin | quote }}
+            {{- end }}
+            {{- if $config.kafka }}
+            - name: KAFKA_BROKERS
+              value: {{ required "kafkaBrokers is required" $root.Values.kafkaBrokers | quote }}
+            {{- end }}
+            {{- if $root.Values.observability.enabled }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ $name }}
+            {{- end }}
+          {{- if $config.secret }}
+          {{- if $root.Values.postgresCaConfigMap }}
+          volumeMounts:
+            - name: postgres-ca
+              mountPath: /etc/foodmatrix/postgres
+              readOnly: true
+          {{- end }}
+          envFrom:
+            - secretRef:
+                name: {{ $config.secret }}
+            {{- if and $config.kafka $root.Values.kafkaSecret }}
+            - secretRef:
+                name: {{ $root.Values.kafkaSecret }}
+            {{- end }}
+          {{- end }}
+          resources: {{- toYaml $root.Values.resources | nindent 12 }}
+          startupProbe:
+            httpGet:
+              path: {{ default "/" $config.probePath }}
+              port: http
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet:
+              path: {{ default "/" $config.probePath }}
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 15
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+{{- end }}

@@ -1,17 +1,48 @@
 "use client";
 
 import {
+  Activity,
   ArrowDownRight,
   ArrowUpRight,
   Minus,
-  Activity,
+  type LucideIcon,
 } from "lucide-react";
+
+const tones = {
+  emerald: {
+    icon: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+    glow: "from-emerald-500/10",
+    line: "via-emerald-400/60",
+  },
+  sky: {
+    icon: "border-sky-500/20 bg-sky-500/10 text-sky-300",
+    glow: "from-sky-500/10",
+    line: "via-sky-400/60",
+  },
+  violet: {
+    icon: "border-violet-500/20 bg-violet-500/10 text-violet-300",
+    glow: "from-violet-500/10",
+    line: "via-violet-400/60",
+  },
+  amber: {
+    icon: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+    glow: "from-amber-500/10",
+    line: "via-amber-400/60",
+  },
+  rose: {
+    icon: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+    glow: "from-rose-500/10",
+    line: "via-rose-400/60",
+  },
+};
 
 interface MetricCardProps {
   title: string;
   value: string | number;
   change?: number;
   description: string;
+  icon?: LucideIcon;
+  tone?: keyof typeof tones;
 }
 
 export default function MetricCard({
@@ -19,89 +50,58 @@ export default function MetricCard({
   value,
   change,
   description,
+  icon: Icon = Activity,
+  tone = "emerald",
 }: MetricCardProps) {
-  const positive = change !== undefined && change > 0;
-  const negative = change !== undefined && change < 0;
-
-  const accentClass = positive
-    ? "text-emerald-400"
-    : negative
-      ? "text-red-400"
-      : "text-zinc-400";
-
-  const iconBg = positive
-    ? "bg-emerald-500/10 border-emerald-500/20"
-    : negative
-      ? "bg-red-500/10 border-red-500/20"
-      : "bg-zinc-800/70 border-zinc-700";
-
-  const ChangeIcon = positive
-    ? ArrowUpRight
-    : negative
-      ? ArrowDownRight
-      : Minus;
+  const style = tones[tone];
+  const ChangeIcon =
+    change === undefined || change === 0
+      ? Minus
+      : change > 0
+        ? ArrowUpRight
+        : ArrowDownRight;
 
   return (
-    <div className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80 p-5 transition-all duration-300 hover:-translate-y-0.5 hover:border-zinc-700 hover:bg-zinc-900/80">
-      {/* Ambient glow */}
-      <div className="pointer-events-none absolute -right-12 -top-12 h-32 w-32 rounded-full bg-emerald-500/5 blur-3xl transition-all duration-500 group-hover:bg-emerald-500/10" />
+    <div className="group relative flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950 p-5 shadow-[0_4px_20px_rgba(0,0,0,0.12)] transition-[border-color,box-shadow,transform] duration-300 hover:border-zinc-700 hover:shadow-[0_8px_28px_rgba(0,0,0,0.2)] motion-safe:hover:-translate-y-0.5">
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent ${style.line} to-transparent opacity-70`}
+      />
+      <div
+        aria-hidden
+        className={`pointer-events-none absolute inset-0 bg-gradient-to-bl ${style.glow} via-transparent to-transparent opacity-70 transition-opacity duration-300 group-hover:opacity-100`}
+      />
 
-      {/* Top signal */}
-      <div className="relative flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
-
-          <p className="text-[10px] font-mono font-bold uppercase tracking-[0.16em] text-zinc-500">
-            {title}
-          </p>
-        </div>
-
-        <div
-          className={`flex h-8 w-8 items-center justify-center rounded-lg border ${iconBg}`}
+      <div className="relative flex items-center gap-3">
+        <span
+          className={`grid size-9 shrink-0 place-items-center rounded-xl border ${style.icon}`}
         >
-          <ChangeIcon className={`h-4 w-4 ${accentClass}`} />
-        </div>
+          <Icon size={17} strokeWidth={1.7} aria-hidden />
+        </span>
+        <h3 className="min-w-0 font-mono text-[10px] font-semibold uppercase leading-5 tracking-[0.12em] text-zinc-400">
+          {title}
+        </h3>
       </div>
 
-      {/* Main value */}
-      <div className="relative mt-5">
-        <h3 className="text-3xl font-semibold tracking-tight text-white">
-          {value}
-        </h3>
+      <p
+        className={`relative my-5 break-words font-semibold tracking-tight tabular-nums ${typeof value === "number" || /\d/.test(value) ? "text-[30px] leading-10 text-zinc-50" : "text-lg leading-10 text-zinc-400"}`}
+      >
+        {value}
+      </p>
 
-        <p className="mt-1 text-[10px] font-mono uppercase tracking-wider text-zinc-600">
+      <div className="relative mt-auto flex flex-wrap items-center justify-between gap-2 border-t border-zinc-800/80 pt-3">
+        <p className="min-w-0 flex-1 text-[11px] leading-5 text-zinc-500">
           {description}
         </p>
-      </div>
-
-      {/* Signal bar */}
-      <div className="relative mt-5">
-        <div className="h-1 overflow-hidden rounded-full bg-zinc-800">
-          <div
-            className={`h-full rounded-full transition-all duration-500 ${
-              positive
-                ? "w-[72%] bg-emerald-400"
-                : negative
-                  ? "w-[34%] bg-red-400"
-                  : change === undefined ? "w-0" : "w-1/2 bg-zinc-500"
-            }`}
-          />
-        </div>
-      </div>
-
-      {/* Bottom meta */}
-      <div className="relative mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Activity className="h-3 w-3 text-zinc-600" />
-
-          <span className="text-[9px] font-mono uppercase tracking-wider text-zinc-600">
-            {change === undefined ? "Current value" : "Network signal"}
+        {change !== undefined && (
+          <span
+            className={`inline-flex shrink-0 items-center gap-0.5 rounded-md border px-1.5 py-0.5 font-mono text-[10px] font-medium ${change > 0 ? "border-emerald-500/15 bg-emerald-500/10 text-emerald-300" : change < 0 ? "border-rose-500/15 bg-rose-500/10 text-rose-300" : "border-zinc-700 bg-zinc-800/60 text-zinc-400"}`}
+          >
+            <ChangeIcon size={12} aria-hidden />
+            {change > 0 ? "+" : ""}
+            {change}%
           </span>
-        </div>
-
-        <span className={`text-xs font-semibold ${accentClass}`}>
-          {change === undefined ? "" : `${positive ? "+" : ""}${change}%`}
-        </span>
+        )}
       </div>
     </div>
   );

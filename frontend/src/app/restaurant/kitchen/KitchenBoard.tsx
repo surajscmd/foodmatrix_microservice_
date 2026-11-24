@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, ChefHat, CookingPot, Inbox, RefreshCw } from "lucide-react";
+import { Check, CookingPot, Inbox, RefreshCw } from "lucide-react";
 import { orderApi, type Order, type OrderItem } from "@/lib/order-api";
 import { useOrganizationStore } from "@/store/organization-store";
 import KitchenTicket from "./KitchenTicket";
@@ -12,7 +12,7 @@ const lanes = [
     title: "New tickets",
     icon: Inbox,
     tone: "border-sky-300/25 bg-sky-300/15 text-sky-100",
-    panel: "border-sky-400/30 border-t-sky-400 bg-[#121d2b]",
+    panel: "border-sky-400/20 border-t-sky-400/70 bg-zinc-950/50",
     header: "from-sky-500/20 to-sky-500/5",
     ticket: "border-sky-400/30",
     ticketHeader: "border-sky-400/20 from-sky-500/15 to-sky-500/5",
@@ -24,7 +24,7 @@ const lanes = [
     title: "Cooking",
     icon: CookingPot,
     tone: "border-amber-300/25 bg-amber-300/15 text-amber-100",
-    panel: "border-amber-400/30 border-t-amber-400 bg-[#251d14]",
+    panel: "border-amber-400/20 border-t-amber-400/70 bg-zinc-950/50",
     header: "from-amber-500/20 to-amber-500/5",
     ticket: "border-amber-400/30",
     ticketHeader: "border-amber-400/20 from-amber-500/15 to-amber-500/5",
@@ -36,7 +36,7 @@ const lanes = [
     title: "Ready for pickup",
     icon: Check,
     tone: "border-emerald-300/25 bg-emerald-300/15 text-emerald-100",
-    panel: "border-emerald-400/30 border-t-emerald-400 bg-[#12241f]",
+    panel: "border-emerald-400/20 border-t-emerald-400/70 bg-zinc-950/50",
     header: "from-emerald-500/20 to-emerald-500/5",
     ticket: "border-emerald-400/30",
     ticketHeader: "border-emerald-400/20 from-emerald-500/15 to-emerald-500/5",
@@ -88,15 +88,10 @@ export default function KitchenBoard() {
     );
   }
 
-  return (
-    <Board
-      key={`${user.id}:${restaurant.id}`}
-      restaurantName={restaurant.name}
-    />
-  );
+  return <Board key={`${user.id}:${restaurant.id}`} />;
 }
 
-function Board({ restaurantName }: { restaurantName: string }) {
+function Board() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -219,24 +214,25 @@ function Board({ restaurantName }: { restaurantName: string }) {
   );
 
   return (
-    <div className="@container mx-auto max-w-[1600px] space-y-4 text-zinc-100">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-700/85 bg-linear-to-r from-[#1d3b31] via-[#222e29] to-[#232429] px-4 py-3">
+    <div className="@container mx-auto max-w-[1600px] space-y-5 text-zinc-100 motion-safe:animate-fade-in">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-300 text-emerald-950">
-            <ChefHat aria-hidden="true" className="size-5" />
-          </span>
+          <span
+            aria-hidden
+            className="h-4 w-1 shrink-0 rounded-full bg-emerald-400"
+          />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-white">
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
               Kitchen display
             </h1>
-            <p className="break-words text-xs text-zinc-200">
-              {restaurantName}
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Kitchen tickets, preparation and pickup
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
           <span
-            className={`flex items-center gap-1.5 text-xs ${loadError ? "text-amber-200" : "text-zinc-200"}`}
+            className={`flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-wider ${loadError ? "text-amber-300" : "text-zinc-500"}`}
           >
             <span
               aria-hidden="true"
@@ -256,7 +252,7 @@ function Board({ restaurantName }: { restaurantName: string }) {
             title="Refresh kitchen tickets"
             onClick={() => void refresh()}
             disabled={refreshing || activeId !== null}
-            className="grid size-10 place-items-center rounded-lg border border-white/20 text-white enabled:hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
+            className="grid size-10 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/70 text-zinc-400 transition-colors enabled:hover:border-emerald-400/30 enabled:hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
           >
             <RefreshCw
               aria-hidden="true"
@@ -290,7 +286,7 @@ function Board({ restaurantName }: { restaurantName: string }) {
         </p>
       )}
       {orders !== null && (
-        <div className="grid items-start gap-3 @min-[57rem]:grid-cols-3">
+        <div className="grid items-start gap-5 @min-[57rem]:grid-cols-3">
           {lanes.map(
             ({
               status,
@@ -312,7 +308,7 @@ function Board({ restaurantName }: { restaurantName: string }) {
                   className={`min-w-0 overflow-hidden rounded-2xl border border-t-2 shadow-sm shadow-black/20 ${panel}`}
                 >
                   <header
-                    className={`flex items-center gap-2.5 bg-linear-to-r px-3 py-3 ${header}`}
+                    className={`flex items-center gap-3 border-b border-zinc-800/70 bg-gradient-to-r px-4 py-4 ${header}`}
                   >
                     <span
                       className={`grid size-8 shrink-0 place-items-center rounded-lg border ${tone}`}
@@ -321,7 +317,7 @@ function Board({ restaurantName }: { restaurantName: string }) {
                     </span>
                     <h2
                       id={`kitchen-${status}`}
-                      className="flex-1 text-sm font-semibold text-white"
+                      className="flex-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-zinc-200"
                     >
                       {title}
                     </h2>
@@ -332,13 +328,13 @@ function Board({ restaurantName }: { restaurantName: string }) {
                       {tickets.length}
                     </span>
                   </header>
-                  <div className="p-2.5">
+                  <div className="p-3">
                     {tickets.length === 0 ? (
-                      <p className="rounded-xl border border-dashed border-white/15 bg-black/10 px-3 py-4 text-sm text-zinc-300">
+                      <p className="rounded-xl border border-dashed border-zinc-800 bg-zinc-950/30 px-4 py-10 text-center text-xs text-zinc-500">
                         {empty}
                       </p>
                     ) : (
-                      <div className="grid gap-2.5 @min-[36rem]:grid-cols-2 @min-[57rem]:grid-cols-1">
+                      <div className="grid gap-3 @min-[36rem]:grid-cols-2 @min-[57rem]:grid-cols-1">
                         {tickets.map((order) => (
                           <KitchenTicket
                             key={order.id}

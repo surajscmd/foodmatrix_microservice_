@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: kong
+  labels:
+    app.kubernetes.io/name: kong
+spec:
+  selector:
+    app.kubernetes.io/name: kong
+  ports:
+    - name: proxy
+      port: 8000
+    - name: metrics
+      port: 8100
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kong
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kong
+    spec:
+      automountServiceAccountToken: false
+      nodeSelector: {{- toYaml .Values.nodeSelector | nindent 8 }}
+      containers:
+        - name: kong
+          image: {{ printf "%s/kong:%s" .Values.imageRegistry .Values.imageTag | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          env:
+            - name: KONG_DATABASE
+              value: "off"
+            - name: KONG_DECLARATIVE_CONFIG
+              value: /kong/declarative/kong.yml
+            - name: KONG_ADMIN_LISTEN
+              value: "off"
+            - name: KONG_PROXY_ACCESS_LOG
+              value: "off"
+            - name: KONG_PROXY_LISTEN
+              value: 0.0.0.0:8000
+            - name: KONG_STATUS_LISTEN
+              value: 0.0.0.0:8100
+          ports:
+            - name: proxy
+              containerPort: 8000
+            - name: metrics
+              containerPort: 8100
+          readinessProbe:
+            httpGet:
+              path: /status/ready
+              port: metrics
+          livenessProbe:
+            httpGet:
+              path: /status
+              port: metrics
+          resources: {{- toYaml .Values.resources | nindent 12 }}

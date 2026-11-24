@@ -1,0 +1,56 @@
+fullnameOverride: otel-gateway
+mode: deployment
+image:
+  repository: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+command:
+  name: otelcol-contrib
+resources:
+  requests:
+    cpu: 100m
+    memory: 192Mi
+  limits:
+    memory: 512Mi
+ports:
+  jaeger-compact:
+    enabled: false
+  jaeger-thrift:
+    enabled: false
+  jaeger-grpc:
+    enabled: false
+  zipkin:
+    enabled: false
+  metrics:
+    enabled: true
+    containerPort: 9464
+    servicePort: 9464
+serviceMonitor:
+  enabled: true
+  metricsEndpoints:
+    - port: metrics
+      interval: 30s
+config:
+  receivers:
+    jaeger: null
+    prometheus: null
+    zipkin: null
+  exporters:
+    debug: null
+    otlp/tempo:
+      endpoint: tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+    prometheus:
+      endpoint: 0.0.0.0:9464
+      resource_to_telemetry_conversion:
+        enabled: true
+  service:
+    pipelines:
+      logs: null
+      traces:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [otlp/tempo]
+      metrics:
+        receivers: [otlp]
+        processors: [memory_limiter, batch]
+        exporters: [prometheus]

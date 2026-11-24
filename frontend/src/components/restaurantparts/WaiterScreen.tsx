@@ -1,14 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Plus, X } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import MenuGrid from "@/elements/waiterpad/MenuGrid";
 import CartPanel from "@/elements/waiterpad/CartPanel";
 import KitchenTicket from "@/elements/waiterpad/KitchenTicket";
 import TableOrders, { OrderStatus } from "@/elements/waiterpad/TableOrders";
 import type { TableGuest } from "@/elements/waiterpad/NewTableForm";
 import WaiterMark from "@/elements/waiterpad/WaiterMark";
+import TableRepresentation from "@/elements/waiterpad/TableRepresentation";
 import RefreshButton from "@/elements/waiterpad/RefreshButton";
+import ModifierPicker from "@/elements/Cash-pos/ModifierPicker";
+import useCashierModifierGroups from "@/elements/Cash-pos/useCashierModifierGroups";
+import {
+  cashierOrderItem,
+  type CartModifier,
+  type CashierModifierGroup,
+} from "@/elements/Cash-pos/cashier-modifiers";
 import {
   canAddToTable,
   type CartItem,
@@ -70,13 +78,21 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
   const [guest, setGuest] = useState<TableGuest | null>(null);
   const [settingUp, setSettingUp] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const modifierCatalog = useCashierModifierGroups();
+  const customizableItems = new Set(
+    modifierCatalog.error ? undefined : modifierCatalog.groups?.keys(),
+  );
+  const [options, setOptions] = useState<{
+    item: MenuItem;
+    groups: CashierModifierGroup[];
+    line?: CartItem;
+  } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [notice, setNotice] = useState<{ error: boolean; text: string }>();
   const lock = useRef(false);
   const workspace = useRef<HTMLDivElement>(null);
-  const menuRegion = useRef<HTMLDivElement>(null);
   const tableList = useRef<HTMLDivElement>(null);
 
   const ticketKey = `${selectedId}:${ordersRevision}`;
@@ -168,17 +184,60 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
     setOrdersRevision((value) => value + 1);
   }
 
-  function addItem(item: MenuItem) {
+  function addItem(item: MenuItem, modifiers: CartModifier[] = []) {
     if (lock.current || menuDisabled) return;
+    const id = JSON.stringify([item.id, modifiers.map(({ id }) => id).sort()]);
     setCart((current) =>
-      current.some((line) => line.menuItem.id === item.id)
+      current.some((line) => line.id === id)
         ? current.map((line) =>
-            line.menuItem.id === item.id
+            line.id === id
               ? { ...line, quantity: Math.min(99, line.quantity + 1) }
               : line,
           )
-        : [...current, { menuItem: item, quantity: 1 }],
+        : [...current, { id, menuItem: item, quantity: 1, modifiers }],
     );
+  }
+
+  function openOptions(item: MenuItem, line?: CartItem) {
+    if (lock.current || menuDisabled || modifierCatalog.error) return;
+    const groups = modifierCatalog.groups?.get(item.id);
+    if (groups?.length) setOptions({ item, groups, line });
+  }
+
+  function saveOptions(modifiers: CartModifier[]) {
+    if (!options || lock.current || menuDisabled) return;
+    if (options.line) {
+      const id = JSON.stringify([
+        options.item.id,
+        modifiers.map(({ id }) => id).sort(),
+      ]);
+      const quantity = options.line.quantity;
+      const existing = cart.find(
+        (line) => line.id === id && line.id !== options.line?.id,
+      );
+      if (existing && existing.quantity + quantity > 99) {
+        setNotice({
+          error: true,
+          text: "This combination would exceed 99 items. Reduce the quantity first.",
+        });
+        return;
+      }
+      setCart((current) => {
+        const remaining = current.filter(
+          (line) => line.id !== options.line?.id,
+        );
+        return existing
+          ? remaining.map((line) =>
+              line.id === id
+                ? { ...line, quantity: line.quantity + quantity }
+                : line,
+            )
+          : [...remaining, { id, menuItem: options.item, modifiers, quantity }];
+      });
+    } else {
+      addItem(options.item, modifiers);
+    }
+    setOptions(null);
   }
 
   function changeQuantity(itemId: string, delta: number) {
@@ -186,7 +245,7 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
     setCart((current) =>
       current
         .map((line) =>
-          line.menuItem.id === itemId
+          line.id === itemId
             ? { ...line, quantity: Math.min(99, line.quantity + delta) }
             : line,
         )
@@ -255,10 +314,9 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
     }
 
     void runAction(async () => {
-      const items = cart.map(({ menuItem, quantity }) => ({
-        menuItemId: menuItem.id,
-        quantity,
-      }));
+      const items = cart.map(({ menuItem, quantity, modifiers }) =>
+        cashierOrderItem(menuItem.id, quantity, modifiers),
+      );
       let saved: Order;
       try {
         if (selected) {
@@ -340,6 +398,7 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
       return;
     }
     setGuest(details);
+    setMenuOpen(true);
     setSettingUp(false);
     setNotice(undefined);
   }
@@ -356,7 +415,20 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 font-sans text-zinc-100">
+    <div className="mx-auto max-w-[1500px] space-y-5 font-sans motion-safe:animate-fade-in text-zinc-100">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-2">
+        <div className="flex items-center gap-3">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
+          <div>
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+              Waiter pad
+            </h1>
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Table orders, menu options and kitchen service
+            </p>
+          </div>
+        </div>
+      </header>
       {(notice || uncertain) && (
         <div
           className={`rounded-xl border px-4 py-3 text-sm ${notice?.error || uncertain ? "border-amber-400/40 bg-amber-950 text-amber-100" : "border-emerald-400/40 bg-emerald-950 text-emerald-100"}`}
@@ -424,7 +496,11 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
           tabIndex={-1}
           className="space-y-4 scroll-mt-20 outline-none"
         >
-          <header className="overflow-hidden rounded-2xl border border-zinc-700 bg-linear-to-r from-[#1d3b31] via-[#222e29] to-[#232429]">
+          <header className="relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_12px_40px_rgba(0,0,0,0.15)]">
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-cyan-400/40"
+            />
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-4">
               <button
                 type="button"
@@ -451,16 +527,16 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                 />
               )}
             </div>
-            <div className="flex min-w-0 items-center gap-3 px-4 py-3">
+            <div className="flex min-w-0 items-center gap-4 px-5 py-5 sm:px-6">
               <WaiterMark />
               <div className="min-w-0">
-                <h1 className="break-words text-sm font-semibold tracking-tight text-white">
+                <h2 className="break-words text-xl font-semibold tracking-tight text-white">
                   {selected
                     ? `Table ${selected.tableId}`
                     : guest
                       ? `Table ${guest.table}`
                       : "Table order unavailable"}
-                </h1>
+                </h2>
                 {selected ? (
                   <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <p className="font-mono text-xs text-zinc-200">
@@ -479,6 +555,15 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                   </p>
                 ) : null}
               </div>
+              {(selected?.tableId || guest?.table) && (
+                <div className="ml-auto hidden w-32 shrink-0 sm:block">
+                  <TableRepresentation
+                    label={selected?.tableId ?? guest?.table ?? ""}
+                    ready={selected?.status === "READY"}
+                    preparing={selected?.status === "PREPARING"}
+                  />
+                </div>
+              )}
             </div>
           </header>
 
@@ -494,7 +579,7 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
           {selectedId && !selected ? (
             <p
               role="status"
-              className="rounded-xl border border-zinc-700 bg-[#202126] p-4 text-sm"
+              className="rounded-xl border border-zinc-700 bg-zinc-900/40 p-4 text-sm"
             >
               {ticketRefreshing
                 ? "Loading ticket…"
@@ -529,27 +614,11 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                             disabled={menuDisabled}
                             aria-expanded={menuOpen}
                             aria-controls="waiter-menu-region"
-                            onClick={() => {
-                              const next = !menuOpen;
-                              setMenuOpen(next);
-                              if (next)
-                                requestAnimationFrame(() => {
-                                  menuRegion.current
-                                    ?.querySelector("input")
-                                    ?.focus({ preventScroll: true });
-                                  menuRegion.current?.scrollIntoView({
-                                    block: "start",
-                                  });
-                                });
-                            }}
-                            className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-50 ${menuOpen ? "border border-white/20 text-zinc-100 hover:bg-white/8" : "bg-emerald-300 text-emerald-950 hover:bg-emerald-200"}`}
+                            onClick={() => setMenuOpen(true)}
+                            className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-50 ${menuOpen ? "border border-white/20 text-zinc-100 hover:bg-white/8" : "bg-emerald-400 text-zinc-950 hover:bg-emerald-300"}`}
                           >
-                            {menuOpen ? (
-                              <X aria-hidden="true" className="size-4" />
-                            ) : (
-                              <Plus aria-hidden="true" className="size-4" />
-                            )}
-                            {menuOpen ? "Hide menu" : "Add items"}
+                            <Plus aria-hidden="true" className="size-4" />
+                            Add items
                           </button>
                         )}
                       </>
@@ -558,23 +627,33 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                 />
               )}
 
-              {(!selected || canAddToTable(selected)) && (
-                <div
-                  id="waiter-menu-region"
-                  ref={menuRegion}
-                  hidden={!!selected && !menuOpen}
-                  className="scroll-mt-20"
+              {!selected && guest && (
+                <button
+                  type="button"
+                  disabled={menuDisabled}
+                  onClick={() => setMenuOpen(true)}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-400 px-4 text-xs font-semibold text-zinc-950 hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50"
                 >
-                  <MenuGrid
-                    restaurantName={restaurant.name}
-                    items={menu?.filter((item) => item.isAvailable) ?? null}
-                    error={menuError}
-                    disabled={menuDisabled}
-                    formatMoney={money.format}
-                    onAdd={addItem}
-                    onRetry={refreshMenu}
-                  />
-                </div>
+                  <Plus size={15} aria-hidden /> Add items
+                </button>
+              )}
+
+              {menuOpen && (!selected || canAddToTable(selected)) && (
+                <MenuGrid
+                  table={selected?.tableId ?? guest?.table ?? ""}
+                  lines={cart}
+                  items={menu?.filter((item) => item.isAvailable) ?? null}
+                  error={menuError}
+                  optionsError={modifierCatalog.error}
+                  disabled={menuDisabled}
+                  customizableItems={customizableItems}
+                  formatMoney={money.format}
+                  onAdd={addItem}
+                  onOptions={openOptions}
+                  onRetry={refreshMenu}
+                  onRetryOptions={modifierCatalog.refresh}
+                  onClose={() => setMenuOpen(false)}
+                />
               )}
 
               {!uncertain && cart.length > 0 && (
@@ -584,6 +663,8 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
                   canSend={!menuDisabled}
                   formatMoney={money.format}
                   onChange={changeQuantity}
+                  onEditOptions={(line) => openOptions(line.menuItem, line)}
+                  customizableItems={customizableItems}
                   onSend={sendOrder}
                   onClear={() => setCart([])}
                 />
@@ -591,6 +672,19 @@ function WaiterStation({ restaurant }: { restaurant: Restaurant }) {
             </>
           )}
         </div>
+      )}
+      {options && (
+        <ModifierPicker
+          item={options.item}
+          groups={options.groups}
+          initialModifiers={options.line?.modifiers ?? []}
+          quantity={options.line?.quantity ?? 1}
+          editing={Boolean(options.line)}
+          blocked={menuDisabled}
+          formatMoney={money.format}
+          onClose={() => setOptions(null)}
+          onSave={saveOptions}
+        />
       )}
     </div>
   );

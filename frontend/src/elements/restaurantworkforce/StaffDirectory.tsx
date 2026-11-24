@@ -1,5 +1,5 @@
 import { useCallback, useDeferredValue, useState } from "react";
-import { Search, UserPlus, UsersRound, X } from "lucide-react";
+import { Search, UserPlus, UsersRound, X, RefreshCw } from "lucide-react";
 import {
   getStaffByRestaurant,
   type EmployeeStatus,
@@ -12,7 +12,6 @@ import {
   Empty,
   ErrorNote,
   input,
-  panel,
   Pagination,
   primary,
   secondary,
@@ -120,30 +119,59 @@ export default function StaffDirectory({
         />
       )}
       <section
-        className={panel + " @container"}
+        className="@container min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70"
         aria-label="Staff directory"
         aria-busy={loading}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/15 bg-linear-to-r from-teal-900/60 via-[#172623] to-[#141821] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/12 text-teal-100">
+            <span className="grid size-9 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
               <UsersRound size={17} aria-hidden />
             </span>
             <div>
-              <h2 className="text-sm font-semibold text-white">
-                Staff directory
-              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                  Staff directory
+                </h2>
+                {data && (
+                  <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                    {data.pagination.total}{" "}
+                    {data.pagination.total === 1 ? "record" : "records"}
+                  </span>
+                )}
+              </div>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                Select an employee to view their profile and manage staff
+                records
+              </p>
             </div>
           </div>
-          <button
-            className={primary}
-            aria-haspopup="dialog"
-            onClick={() => setAdding(true)}
-          >
-            <UserPlus size={14} aria-hidden /> Add staff
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              aria-label="Refresh staff directory"
+              disabled={loading}
+              onClick={() => setRevision((value) => value + 1)}
+              className={secondary}
+            >
+              <RefreshCw
+                size={14}
+                className={loading ? "motion-safe:animate-spin" : ""}
+                aria-hidden
+              />
+            </button>
+            <button
+              className={
+                primary + " bg-gradient-to-r from-emerald-400 to-cyan-400"
+              }
+              aria-haspopup="dialog"
+              onClick={() => setAdding(true)}
+            >
+              <UserPlus size={14} aria-hidden /> Add staff
+            </button>
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 bg-[#15171d] px-3 py-3 @xl:justify-between @xl:px-4">
+        <div className="flex flex-wrap items-center gap-2 bg-zinc-950/60 px-3 py-3 @xl:justify-between @xl:px-4">
           <div className="relative w-full @xl:max-w-xs">
             <Search
               size={15}
@@ -180,7 +208,7 @@ export default function StaffDirectory({
           <div
             role="group"
             aria-label="Filter by staff status"
-            className="flex flex-wrap gap-0.5 rounded-lg border border-white/8 bg-zinc-950/60 p-0.5"
+            className="flex flex-wrap gap-0.5 rounded-lg border border-zinc-800/80 bg-zinc-950/60 p-0.5"
           >
             {statusOptions.map(({ value, label }) => (
               <button
@@ -191,7 +219,7 @@ export default function StaffDirectory({
                   setStatus(value);
                   setPage(1);
                 }}
-                className={`min-h-8 rounded-md px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${status === value ? "bg-emerald-400/15 text-emerald-200" : "text-zinc-300 hover:bg-white/8"}`}
+                className={`min-h-8 rounded-md px-2 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${status === value ? "bg-emerald-400/15 text-emerald-300" : "text-zinc-300 hover:bg-white/8"}`}
               >
                 {label}
               </button>
@@ -211,7 +239,7 @@ export default function StaffDirectory({
         )}
         {loading && <Empty>Loading staff…</Empty>}
         {data && data.data.length === 0 && (
-          <div className="border-t border-white/8 px-4 py-8 text-center">
+          <div className="border-t border-zinc-800/80 px-4 py-8 text-center">
             <p role="status" className="text-sm font-medium text-zinc-200">
               {query || status
                 ? "No staff match these filters."
@@ -237,7 +265,7 @@ export default function StaffDirectory({
             />
             <p
               role="status"
-              className="border-t border-white/8 px-4 py-2 text-xs tabular-nums text-zinc-400"
+              className="border-t border-zinc-800/80 px-4 py-2 text-xs tabular-nums text-zinc-400"
             >
               Showing {(page - 1) * pageSize + 1}–
               {(page - 1) * pageSize + data.data.length} of{" "}

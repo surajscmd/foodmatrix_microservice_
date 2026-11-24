@@ -1,25 +1,17 @@
 "use client";
 
-import {
-  ArrowLeft,
-  Building2,
-  CheckCircle2,
-  Clock3,
-  MapPin,
-  Pencil,
-  Phone,
-  ShieldAlert,
-  Star,
-  User,
-} from "lucide-react";
-
+import { ArrowLeft, Building2, MapPin, Pencil } from "lucide-react";
+import { useOrganizationStore } from "@/store/organization-store";
 import type { Restaurant } from "@/utils/types/organization";
+import RestaurantRecordDetails from "./RestaurantRecordDetails";
+import RestaurantOperationalOverview from "./RestaurantOperationalOverview";
 
 interface DiagnosticViewProps {
   restaurant: Restaurant;
 
   canEdit: boolean;
   canChangeStatus: boolean;
+  updatingStatus?: boolean;
 
   onEdit: () => void;
 
@@ -42,308 +34,127 @@ export default function DiagnosticView({
   restaurant,
   canEdit,
   canChangeStatus,
+  updatingStatus = false,
   onEdit,
   onUpdateStatus,
   onBack,
 }: DiagnosticViewProps) {
+  const franchise = useOrganizationStore((state) => state.franchise);
+  const linkedFranchise =
+    franchise?.id === restaurant.franchiseId ? franchise : null;
+  const currency =
+    restaurant.defaultCurrency ?? linkedFranchise?.defaultCurrency;
   return (
-    <div className="space-y-6 animate-fade-in p-6 ">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="p-2 hover:bg-zinc-900 border border-zinc-800 hover:border-zinc-700 text-zinc-400 hover:text-white rounded-xl transition-all cursor-pointer"
-            id="btn-back-to-franchise-grid"
-            aria-label="Back to restaurants"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
-
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs font-mono px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900/50 text-zinc-400">
-                {restaurant.id}
-              </span>
-
-              <span
-                className={`px-2 py-0.5 rounded text-[10px] font-mono uppercase font-bold ${getStatusClass(
-                  restaurant.status,
-                )}`}
-              >
-                {getStatusLabel(restaurant.status)}
-              </span>
+    <div className="@container space-y-6 p-6 motion-safe:animate-fade-in">
+      <button
+        type="button"
+        onClick={onBack}
+        disabled={updatingStatus}
+        id="btn-back-to-franchise-grid"
+        className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-zinc-300 hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
+      >
+        <ArrowLeft size={14} aria-hidden /> Back to restaurants
+      </button>
+      <section
+        aria-labelledby="restaurant-detail-title"
+        className="relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_12px_40px_rgba(0,0,0,0.15)]"
+      >
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-cyan-400/40"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-6 @xl:px-6">
+          <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
+            <span
+              aria-hidden
+              className="grid size-14 shrink-0 place-items-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-400/10 text-emerald-300 shadow-[0_0_24px_rgba(52,211,153,0.06)]"
+            >
+              <Building2 size={24} strokeWidth={1.7} />
+            </span>
+            <div className="min-w-0">
+              <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Restaurant profile
+              </p>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <h2
+                  id="restaurant-detail-title"
+                  className="break-words text-xl font-semibold tracking-tight text-white"
+                >
+                  {restaurant.name}
+                </h2>
+                <span
+                  className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-medium ${getStatusClass(restaurant.status)}`}
+                >
+                  {getStatusLabel(restaurant.status)}
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <MapPin size={12} className="shrink-0" aria-hidden />
+                  <span className="break-words">{restaurant.city}</span>
+                </span>
+                <span className="break-all rounded border border-white/10 bg-black/15 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
+                  {restaurant.id}
+                </span>
+              </div>
             </div>
-
-            <h2 className="text-xl font-semibold text-white tracking-tight mt-1">
-              {restaurant.name}
-            </h2>
           </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2">
           {canEdit && (
             <button
               type="button"
               onClick={onEdit}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-300 hover:text-white hover:border-emerald-500/30 transition-all"
+              disabled={updatingStatus}
               id="btn-edit-restaurant"
+              className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 text-xs font-semibold text-zinc-300 transition-colors hover:border-emerald-500/30 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
             >
-              <Pencil className="w-3.5 h-3.5" />
-              Edit
+              <Pencil size={13} aria-hidden /> Edit restaurant
             </button>
           )}
-
         </div>
-      </div>
+      </section>
 
-      {/* Status Controller */}
       {canChangeStatus && (
-        <div className="flex flex-wrap items-center justify-between gap-4 bg-zinc-900/60 p-2 rounded-xl border border-zinc-800/80">
-          <span className="text-[10px] font-mono text-zinc-400 px-2 uppercase">
-            Core Pulse:
-          </span>
-
-          <div className="flex gap-1.5">
-            {(["ACTIVE", "INACTIVE"] as const).map((status) => {
-              const isActive = restaurant.status === status;
-
-              return (
-                <button
-                  key={status}
-                  type="button"
-                  aria-pressed={isActive}
-                  onClick={() => void onUpdateStatus(restaurant.id, status)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-bold font-mono uppercase transition-all cursor-pointer ${
-                    isActive
-                      ? status === "ACTIVE"
-                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                        : "bg-zinc-800 text-zinc-300 border border-zinc-700"
-                      : "text-zinc-500 hover:text-zinc-300 border border-transparent"
-                  }`}
-                  id={`btn-node-status-${status}`}
-                >
-                  {status === "ACTIVE" ? "Operational" : "Inactive"}
-                </button>
-              );
-            })}
+        <section
+          aria-label="Restaurant status"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-800/80 bg-zinc-900/60 p-2"
+        >
+          <div>
+            <h3 className="px-2 font-mono text-[10px] uppercase text-zinc-400">
+              Core Pulse:
+            </h3>
           </div>
-        </div>
+          <div
+            role="group"
+            aria-label="Change restaurant status"
+            className="flex gap-1.5"
+          >
+            {(["ACTIVE", "INACTIVE"] as const).map((status) => (
+              <button
+                key={status}
+                type="button"
+                aria-pressed={restaurant.status === status}
+                disabled={updatingStatus || restaurant.status === status}
+                onClick={() => void onUpdateStatus(restaurant.id, status)}
+                id={`btn-node-status-${status}`}
+                className={`min-h-9 rounded-lg border px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:cursor-default ${restaurant.status === status ? getStatusClass(status) : "border-zinc-800 bg-zinc-950 text-zinc-500 enabled:hover:border-zinc-700 enabled:hover:text-zinc-200"} ${updatingStatus ? "opacity-50" : ""}`}
+              >
+                {getStatusLabel(status)}
+              </button>
+            ))}
+          </div>
+        </section>
       )}
-
-      {/* KPI */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center">
-          <div>
-            <span className="text-[10px] font-mono uppercase text-zinc-500 font-bold">
-              Node Registry
-            </span>
-
-            <h4 className="text-lg font-bold text-emerald-400 font-mono mt-1">
-              Registered
-            </h4>
-
-            <p className="text-[10px] text-zinc-500">Organization Service</p>
-          </div>
-
-          <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
-            <Building2 className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center">
-          <div>
-            <span className="text-[10px] font-mono uppercase text-zinc-500 font-bold">
-              Workforce
-            </span>
-
-            <h4 className="text-lg font-bold text-white mt-1">Pending</h4>
-
-            <p className="text-[10px] text-zinc-500">HR Service integration</p>
-          </div>
-
-          <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
-            <User className="w-5 h-5" />
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-4 flex justify-between items-center">
-          <div>
-            <span className="text-[10px] font-mono uppercase text-zinc-500 font-bold">
-              Service Health
-            </span>
-
-            <h4 className="text-lg font-bold text-emerald-400 mt-1">Online</h4>
-
-            <p className="text-[10px] text-zinc-500">
-              Organization registry reachable
-            </p>
-          </div>
-
-          <div className="p-2 bg-emerald-500/10 rounded-xl text-emerald-400">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-        </div>
-      </div>
-
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Metadata */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
-            <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-mono text-zinc-400 pb-2 border-b border-zinc-800">
-              Node Connection Metas
-            </h3>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">Node Name</span>
-
-                <div className="flex items-center gap-2 text-white">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-
-                  <span className="font-semibold">{restaurant.name}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">Node Location</span>
-
-                <div className="flex items-start gap-2 text-white">
-                  <MapPin className="w-3.5 h-3.5 text-emerald-400 mt-0.5" />
-
-                  <span>
-                    {restaurant.address}, {restaurant.city}
-                    {restaurant.state ? `, ${restaurant.state}` : ""},{" "}
-                    {restaurant.country}
-                  </span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">Operating Timezone</span>
-
-                <div className="flex items-center gap-2 text-white font-mono">
-                  <Clock3 className="w-3.5 h-3.5 text-emerald-400" />
-
-                  <span>{restaurant.timezone}</span>
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">Franchise Link</span>
-
-                <div className="text-white font-mono text-[10px] break-all">
-                  {restaurant.franchiseId}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">Node Created</span>
-
-                <div className="text-white font-mono text-[10px]">
-                  {new Date(restaurant.createdAt).toLocaleString()}
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <span className="text-zinc-500 block">
-                  Last Registry Update
-                </span>
-
-                <div className="text-white font-mono text-[10px]">
-                  {new Date(restaurant.updatedAt).toLocaleString()}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* POS */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
-            <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-mono text-zinc-400">
-              Real-Time POS Receipts Stream
-            </h3>
-
-            <div className="py-8 text-center border border-dashed border-zinc-800 rounded-xl">
-              <ShieldAlert className="w-6 h-6 mx-auto mb-2 text-zinc-700" />
-
-              <p className="text-zinc-500 font-mono text-[11px]">
-                Order Service integration pending.
-              </p>
-
-              <p className="text-zinc-600 text-[10px] mt-1">
-                Node: {restaurant.id}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Right */}
-        <div className="lg:col-span-5 space-y-6">
-          {/* Alerts */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
-            <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-mono text-zinc-400 flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-rose-500" />
-
-              <span>Node Active Alarm Triggers</span>
-            </h3>
-
-            <div className="p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-xl flex gap-3 items-center text-xs text-emerald-400">
-              <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-
-              <div>
-                <span className="font-semibold block">
-                  Organization Systems OK
-                </span>
-
-                <span className="text-[10px] text-zinc-500">
-                  Inventory monitoring will appear here after service
-                  integration.
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Workforce */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
-            <h3 className="text-xs font-semibold text-white uppercase tracking-wider font-mono text-zinc-400">
-              Active Roster Checkin
-            </h3>
-
-            <div className="p-6 text-center border border-dashed border-zinc-800 rounded-xl">
-              <User className="w-6 h-6 mx-auto mb-2 text-zinc-700" />
-
-              <p className="text-zinc-500 font-mono text-[11px]">
-                HR Service integration pending.
-              </p>
-            </div>
-          </div>
-
-          {/* Contact */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <Phone className="w-3.5 h-3.5 text-emerald-400" />
-
-              <span>
-                Contact information is not part of the current Organization
-                Restaurant model.
-              </span>
-            </div>
-          </div>
-
-          {/* Rating */}
-          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5">
-            <div className="flex items-center gap-2 text-xs text-zinc-500">
-              <Star className="w-3.5 h-3.5 text-zinc-700" />
-
-              <span>Rating data will come from analytics/review services.</span>
-            </div>
-          </div>
-        </div>
-      </div>
+      <RestaurantOperationalOverview
+        key={restaurant.id}
+        restaurant={restaurant}
+        currency={currency}
+        recordDetails={
+          <RestaurantRecordDetails
+            restaurant={restaurant}
+            franchise={linkedFranchise}
+          />
+        }
+      />
     </div>
   );
 }

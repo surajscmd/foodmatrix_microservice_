@@ -1,0 +1,68 @@
+imageRegistry: ""
+imageTag: ""
+imagePullPolicy: IfNotPresent
+nodeSelector:
+  kubernetes.io/arch: amd64
+publicOrigin: "http://localhost:8080"
+postgresCaConfigMap: ""
+kafkaBrokers: ""
+kafkaSecret: ""
+kafkaTopics:
+  enabled: true
+  partitions: 3
+  replicationFactor: 3
+migrations:
+  enabled: true
+bootstrap:
+  enabled: false
+  secret: foodmatrix-bootstrap
+observability:
+  enabled: false
+  instrumentation: foodmatrix
+  kongServiceMonitor: false
+edge:
+  image: nginxinc/nginx-unprivileged:1.28-alpine
+  replicas: 1
+  serviceType: ClusterIP
+  loadBalancerClass: ""
+  annotations: {}
+  forwardedProto: http
+services:
+  frontend:
+    port: 3000
+    probePath: /login
+  organization-service:
+    port: 3001
+    secret: organization-service
+    migrate: true
+  hr-service:
+    port: 3002
+    secret: hr-service
+    migrate: true
+    kafka: true
+  catalog-service:
+    port: 3004
+    secret: catalog-service
+    migrate: true
+  order-service:
+    port: 3005
+    secret: order-service
+    migrate: true
+    kafka: true
+  inventory-service:
+    port: 3006
+    secret: inventory-service
+    migrate: true
+    kafka: true
+  notification-service:
+    port: 3007
+    secret: notification-service
+    migrate: true
+    kafka: true
+replicas: 1
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 768Mi

@@ -21,7 +21,6 @@ import {
   Field,
   input,
   money,
-  panel,
   Pagination,
   primary,
   secondary,
@@ -123,15 +122,17 @@ export default function WagePanel({
   }
 
   return (
-    <section className={panel}>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 px-4 py-3">
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="grid size-9 place-items-center rounded-xl bg-emerald-400/12 text-emerald-300">
-            <Banknote size={17} />
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <Banknote size={17} aria-hidden />
           </span>
           <div>
-            <h2 className="text-sm font-semibold text-white">Wage history</h2>
-            <p className="text-xs text-zinc-400">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Wage history
+            </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
               {data?.current
                 ? `Current pay · ${wageLabel(data.current, currency)}`
                 : "Current and scheduled rates"}
@@ -215,7 +216,7 @@ export default function WagePanel({
       )}
       {loading && <Empty>Loading wages…</Empty>}
       {data?.data.length === 0 && <Empty>No wage records yet.</Empty>}
-      <ul className="divide-y divide-white/8">
+      <ul className="divide-y divide-zinc-800/80">
         {data?.data.map((wage, index) => {
           const start = wage.effectiveStartDate.slice(0, 10);
           const upcoming = start > today;

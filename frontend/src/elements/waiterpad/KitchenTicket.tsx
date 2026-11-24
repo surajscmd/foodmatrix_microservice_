@@ -1,5 +1,6 @@
 import type { Order, OrderItemStatus } from "@/lib/order-api";
 import type { ReactNode } from "react";
+import { ChefHat } from "lucide-react";
 
 const itemStatus: Record<
   OrderItemStatus,
@@ -47,20 +48,27 @@ export default function KitchenTicket({ order, formatMoney, actions }: Props) {
   return (
     <section
       aria-labelledby="waiter-ticket-title"
-      className="overflow-hidden rounded-2xl border border-zinc-700/80 bg-[#18191d] shadow-lg shadow-black/20"
+      className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80 shadow-lg shadow-black/20"
     >
-      <header className="flex flex-wrap items-center justify-between gap-3 bg-[#232a27] px-4 py-3">
-        <div className="min-w-0">
-          <h2
-            id="waiter-ticket-title"
-            className="text-sm font-semibold text-white"
-          >
-            Kitchen ticket
-          </h2>
-          <p className="mt-0.5 text-xs text-zinc-300">
-            {quantity} {quantity === 1 ? "item" : "items"}
-            {quantity > 0 && order.status !== "PENDING" && ` · ${ready} ready`}
-          </p>
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 bg-gradient-to-r from-sky-500/15 to-zinc-950 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-sky-400/20 bg-sky-400/10 text-sky-400">
+            <ChefHat size={16} aria-hidden />
+          </span>
+          <div>
+            <h2
+              id="waiter-ticket-title"
+              className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300"
+            >
+              Kitchen ticket
+            </h2>
+            <p className="mt-0.5 text-xs text-zinc-300">
+              {quantity} {quantity === 1 ? "item" : "items"}
+              {quantity > 0 &&
+                order.status !== "PENDING" &&
+                ` · ${ready} ready`}
+            </p>
+          </div>
         </div>
         {actions && (
           <div className="flex flex-wrap items-center gap-2">{actions}</div>
@@ -71,9 +79,9 @@ export default function KitchenTicket({ order, formatMoney, actions }: Props) {
         <div className="max-h-[25rem] overflow-y-auto border-y border-white/10">
           <table
             aria-labelledby="waiter-ticket-title"
-            className="w-full text-left text-sm"
+            className="w-full text-left text-xs"
           >
-            <thead className="sticky top-0 bg-[#25262b] text-xs font-medium text-zinc-200">
+            <thead className="sticky top-0 bg-zinc-950 font-mono text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
               <tr>
                 <th scope="col" className="px-4 py-2.5 sm:px-5">
                   Item
@@ -124,7 +132,7 @@ export default function KitchenTicket({ order, formatMoney, actions }: Props) {
                 );
 
                 return (
-                  <tr key={item.id} className="even:bg-[#202126]">
+                  <tr key={item.id} className="even:bg-zinc-900/30">
                     <th
                       scope="row"
                       className="px-4 py-3 align-top font-normal sm:px-5"
@@ -170,7 +178,7 @@ export default function KitchenTicket({ order, formatMoney, actions }: Props) {
         </p>
       )}
 
-      <footer className="bg-[#232429]">
+      <footer className="border-t border-zinc-800 bg-gradient-to-r from-zinc-950 via-zinc-950 to-emerald-500/[0.06]">
         <dl className="ml-auto grid max-w-sm grid-cols-[1fr_auto] items-center gap-x-5 gap-y-1.5 px-4 py-3 text-sm sm:px-5">
           {hasAdjustments && (
             <>
@@ -199,8 +207,10 @@ export default function KitchenTicket({ order, formatMoney, actions }: Props) {
           <div
             className={`col-span-2 flex items-baseline justify-between gap-5 ${hasAdjustments ? "mt-1 border-t border-white/10 pt-2" : ""}`}
           >
-            <dt className="font-semibold text-white">Order total</dt>
-            <dd className="text-sm font-semibold tabular-nums text-emerald-100">
+            <dt className="font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
+              Order total
+            </dt>
+            <dd className="text-xl font-semibold tracking-tight tabular-nums text-emerald-400">
               {money(order.total)}
             </dd>
           </div>

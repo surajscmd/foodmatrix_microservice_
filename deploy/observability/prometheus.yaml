@@ -1,0 +1,39 @@
+alertmanager:
+  enabled: true
+grafana:
+  fullnameOverride: grafana
+  persistence:
+    enabled: true
+    storageClassName: foodmatrix-gp3
+    size: 5Gi
+  additionalDataSources:
+    - name: Loki
+      uid: loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+    - name: Tempo
+      uid: tempo
+      type: tempo
+      url: http://tempo.monitoring.svc.cluster.local:3200
+      access: proxy
+prometheus:
+  prometheusSpec:
+    retention: 15d
+    retentionSize: 17GB
+    serviceMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: foodmatrix-gp3
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 20Gi
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false

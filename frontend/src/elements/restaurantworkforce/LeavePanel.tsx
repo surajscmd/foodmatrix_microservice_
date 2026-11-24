@@ -4,7 +4,6 @@ import { getLeaves, type LeaveRecord } from "@/lib/hr-api";
 import {
   Empty,
   ErrorNote,
-  panel,
   primary,
   secondary,
   useWorkforceQuery,
@@ -60,14 +59,32 @@ export default function LeavePanel({
   }
 
   return (
-    <section className={panel + " @container"} aria-label="Leave requests">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/15 bg-linear-to-r from-teal-900/60 via-[#172623] to-[#141821] px-4 py-3">
-        <h2 className="flex items-center gap-2.5 text-sm font-semibold text-white">
-          <span className="grid size-9 place-items-center rounded-xl border border-teal-300/20 bg-teal-300/12 text-teal-100">
+    <section
+      className="@container min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70"
+      aria-label="Leave requests"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
             <CalendarDays size={17} aria-hidden />
           </span>
-          Leave requests
-        </h2>
+          <div>
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+                Leave requests
+              </h2>
+              {result.data && (
+                <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+                  {result.data.length}{" "}
+                  {result.data.length === 1 ? "record" : "records"}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              Review leave periods, decisions and staff notes
+            </p>
+          </div>
+        </div>
         <button
           type="button"
           className={primary}
@@ -80,7 +97,7 @@ export default function LeavePanel({
       <div
         role="group"
         aria-label="Filter leave requests"
-        className="flex flex-wrap items-center gap-1 border-b border-white/8 bg-[#191c22] p-2"
+        className="flex flex-wrap items-center gap-1 border-b border-zinc-800/80 bg-zinc-950/80 p-2"
       >
         {filters.map(({ id, label }) => (
           <button
@@ -91,7 +108,7 @@ export default function LeavePanel({
               setStatus(id);
               setNotice("");
             }}
-            className={`min-h-8 rounded-md px-2.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${status === id ? "bg-emerald-400/15 text-emerald-200" : "text-zinc-300 hover:bg-white/8"}`}
+            className={`min-h-8 rounded-md px-2.5 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${status === id ? "bg-emerald-400/15 text-emerald-300" : "text-zinc-300 hover:bg-white/8"}`}
           >
             {label}
           </button>
@@ -128,44 +145,44 @@ export default function LeavePanel({
       {Boolean(result.data?.length) && (
         <table className="w-full table-fixed text-left">
           <caption className="sr-only">Restaurant leave requests</caption>
-          <thead className="border-b border-white/8 bg-[#191c22] text-[11px] text-zinc-300">
+          <thead className="border-b border-zinc-800 bg-zinc-950/80 font-mono text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-600">
             <tr>
               <th
                 scope="col"
-                className="px-3 py-2.5 font-medium @xl:w-[21%] @xl:px-4"
+                className="px-3 py-3 font-bold @xl:w-[21%] @xl:px-4"
               >
                 Employee
               </th>
               <th
                 scope="col"
-                className="hidden w-[20%] px-3 py-2.5 font-medium @xl:table-cell"
+                className="hidden w-[20%] px-3 py-3 font-bold @xl:table-cell"
               >
                 Leave period
               </th>
               <th
                 scope="col"
-                className="hidden w-[13%] px-3 py-2.5 font-medium @xl:table-cell"
+                className="hidden w-[13%] px-3 py-3 font-bold @xl:table-cell"
               >
                 Type &amp; pay
               </th>
               <th
                 scope="col"
-                className="hidden w-[17%] px-3 py-2.5 font-medium @xl:table-cell"
+                className="hidden w-[17%] px-3 py-3 font-bold @xl:table-cell"
               >
                 Notes
               </th>
-              <th scope="col" className="w-28 px-2 py-2.5 font-medium @xl:w-22">
+              <th scope="col" className="w-28 px-2 py-3 font-bold @xl:w-22">
                 Status<span className="@xl:hidden"> &amp; actions</span>
               </th>
               <th
                 scope="col"
-                className="hidden px-3 py-2.5 text-right font-medium @xl:table-cell"
+                className="hidden px-3 py-3 text-right font-bold @xl:table-cell"
               >
                 Actions
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-white/8">
+          <tbody className="divide-y divide-zinc-800/70">
             {result.data?.map((leave) => (
               <LeaveRequestRow
                 key={leave.id}

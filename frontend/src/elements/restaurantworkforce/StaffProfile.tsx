@@ -21,7 +21,10 @@ import WagePanel from "./WagePanel";
 import PayslipList from "./PayslipList";
 import StaffPinDialog from "./StaffPinDialog";
 import StaffPaySummary from "./StaffPaySummary";
+import StaffDetailSection from "./StaffDetailSection";
+import StaffActivityOverview from "./StaffActivityOverview";
 import StaffShiftSchedule from "./StaffShiftSchedule";
+import WorkforceFormDialog from "./WorkforceFormDialog";
 import {
   dayLabel,
   ErrorNote,
@@ -60,7 +63,9 @@ export default function StaffProfile({
   onArchive: (message: string) => void;
 }) {
   const [view, setView] = useState<(typeof views)[number]["id"]>("overview");
-  const [dialog, setDialog] = useState<"profile" | "pin" | null>(null);
+  const [dialog, setDialog] = useState<"profile" | "pin" | "status" | null>(
+    null,
+  );
   const [status, setStatus] = useState<EmployeeStatus | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -81,13 +86,14 @@ export default function StaffProfile({
   }
 
   async function saveStatus() {
-    if (!status || saving) return;
+    if (!status || status === employee.status || saving) return;
     setSaving(true);
     setError("");
     try {
       const { data } = await updateStaffStatus(employee.id, status);
       onSave(data, "Staff status updated.");
       setStatus(null);
+      setDialog(null);
     } catch (error) {
       setError(attendanceError(error, "Unable to update staff status."));
     } finally {
@@ -96,7 +102,7 @@ export default function StaffProfile({
   }
 
   return (
-    <div className="@container space-y-3">
+    <div className="@container space-y-5 motion-safe:animate-fade-in">
       <button
         type="button"
         className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-zinc-300 hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50"
@@ -105,25 +111,32 @@ export default function StaffProfile({
       >
         <ArrowLeft size={14} aria-hidden /> Back to staff directory
       </button>
-      <section className={panel}>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-teal-300/15 bg-linear-to-r from-teal-900/85 via-[#172623] to-[#141821] px-4 py-4 @xl:px-5">
+      <section className="relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_12px_40px_rgba(0,0,0,0.15)]">
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-cyan-400/40"
+        />
+        <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-6 @xl:px-6">
           <div className="flex min-w-0 items-center gap-3">
             <span
-              className="grid size-11 shrink-0 place-items-center rounded-xl border border-teal-300/25 bg-teal-300/15 text-sm font-semibold uppercase text-teal-100"
+              className="grid size-14 shrink-0 place-items-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-400/10 text-lg font-semibold uppercase text-emerald-300 shadow-[0_0_24px_rgba(52,211,153,0.06)]"
               aria-hidden
             >
               {employee.firstName[0]}
               {employee.lastName[0]}
             </span>
             <div className="min-w-0">
+              <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                Employee profile
+              </p>
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h2 className="break-words text-base font-semibold tracking-tight text-white">
+                <h2 className="break-words text-xl font-semibold tracking-tight text-white">
                   {employee.firstName} {employee.lastName}
                 </h2>
                 <Status value={employee.status} />
               </div>
-              <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-teal-100/85">
-                <span>{employee.role}</span>
+              <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+                <span>{employee.role.replaceAll("_", " ")}</span>
                 <span className="break-all rounded border border-white/10 bg-black/15 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                   {employee.employeeCode}
                 </span>
@@ -140,24 +153,25 @@ export default function StaffProfile({
             <Pencil size={13} /> Edit profile
           </button>
         </div>
-        <nav
-          className="flex flex-wrap gap-1 bg-[#191c22] p-2"
-          aria-label="Employee records"
-        >
-          {views.map(({ id, label, Icon }) => (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={view === id}
-              onClick={() => setView(id)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${view === id ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : "border-transparent text-zinc-300 hover:bg-white/8"}`}
-            >
-              <Icon size={15} aria-hidden />
-              {label}
-            </button>
-          ))}
-        </nav>
       </section>
+      <nav
+        className="grid grid-cols-2 gap-1.5 rounded-xl border border-zinc-800 bg-zinc-950/80 p-2 sm:flex sm:flex-wrap"
+        aria-label="Employee records"
+      >
+        {views.map(({ id, label, Icon }) => (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={view === id}
+            disabled={saving}
+            onClick={() => setView(id)}
+            className={`inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border px-3 font-mono text-[10px] font-semibold uppercase tracking-wider transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-50 ${view === id ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300" : "border-transparent text-zinc-500 hover:border-zinc-800 hover:bg-zinc-900 hover:text-zinc-200"}`}
+          >
+            <Icon size={15} aria-hidden />
+            {label}
+          </button>
+        ))}
+      </nav>
       {notice && (
         <p
           role="status"
@@ -166,7 +180,7 @@ export default function StaffProfile({
           {notice}
         </p>
       )}
-      {error && <ErrorNote>{error}</ErrorNote>}
+      {error && dialog !== "status" && <ErrorNote>{error}</ErrorNote>}
       {dialog === "profile" && (
         <StaffForm
           employee={employee}
@@ -189,102 +203,136 @@ export default function StaffProfile({
           }}
         />
       )}
-      {view === "overview" && (
-        <div className="grid items-start gap-3 @2xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <div className="space-y-3">
-            <section className={panel}>
-              <h3 className="flex items-center gap-2 border-b border-white/8 bg-[#191c22] px-4 py-2.5 text-xs font-semibold text-white">
-                <UserRound size={16} className="text-emerald-300" aria-hidden />{" "}
-                Employment details
-              </h3>
-              <dl className="grid grid-cols-2 gap-3 px-4 py-3">
-                <div>
-                  <dt className="text-xs text-zinc-400">Employee code</dt>
-                  <dd className="mt-1 break-words font-mono text-xs font-medium text-white">
-                    {employee.employeeCode}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-zinc-400">Job role</dt>
-                  <dd className="mt-1 break-words text-xs font-medium text-white">
-                    {employee.role}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-zinc-400">Added to HR</dt>
-                  <dd className="mt-1 text-xs font-medium text-white">
-                    {dayLabel(employee.createdAt)}
-                  </dd>
-                </div>
-              </dl>
-              <div className="flex flex-wrap items-end gap-2 border-t border-white/8 px-4 py-3">
-                <Field label="Employment status">
-                  <select
-                    className={input + " min-w-32"}
-                    value={status ?? employee.status}
-                    onChange={(event) =>
-                      setStatus(event.target.value as EmployeeStatus)
-                    }
-                    disabled={saving}
-                  >
-                    <option value="ACTIVE">Active</option>
-                    <option value="ON_LEAVE">On leave</option>
-                    <option value="TERMINATED">Terminated</option>
-                  </select>
-                </Field>
-                {status && status !== employee.status && (
-                  <>
-                    <button
-                      type="button"
-                      className={secondary}
-                      onClick={() => {
-                        setStatus(null);
-                        setError("");
-                      }}
-                      disabled={saving}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className={primary}
-                      onClick={saveStatus}
-                      disabled={saving}
-                    >
-                      {saving ? "Saving…" : "Save status"}
-                    </button>
-                  </>
-                )}
-              </div>
-            </section>
-            <section className={panel}>
-              <h3 className="flex items-center gap-2 border-b border-white/8 bg-[#191c22] px-4 py-2.5 text-xs font-semibold text-white">
-                <KeyRound size={16} className="text-sky-300" aria-hidden />{" "}
-                Staff PIN
-              </h3>
-              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
-                <p className="flex items-center gap-1.5 text-xs text-zinc-300">
-                  <BadgeCheck size={14} className="text-sky-300" aria-hidden />{" "}
-                  Saved PIN is protected
-                </p>
-                <button
-                  type="button"
-                  className={secondary}
-                  aria-haspopup="dialog"
-                  onClick={() => setDialog("pin")}
-                  disabled={saving}
-                >
-                  Reset PIN
-                </button>
-              </div>
-            </section>
+      {dialog === "status" && (
+        <WorkforceFormDialog
+          title="Change employment status"
+          icon={UserRound}
+          saving={saving}
+          onClose={() => {
+            setDialog(null);
+            setStatus(null);
+            setError("");
+          }}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveStatus();
+          }}
+          actions={
+            <button
+              type="submit"
+              className={primary}
+              disabled={saving || !status || status === employee.status}
+            >
+              {saving ? "Saving…" : "Save status"}
+            </button>
+          }
+        >
+          <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+            <p className="text-sm font-semibold text-white">
+              {employee.firstName} {employee.lastName}
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              {employee.employeeCode}
+            </p>
           </div>
+          <Field label="Employment status">
+            <select
+              className={input}
+              value={status ?? employee.status}
+              disabled={saving}
+              onChange={(event) =>
+                setStatus(event.target.value as EmployeeStatus)
+              }
+            >
+              <option value="ACTIVE">Active</option>
+              <option value="ON_LEAVE">On leave</option>
+              <option value="TERMINATED">Terminated</option>
+            </select>
+          </Field>
+          {error && <ErrorNote>{error}</ErrorNote>}
+        </WorkforceFormDialog>
+      )}
+      {view === "overview" && (
+        <StaffActivityOverview
+          staffId={employee.id}
+          currency={currency}
+          today={today}
+          timeZone={timeZone}
+        >
+          <StaffDetailSection title="Employee information" icon={UserRound}>
+            <dl className="grid grid-cols-1 gap-5 text-xs sm:grid-cols-2">
+              {[
+                ["Employee name", `${employee.firstName} ${employee.lastName}`],
+                ["Employee code", employee.employeeCode],
+                ["Job role", employee.role.replaceAll("_", " ")],
+                [
+                  "Employment status",
+                  <Status key="status" value={employee.status} />,
+                ],
+                ["Joined", dayLabel(employee.createdAt)],
+                ["Last updated", dayLabel(employee.updatedAt)],
+                [
+                  "Record state",
+                  employee.deletedAt ? "Archived" : "Active record",
+                ],
+                ["Restaurant time zone", timeZone],
+              ].map(([label, value]) => (
+                <div key={String(label)}>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+                    {label}
+                  </dt>
+                  <dd className="mt-2 break-words text-xs font-medium text-zinc-200">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-800 pt-4">
+              <p className="text-[10px] text-zinc-500">
+                Manage active, on-leave or terminated status.
+              </p>
+              <button
+                type="button"
+                className={secondary}
+                aria-haspopup="dialog"
+                disabled={saving}
+                onClick={() => {
+                  setStatus(employee.status);
+                  setError("");
+                  setDialog("status");
+                }}
+              >
+                Change status
+              </button>
+            </div>
+          </StaffDetailSection>
           <StaffPaySummary
             staffId={employee.id}
             currency={currency}
             onOpen={setView}
           />
-        </div>
+          <StaffDetailSection title="Staff PIN" icon={KeyRound}>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <BadgeCheck
+                  size={14}
+                  className="text-emerald-400"
+                  aria-hidden
+                />
+                Saved PIN is protected
+              </p>
+              <button
+                type="button"
+                className={secondary}
+                aria-haspopup="dialog"
+                onClick={() => setDialog("pin")}
+                disabled={saving}
+              >
+                Reset PIN
+              </button>
+            </div>
+          </StaffDetailSection>
+        </StaffActivityOverview>
       )}
       {view === "overview" && employee.status === "TERMINATED" && (
         <section
@@ -294,7 +342,7 @@ export default function StaffProfile({
           }
         >
           <div>
-            <h3 className="text-sm font-semibold text-white">
+            <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
               Archive employee
             </h3>
             <p className="mt-0.5 text-xs text-zinc-400">

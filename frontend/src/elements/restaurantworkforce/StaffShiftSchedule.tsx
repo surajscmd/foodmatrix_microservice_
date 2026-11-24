@@ -9,7 +9,6 @@ import {
 import {
   Empty,
   ErrorNote,
-  panel,
   secondary,
   Status,
   useWorkforceQuery,
@@ -70,17 +69,17 @@ export default function StaffShiftSchedule({
   });
 
   return (
-    <section className={panel}>
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 bg-[#191c22] px-4 py-3">
-        <div className="flex items-center gap-2.5">
-          <span className="grid size-8 place-items-center rounded-lg border border-sky-300/20 bg-sky-300/10 text-sky-200">
-            <CalendarClock size={16} aria-hidden />
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <CalendarClock size={17} aria-hidden />
           </span>
           <div>
-            <h3 className="text-xs font-semibold text-white">
+            <h3 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
               Scheduled shifts
             </h3>
-            <p className="mt-0.5 text-[11px] text-zinc-400">
+            <p className="mt-1 text-[10px] text-zinc-500">
               {timeZone.replaceAll("_", " ")}
             </p>
           </div>
@@ -134,7 +133,7 @@ export default function StaffShiftSchedule({
       )}
       {data?.length === 0 && <Empty>No shifts scheduled for this month.</Empty>}
       {!!data?.length && (
-        <ul className="divide-y divide-white/8">
+        <ul className="divide-y divide-zinc-800/80">
           {data.map((shift) => {
             const start = new Date(shift.scheduledStart);
             const end = new Date(shift.scheduledEnd);

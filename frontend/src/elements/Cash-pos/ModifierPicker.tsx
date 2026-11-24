@@ -93,7 +93,7 @@ export default function ModifierPicker({
           <button
             type="submit"
             disabled={!valid || blocked}
-            className="min-h-9 rounded-lg bg-emerald-300 px-3 text-xs font-semibold text-emerald-950 enabled:hover:bg-emerald-200 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-45"
+            className="min-h-9 rounded-lg bg-emerald-400 px-3 text-xs font-bold text-zinc-950 enabled:hover:bg-emerald-300 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-45"
           >
             {editing ? "Save options" : "Add with modifiers"} · {formatMoney(total)}
           </button>
@@ -120,7 +120,7 @@ export default function ModifierPicker({
             key={group.id}
             className="min-w-0 rounded-xl border border-zinc-800 bg-zinc-950/45 px-3 pt-2 pb-3"
           >
-            <legend className="px-1 text-sm font-medium text-zinc-100">
+            <legend className="px-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-300">
               {group.name}
             </legend>
             <p className="mb-2 flex justify-between gap-2 text-xs text-zinc-400">
@@ -155,7 +155,7 @@ export default function ModifierPicker({
                     onClick={() => toggle(group, option.id)}
                     className={`flex min-h-10 items-center justify-between gap-2 rounded-lg border px-2.5 py-2 text-left text-xs font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 disabled:opacity-45 ${
                       chosen
-                        ? "border-emerald-300/45 bg-emerald-400/10 text-emerald-100"
+                        ? "border-emerald-400/60 bg-emerald-400/15 text-emerald-200"
                         : "border-zinc-700 bg-zinc-900/70 text-zinc-200 enabled:hover:border-emerald-300/40"
                     }`}
                   >

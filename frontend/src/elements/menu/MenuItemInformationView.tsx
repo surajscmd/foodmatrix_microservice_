@@ -45,6 +45,7 @@ import {
 
 import type { Restaurant } from "@/utils/types/organization";
 
+import DetailMetricCard from "@/elements/shared/DetailMetricCard";
 import AddModifierGroupPopup from "./AddModifierGroupPopup";
 import RestaurantMenuEditDrawer from "./RestaurantMenuEditDrawer";
 import RecipeItemPopup from "./RecipeItemPopup";
@@ -345,8 +346,7 @@ async function fetchMenuItemInformation(
   const modifierGroups = extractItemModifierGroups(modifierResponse);
 
   const pricingResponseData = pricingResponse.data as
-    | RestaurantPricingResponseShape
-    | undefined;
+    RestaurantPricingResponseShape | undefined;
 
   const configuredPricing = pricingResponseData?.restaurants ?? [];
 
@@ -406,28 +406,27 @@ function Section({
   action,
 }: SectionProps) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/70">
-      <div className="border-b border-zinc-800 px-5 py-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-zinc-800 bg-zinc-900">
-              <Icon className="h-4 w-4 text-emerald-400" />
-            </div>
-
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
-
-              {description && (
-                <p className="mt-0.5 text-xs text-zinc-500">{description}</p>
-              )}
-            </div>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50 p-5">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3 border-b border-zinc-800 pb-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <Icon
+            className="mt-0.5 h-[15px] w-[15px] shrink-0 text-emerald-400"
+            aria-hidden
+          />
+          <div className="min-w-0">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-300">
+              {title}
+            </h2>
+            {description && (
+              <p className="mt-1 text-[10px] leading-5 text-zinc-500">
+                {description}
+              </p>
+            )}
           </div>
-
-          {action}
         </div>
+        {action}
       </div>
-
-      <div className="p-5">{children}</div>
+      {children}
     </section>
   );
 }
@@ -480,7 +479,7 @@ function InfoRow({
       <span className="shrink-0 text-xs text-zinc-500">{label}</span>
 
       <span
-        className={`text-right text-sm font-medium text-zinc-200 ${
+        className={`min-w-0 break-words text-right text-xs font-medium leading-5 text-zinc-200 ${
           mono ? "font-mono text-xs" : ""
         }`}
       >
@@ -1025,271 +1024,103 @@ export default function MenuItemInformationView({
 
   return (
     <>
-      <div className="animate-fade-in space-y-6 p-6">
-        {/* BACK */}
+      <div className="@container space-y-6 p-6 motion-safe:animate-fade-in">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-zinc-300 hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
+        >
+          <ArrowLeft size={14} aria-hidden /> Back to menu items
+        </button>
 
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onBack}
-            aria-label="Back to Menu Items"
-            className="group inline-flex h-9 w-9 items-center justify-center rounded-lg border border-zinc-800 bg-zinc-900/60 text-zinc-400 transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-900 hover:text-zinc-100"
-          >
-            <ArrowLeft className="h-4 w-4 transition-transform duration-200 group-hover:-translate-x-0.5" />
-          </button>
-
-          <span className="text-sm font-medium text-zinc-400">
-            Back to Menu Items
-          </span>
-        </div>
-
-        {/* HEADER */}
-
-        <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70">
-          <div className="flex flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
-            {/* Item details */}
-            <div className="flex min-w-0 items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 self-center items-center justify-center rounded-xl border border-emerald-500/15 bg-emerald-500/[0.07]">
-                <Utensils className="h-5 w-5 text-emerald-400" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="mb-2 flex flex-wrap items-center gap-2">
-                  <span className="rounded-md border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-[10px] text-zinc-400">
+        <section
+          aria-labelledby="menu-item-profile"
+          className="relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_12px_40px_rgba(0,0,0,0.15)]"
+        >
+          <div
+            aria-hidden
+            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-cyan-400/40"
+          />
+          <div className="flex flex-wrap items-center justify-between gap-4 px-5 py-6 @xl:px-6">
+            <div className="flex min-w-0 flex-1 basis-64 items-center gap-3">
+              <span
+                aria-hidden
+                className="grid size-14 shrink-0 place-items-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-400/10 text-emerald-300 shadow-[0_0_24px_rgba(52,211,153,0.06)]"
+              >
+                <Utensils size={24} strokeWidth={1.7} />
+              </span>
+              <div className="min-w-0">
+                <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                  Menu item profile
+                </p>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <h1
+                    id="menu-item-profile"
+                    className="break-words text-xl font-semibold tracking-tight text-white"
+                  >
+                    {details.name}
+                  </h1>
+                  <StatusBadge active={details.isAvailable} />
+                </div>
+                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+                  <span>{details.category?.name ?? "Uncategorized"}</span>
+                  <span className="break-all rounded border border-white/10 bg-black/15 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                     {details.sku}
                   </span>
-
-                  <StatusBadge active={details.isAvailable} />
-
-                  <span className="rounded-md border border-zinc-800 bg-zinc-900/70 px-2 py-1 text-[10px] text-zinc-500">
-                    {details.category?.name ?? "Uncategorized"}
-                  </span>
                 </div>
-
-                <h1 className="truncate text-xl font-semibold tracking-tight text-zinc-100">
-                  {details.name}
-                </h1>
-
-                <p className="mt-1 line-clamp-2 max-w-2xl text-sm leading-5 text-zinc-500">
-                  {details.description || "No description provided."}
-                </p>
               </div>
             </div>
-
-            {/* Last updated */}
-            <div className="flex shrink-0 items-center gap-2.5 border-t border-zinc-800 pt-3 lg:border-l lg:border-t-0 lg:pl-5 lg:pt-0">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-zinc-900">
-                <Clock className="h-4 w-4 text-zinc-500" />
-              </div>
-
+            <div className="flex shrink-0 items-center gap-2.5">
+              <Clock size={15} className="text-zinc-500" aria-hidden />
               <div>
-                <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-                  Last Updated
+                <p className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">
+                  Last updated
                 </p>
-                <p className="mt-1 text-xs font-medium text-zinc-300">
+                <p className="mt-1 text-[11px] text-zinc-300">
                   {formatDate(details.updatedAt)}
                 </p>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         {/* KPI ROW */}
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {/* BASE PRICE */}
-          <div className="group relative isolate overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/[0.08] via-zinc-950/95 to-zinc-950 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-1 hover:border-emerald-400/40 hover:shadow-[0_12px_32px_rgba(16,185,129,0.09)]">
-            <div className="pointer-events-none absolute -right-8 -top-10 -z-0 h-32 w-32 rounded-full bg-emerald-400/10 blur-3xl transition-colors duration-500 group-hover:bg-emerald-400/20" />
-
-            <div className="relative z-10">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-300/70">
-                    Pricing
-                  </p>
-                  <h3 className="mt-1.5 text-sm font-medium text-zinc-300">
-                    Base Price
-                  </h3>
-                </div>
-
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-400/20 bg-gradient-to-br from-emerald-400/15 to-emerald-500/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-transform duration-300 group-hover:scale-110">
-                  <BadgeDollarSign className="h-[18px] w-[18px] text-emerald-300" />
-                </div>
-              </div>
-
-              <p className="mt-6 truncate text-3xl font-semibold tracking-tight text-white tabular-nums">
-                {formatCurrency(Number(details.basePrice))}
-              </p>
-
-              <div className="mt-4 h-px bg-gradient-to-r from-emerald-400/30 via-emerald-400/10 to-transparent" />
-
-              <div className="mt-4 flex items-center justify-between gap-2">
-                <p className="text-xs text-zinc-500">Central catalog price</p>
-
-                <span className="shrink-0 rounded-lg border border-emerald-400/15 bg-emerald-400/[0.06] px-2 py-1 text-[10px] font-medium text-emerald-300/90">
-                  Master
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* RESTAURANT AVAILABILITY */}
-          <div className="group relative isolate overflow-hidden rounded-2xl border border-sky-500/20 bg-gradient-to-br from-sky-500/[0.08] via-zinc-950/95 to-zinc-950 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-1 hover:border-sky-400/40 hover:shadow-[0_12px_32px_rgba(14,165,233,0.09)]">
-            <div className="pointer-events-none absolute -right-8 -top-10 -z-0 h-32 w-32 rounded-full bg-sky-400/10 blur-3xl transition-colors duration-500 group-hover:bg-sky-400/20" />
-
-            <div className="relative z-10">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-sky-300/70">
-                    Availability
-                  </p>
-                  <h3 className="mt-1.5 text-sm font-medium text-zinc-300">
-                    Restaurant Availability
-                  </h3>
-                </div>
-
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-sky-400/20 bg-gradient-to-br from-sky-400/15 to-sky-500/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-transform duration-300 group-hover:scale-110">
-                  <Store className="h-[18px] w-[18px] text-sky-300" />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-end justify-between gap-3">
-                <p className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-semibold tracking-tight text-white tabular-nums">
-                    {availableRestaurants}
-                  </span>
-                  <span className="text-base font-medium text-zinc-500">
-                    / {pricing.length}
-                  </span>
-                </p>
-
-                <span className="rounded-lg border border-sky-400/15 bg-sky-400/[0.07] px-2.5 py-1 text-xs font-semibold tabular-nums text-sky-300">
-                  {coveragePercentage}%
-                </span>
-              </div>
-
-              <div
-                className="mt-4 h-1.5 overflow-hidden rounded-full bg-zinc-800/90"
-                role="progressbar"
-                aria-label="Restaurant availability"
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-valuenow={coveragePercentage}
-              >
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-sky-600 via-sky-400 to-cyan-300 shadow-[0_0_12px_rgba(56,189,248,0.3)] transition-all duration-700 ease-out"
-                  style={{
-                    width: `${coveragePercentage}%`,
-                  }}
-                />
-              </div>
-
-              <div className="mt-3 flex items-center justify-between gap-2">
-                <p className="text-xs text-zinc-500">
-                  Restaurants serving this item
-                </p>
-                <span className="shrink-0 text-[10px] font-medium text-sky-300/80">
-                  {coveragePercentage}% available
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* RECIPE INGREDIENTS */}
-          <div className="group relative isolate overflow-hidden rounded-2xl border border-amber-500/20 bg-gradient-to-br from-amber-500/[0.07] via-zinc-950/95 to-zinc-950 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-1 hover:border-amber-400/40 hover:shadow-[0_12px_32px_rgba(245,158,11,0.08)]">
-            <div className="pointer-events-none absolute -right-8 -top-10 -z-0 h-32 w-32 rounded-full bg-amber-400/10 blur-3xl transition-colors duration-500 group-hover:bg-amber-400/20" />
-
-            <div className="relative z-10">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-300/70">
-                    Preparation
-                  </p>
-                  <h3 className="mt-1.5 text-sm font-medium text-zinc-300">
-                    Recipe Ingredients
-                  </h3>
-                </div>
-
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-amber-400/20 bg-gradient-to-br from-amber-400/15 to-amber-500/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-transform duration-300 group-hover:scale-110">
-                  <ChefHat className="h-[18px] w-[18px] text-amber-300" />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-end gap-3">
-                <span className="text-4xl font-semibold tracking-tight text-white tabular-nums">
-                  {recipes.length}
-                </span>
-
-                <span className="mb-1.5 text-xs font-medium text-amber-300/80">
-                  {recipes.length === 1 ? "ingredient" : "ingredients"}
-                </span>
-              </div>
-
-              <div className="mt-4 h-px bg-gradient-to-r from-amber-400/30 via-amber-400/10 to-transparent" />
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-zinc-500">
-                  Ingredients defined in the recipe
-                </p>
-
-                <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400/15 bg-amber-400/[0.06] px-2 py-1.5 text-[10px] font-medium text-amber-200/80">
-                  <ChefHat className="h-3 w-3 text-amber-300" />
-                  Recipe
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* MODIFIER GROUPS */}
-          <div className="group relative isolate overflow-hidden rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.08] via-zinc-950/95 to-zinc-950 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.12)] transition-all duration-300 hover:-translate-y-1 hover:border-violet-400/40 hover:shadow-[0_12px_32px_rgba(139,92,246,0.09)]">
-            <div className="pointer-events-none absolute -right-8 -top-10 -z-0 h-32 w-32 rounded-full bg-violet-400/10 blur-3xl transition-colors duration-500 group-hover:bg-violet-400/20" />
-
-            <div className="relative z-10">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-violet-300/70">
-                    Customization
-                  </p>
-                  <h3 className="mt-1.5 text-sm font-medium text-zinc-300">
-                    Modifier Groups
-                  </h3>
-                </div>
-
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-violet-400/20 bg-gradient-to-br from-violet-400/15 to-violet-500/[0.04] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-transform duration-300 group-hover:scale-110">
-                  <Layers3 className="h-[18px] w-[18px] text-violet-300" />
-                </div>
-              </div>
-
-              <div className="mt-6 flex items-end gap-3">
-                <span className="text-4xl font-semibold tracking-tight text-white tabular-nums">
-                  {modifierGroups.length}
-                </span>
-
-                <span className="mb-1.5 text-xs font-medium text-violet-300/80">
-                  {modifierGroups.length === 1 ? "group" : "groups"}
-                </span>
-              </div>
-
-              <div className="mt-4 h-px bg-gradient-to-r from-violet-400/30 via-violet-400/10 to-transparent" />
-
-              <div className="mt-4 flex items-center justify-between gap-3">
-                <p className="text-xs text-zinc-500">
-                  Modifier groups attached
-                </p>
-
-                <span className="flex shrink-0 items-center gap-1.5 rounded-lg border border-violet-400/15 bg-violet-400/[0.06] px-2 py-1.5 text-[10px] font-medium text-violet-200/80">
-                  <Layers3 className="h-3 w-3 text-violet-300" />
-                  Options
-                </span>
-              </div>
-            </div>
-          </div>
+          <DetailMetricCard
+            title="Base price"
+            value={formatCurrency(Number(details.basePrice))}
+            description="Central catalog price · Master"
+            icon={BadgeDollarSign}
+            tone="emerald"
+          />
+          <DetailMetricCard
+            title="Restaurant availability"
+            value={`${availableRestaurants} / ${pricing.length}`}
+            description={`${coveragePercentage}% of restaurants serving this item`}
+            icon={Store}
+            tone="sky"
+            progress={coveragePercentage}
+          />
+          <DetailMetricCard
+            title="Recipe ingredients"
+            value={recipes.length}
+            description="Ingredients defined in the recipe"
+            icon={ChefHat}
+            tone="amber"
+          />
+          <DetailMetricCard
+            title="Modifier groups"
+            value={modifierGroups.length}
+            description="Modifier groups attached"
+            icon={Layers3}
+            tone="violet"
+          />
         </div>
 
         {/* MAIN GRID */}
 
-        <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
-          <div className="space-y-5 xl:col-span-7">
+        <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
+          <div className="min-w-0 space-y-6 lg:col-span-7">
             <Section
               title="Master Information"
               description="Central catalog configuration for this menu item."
@@ -1484,7 +1315,9 @@ export default function MenuItemInformationView({
                               {canEditSharedCatalog && (
                                 <button
                                   type="button"
-                                  onClick={() => void openEditRecipePopup(recipe)}
+                                  onClick={() =>
+                                    void openEditRecipePopup(recipe)
+                                  }
                                   disabled={
                                     isSavingRecipe ||
                                     deletingRecipeId === recipe.id
@@ -1616,7 +1449,7 @@ export default function MenuItemInformationView({
             </Section>
           </div>
 
-          <div className="space-y-5 xl:col-span-5">
+          <div className="min-w-0 space-y-6 lg:col-span-5">
             <Section
               title="Restaurant Pricing"
               description="Restaurant-level selling price and availability."

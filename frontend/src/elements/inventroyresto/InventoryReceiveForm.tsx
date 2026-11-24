@@ -51,7 +51,7 @@ export default function InventoryReceiveForm({
 
   return (
     <form onSubmit={submit} className="space-y-3 p-4">
-      <p className="text-sm text-zinc-300">
+      <p className="text-xs text-zinc-400">
         Enter what actually arrived. The current receiving API requires a
         positive amount for every line. Contact warehouse staff if a line is
         entirely missing.
@@ -59,7 +59,7 @@ export default function InventoryReceiveForm({
       {items.map((item) => (
         <div
           key={item.id}
-          className="grid gap-2 rounded-lg border border-zinc-700 p-3 sm:grid-cols-2"
+          className="grid gap-2 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3 sm:grid-cols-2"
         >
           <label className="grid gap-1 text-xs text-zinc-300">
             {item.ingredient?.name ?? ingredientLabel(item.ingredientId)} ·{" "}
@@ -84,7 +84,7 @@ export default function InventoryReceiveForm({
         </div>
       ))}
       {!items.length && (
-        <p role="status" className="text-sm text-zinc-300">
+        <p role="status" className="text-xs text-zinc-400">
           There are no shipment lines to receive.
         </p>
       )}

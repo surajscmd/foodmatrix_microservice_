@@ -24,11 +24,7 @@ const statusLabels: Record<TransferStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
-export function TransferStatusBadge({
-  status,
-}: {
-  status: TransferStatus;
-}) {
+export function TransferStatusBadge({ status }: { status: TransferStatus }) {
   const color =
     status === "COMPLETED"
       ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
@@ -132,15 +128,21 @@ function TableContent({
 
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <Truck className="h-4 w-4 text-emerald-400" />
-          <h2 className="text-xs font-semibold text-zinc-200">
-            Outgoing Transfers
-          </h2>
-          <span className="font-mono text-[10px] text-zinc-600">
-            {loading ? "…" : filtered.length}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <Truck size={17} aria-hidden />
           </span>
+          <div>
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Outgoing Transfers
+            </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              {loading
+                ? "Loading transfers…"
+                : `${filtered.length} matching transfers`}
+            </p>
+          </div>
         </div>
 
         <select
@@ -186,20 +188,25 @@ function TableContent({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-800 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
-                {["Transfer", "Restaurant", "Stock Items", "Shipment", "Status", "Actions"].map(
-                  (label) => (
-                    <th
-                      key={label}
-                      scope="col"
-                      className={`whitespace-nowrap px-5 py-3.5 font-semibold ${
-                        label === "Actions" ? "text-right" : ""
-                      }`}
-                    >
-                      {label}
-                    </th>
-                  ),
-                )}
+              <tr className="border-b border-zinc-800/80 bg-zinc-950/80 font-mono text-[9px] uppercase tracking-wider text-zinc-500">
+                {[
+                  "Transfer",
+                  "Restaurant",
+                  "Stock Items",
+                  "Shipment",
+                  "Status",
+                  "Actions",
+                ].map((label) => (
+                  <th
+                    key={label}
+                    scope="col"
+                    className={`whitespace-nowrap px-5 py-3.5 font-semibold ${
+                      label === "Actions" ? "text-right" : ""
+                    }`}
+                  >
+                    {label}
+                  </th>
+                ))}
               </tr>
             </thead>
 
@@ -210,7 +217,10 @@ function TableContent({
                   className="transition-colors hover:bg-zinc-900/50"
                 >
                   <td className="px-5 py-4">
-                    <p title={transfer.id} className="whitespace-nowrap font-mono text-[11px] text-zinc-300">
+                    <p
+                      title={transfer.id}
+                      className="whitespace-nowrap font-mono text-[11px] text-zinc-300"
+                    >
                       TRF-{transfer.id.slice(0, 8).toUpperCase()}
                     </p>
                     <p className="mt-1 text-[10px] text-zinc-600">
@@ -220,7 +230,8 @@ function TableContent({
 
                   <td className="px-5 py-4">
                     <p className="font-semibold text-zinc-200">
-                      {transfer.restaurant?.name ?? "Restaurant name unavailable"}
+                      {transfer.restaurant?.name ??
+                        "Restaurant name unavailable"}
                     </p>
                     <p className="mt-1 whitespace-nowrap font-mono text-[9px] text-zinc-600">
                       {transfer.toRestaurantId}
@@ -230,9 +241,11 @@ function TableContent({
                   <td className="px-5 py-4">
                     <p>{transfer.items.length} stock items</p>
                     <p className="mt-1 max-w-[180px] truncate text-[10px] text-zinc-600">
-                      {transfer.items.map((item) =>
-                        item.ingredient?.name ?? item.ingredientId,
-                      ).join(", ")}
+                      {transfer.items
+                        .map(
+                          (item) => item.ingredient?.name ?? item.ingredientId,
+                        )
+                        .join(", ")}
                     </p>
                   </td>
 
@@ -241,7 +254,8 @@ function TableContent({
                       {transfer.shipment?.carrierName ?? "Not assigned"}
                     </p>
                     <p className="mt-1 font-mono text-[9px] text-zinc-600">
-                      {transfer.shipment?.trackingNumber ?? "No tracking number"}
+                      {transfer.shipment?.trackingNumber ??
+                        "No tracking number"}
                     </p>
                   </td>
 

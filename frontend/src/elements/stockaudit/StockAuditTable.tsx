@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  ClipboardList,
-  Eye,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
+import { ClipboardList, Eye, Loader2, RefreshCw } from "lucide-react";
 
 import { InventoryPagination } from "@/elements/rawmaterial/InventoryShared";
 
@@ -34,11 +29,7 @@ const movementClasses: Record<MovementType, string> = {
   WASTE: "border-rose-500/20 bg-rose-500/10 text-rose-300",
 };
 
-export function AuditMovementBadge({
-  type,
-}: {
-  type: MovementType;
-}) {
+export function AuditMovementBadge({ type }: { type: MovementType }) {
   return (
     <span
       className={`inline-flex whitespace-nowrap rounded-lg border px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-wider ${movementClasses[type]}`}
@@ -103,17 +94,19 @@ export default function StockAuditTable({
 }: Props) {
   return (
     <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-800 px-5 py-4">
-        <div className="flex items-center gap-2">
-          <ClipboardList className="h-4 w-4 text-emerald-400" />
-
-          <h2 className="text-xs font-semibold text-zinc-200">
-            Movement Ledger
-          </h2>
-
-          <span className="font-mono text-[10px] text-zinc-600">
-            {locationName}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <ClipboardList size={17} aria-hidden />
           </span>
+          <div className="min-w-0">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Movement Ledger
+            </h2>
+            <p className="mt-1 break-words text-[10px] text-zinc-500">
+              {locationName}
+            </p>
+          </div>
         </div>
 
         <span className="rounded-lg border border-zinc-800 bg-zinc-900 px-2 py-1 font-mono text-[9px] uppercase tracking-wider text-zinc-500">
@@ -122,7 +115,10 @@ export default function StockAuditTable({
       </div>
 
       {loading ? (
-        <div role="status" className="flex min-h-[240px] items-center justify-center gap-2 text-xs text-zinc-500">
+        <div
+          role="status"
+          className="flex min-h-[240px] items-center justify-center gap-2 text-xs text-zinc-500"
+        >
           <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
           Loading audit records...
         </div>
@@ -141,9 +137,7 @@ export default function StockAuditTable({
         </div>
       ) : movements.length === 0 ? (
         <div className="space-y-2 p-12 text-center">
-          <p className="text-xs text-zinc-400">
-            No audit records found.
-          </p>
+          <p className="text-xs text-zinc-400">No audit records found.</p>
           <p className="text-[10px] text-zinc-600">
             Try another location, stock item, movement or date range.
           </p>
@@ -152,7 +146,7 @@ export default function StockAuditTable({
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-zinc-800 font-mono text-[10px] uppercase tracking-wider text-zinc-500">
+              <tr className="border-b border-zinc-800/80 bg-zinc-950/80 font-mono text-[9px] uppercase tracking-wider text-zinc-500">
                 {[
                   "Date & Time",
                   "Stock Item",

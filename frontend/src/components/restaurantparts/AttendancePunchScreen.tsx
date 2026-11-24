@@ -30,7 +30,9 @@ function hrError(error: unknown, fallback: string) {
   const message: unknown = error.response?.data?.message;
   if (typeof message === "string") return message;
   if (Array.isArray(message)) {
-    return message.filter((item) => typeof item === "string").join(" ") || fallback;
+    return (
+      message.filter((item) => typeof item === "string").join(" ") || fallback
+    );
   }
   return fallback;
 }
@@ -38,8 +40,9 @@ function hrError(error: unknown, fallback: string) {
 async function getRestaurantStaff(restaurantId: string) {
   const { data } = await getStaffByRestaurant(restaurantId, 1, 50);
   const remaining = await Promise.all(
-    Array.from({ length: Math.max(0, data.pagination.totalPages - 1) }, (_, index) =>
-      getStaffByRestaurant(restaurantId, index + 2, 50),
+    Array.from(
+      { length: Math.max(0, data.pagination.totalPages - 1) },
+      (_, index) => getStaffByRestaurant(restaurantId, index + 2, 50),
     ),
   );
 
@@ -48,11 +51,9 @@ async function getRestaurantStaff(restaurantId: string) {
 
 function RestaurantPunchClock({
   restaurantId,
-  restaurantName,
   timeZone,
 }: {
   restaurantId: string;
-  restaurantName: string;
   timeZone: string;
 }) {
   const [now, setNow] = useState<Date | null>(null);
@@ -104,7 +105,8 @@ function RestaurantPunchClock({
         setData({ staff, shifts: attendance.data, schedules: schedules.data });
         setLoadError("");
       } catch (error) {
-        if (!cancelled) setLoadError(hrError(error, "Could not load attendance."));
+        if (!cancelled)
+          setLoadError(hrError(error, "Could not load attendance."));
       } finally {
         if (!cancelled) setLoadedKey(loadKey);
       }
@@ -116,7 +118,10 @@ function RestaurantPunchClock({
     };
   }, [loadKey, localDate, restaurantId]);
 
-  async function savePunch(id: string, submit: () => ReturnType<typeof clockIn>) {
+  async function savePunch(
+    id: string,
+    submit: () => ReturnType<typeof clockIn>,
+  ) {
     if (pendingId || loading || loadError) return;
 
     setPendingId(id);
@@ -124,15 +129,26 @@ function RestaurantPunchClock({
     setNotice("");
     try {
       const { data: shift, message } = await submit();
-      setData((previous) =>
-        previous && {
-          ...previous,
-          shifts: [shift, ...previous.shifts.filter((entry) => entry.id !== shift.id)],
-        },
+      setData(
+        (previous) =>
+          previous && {
+            ...previous,
+            shifts: [
+              shift,
+              ...previous.shifts.filter((entry) => entry.id !== shift.id),
+            ],
+          },
       );
-      setNotice(`${shift.staff.firstName} ${shift.staff.lastName} · ${message}`);
+      setNotice(
+        `${shift.staff.firstName} ${shift.staff.lastName} · ${message}`,
+      );
     } catch (error) {
-      setPunchError(hrError(error, "Could not save the punch. Check the attendance log before trying again."));
+      setPunchError(
+        hrError(
+          error,
+          "Could not save the punch. Check the attendance log before trying again.",
+        ),
+      );
       // A response can fail after HR has already written the attendance record.
       setRevision((value) => value + 1);
     } finally {
@@ -143,38 +159,49 @@ function RestaurantPunchClock({
   const shifts = data?.shifts ?? [];
   const onDuty = shifts.filter((shift) => !shift.clockOutAt);
   const completedToday = shifts.filter(
-    (shift) => shift.clockOutAt && dateFormatter.format(new Date(shift.clockOutAt)) === localDate,
+    (shift) =>
+      shift.clockOutAt &&
+      dateFormatter.format(new Date(shift.clockOutAt)) === localDate,
   );
-  const activeStaff = new Set(data?.staff.filter((staff) => staff.status === "ACTIVE").map((staff) => staff.id));
+  const activeStaff = new Set(
+    data?.staff
+      .filter((staff) => staff.status === "ACTIVE")
+      .map((staff) => staff.id),
+  );
   const workingStaff = new Set(onDuty.map((shift) => shift.staffId));
-  const available = now && data
-    ? data.schedules.filter((schedule) => {
-        const start = new Date(schedule.scheduledStart);
-        const end = new Date(schedule.scheduledEnd);
-        if (
-          schedule.status !== "SCHEDULED" ||
-          !activeStaff.has(schedule.staffId) ||
-          workingStaff.has(schedule.staffId) ||
-          end <= now ||
-          start > now
-        ) {
-          return false;
-        }
+  const available =
+    now && data
+      ? data.schedules.filter((schedule) => {
+          const start = new Date(schedule.scheduledStart);
+          const end = new Date(schedule.scheduledEnd);
+          if (
+            schedule.status !== "SCHEDULED" ||
+            !activeStaff.has(schedule.staffId) ||
+            workingStaff.has(schedule.staffId) ||
+            end <= now ||
+            start > now
+          ) {
+            return false;
+          }
 
-        return !completedToday.some((shift) => {
-          if (shift.shiftScheduleId) return shift.shiftScheduleId === schedule.id;
-          const clockInAt = new Date(shift.clockInAt);
-          return shift.staffId === schedule.staffId && clockInAt >= start && clockInAt < end;
-        });
-      })
-    : [];
+          return !completedToday.some((shift) => {
+            if (shift.shiftScheduleId)
+              return shift.shiftScheduleId === schedule.id;
+            const clockInAt = new Date(shift.clockInAt);
+            return (
+              shift.staffId === schedule.staffId &&
+              clockInAt >= start &&
+              clockInAt < end
+            );
+          });
+        })
+      : [];
 
   const blocked = loading || !!loadError || pendingId !== null;
 
   return (
-    <div className="@container space-y-4">
+    <div className="@container mx-auto max-w-[1500px] space-y-5 motion-safe:animate-fade-in">
       <AttendanceHeader
-        restaurantName={restaurantName}
         now={now}
         timeZone={timeZone}
         onDuty={workingStaff.size}
@@ -186,38 +213,69 @@ function RestaurantPunchClock({
         busy={pendingId !== null}
       />
 
-      {loadError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100">{loadError}</p>}
-      {punchError && <p role="alert" className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100">{punchError}</p>}
-      {notice && <p role="status" className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100">{notice}</p>}
+      {loadError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100"
+        >
+          {loadError}
+        </p>
+      )}
+      {punchError && (
+        <p
+          role="alert"
+          className="rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-2.5 text-sm text-rose-100"
+        >
+          {punchError}
+        </p>
+      )}
+      {notice && (
+        <p
+          role="status"
+          className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100"
+        >
+          {notice}
+        </p>
+      )}
 
       {data ? (
-        <div className="grid items-start gap-4 @3xl:grid-cols-2">
+        <div className="grid items-start gap-5 @3xl:grid-cols-2">
           <PunchStation
             schedules={available}
             timeZone={timeZone}
             blocked={blocked}
             pendingId={pendingId}
             onPunchIn={(schedule) =>
-              void savePunch(schedule.id, () => clockIn({
-                restaurantId,
-                staffId: schedule.staffId,
-                shiftScheduleId: schedule.id,
-              }))
+              void savePunch(schedule.id, () =>
+                clockIn({
+                  restaurantId,
+                  staffId: schedule.staffId,
+                  shiftScheduleId: schedule.id,
+                }),
+              )
             }
           />
           <AttendanceLogBoard
+            now={now}
             onDuty={onDuty}
             completed={completedToday}
             timeZone={timeZone}
             blocked={blocked}
             pendingId={pendingId}
-            onPunchOut={(shiftId) => void savePunch(shiftId, () => clockOut(shiftId))}
+            onPunchOut={(shiftId) =>
+              void savePunch(shiftId, () => clockOut(shiftId))
+            }
           />
         </div>
-      ) : loading && (
-        <p role="status" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300">
-          Loading staff, roster and attendance…
-        </p>
+      ) : (
+        loading && (
+          <p
+            role="status"
+            className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-300"
+          >
+            Loading staff, roster and attendance…
+          </p>
+        )
       )}
     </div>
   );
@@ -232,8 +290,13 @@ export default function AttendancePunchScreen() {
   const restaurantId = user?.managedRestaurantId ?? restaurant?.id;
   if (!hydrated || !restaurantId || !user) {
     return (
-      <p role="status" className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-200">
-        {hydrated ? error || "No restaurant is assigned or selected for this account." : "Loading restaurant…"}
+      <p
+        role="status"
+        className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 text-sm text-zinc-200"
+      >
+        {hydrated
+          ? error || "No restaurant is assigned or selected for this account."
+          : "Loading restaurant…"}
       </p>
     );
   }
@@ -244,7 +307,7 @@ export default function AttendancePunchScreen() {
     <RestaurantPunchClock
       key={restaurantId}
       restaurantId={restaurantId}
-      restaurantName={location?.name ?? "Restaurant attendance"}
+
       timeZone={location?.timezone || "UTC"}
     />
   );

@@ -1,0 +1,23 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: foodmatrix
+  namespace: monitoring
+spec:
+  groups:
+    - name: foodmatrix.rules
+      rules:
+        - alert: FoodMatrixDeploymentUnavailable
+          expr: kube_deployment_spec_replicas{namespace="foodmatrix"} > 0 and kube_deployment_status_replicas_available{namespace="foodmatrix"} == 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "No available replicas for {{ $labels.deployment }}"
+        - alert: FoodMatrixContainerRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="foodmatrix"}[15m]) > 3
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Frequent restarts for {{ $labels.pod }}/{{ $labels.container }}"

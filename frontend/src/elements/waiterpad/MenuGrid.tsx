@@ -1,154 +1,284 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Search, Utensils } from "lucide-react";
-import type { MenuItem } from "./types";
+import { useEffect, useId, useRef, useState } from "react";
+import {
+  ArrowRight,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Utensils,
+  X,
+} from "lucide-react";
+import type { CartItem, MenuItem } from "./types";
+import { itemPriceInCents } from "@/elements/Cash-pos/cashier-modifiers";
 
 interface Props {
-  restaurantName: string;
+  table: string;
   items: MenuItem[] | null;
+  lines: CartItem[];
   error: string;
+  optionsError: string;
   disabled: boolean;
+  customizableItems: ReadonlySet<string>;
   formatMoney: (amount: number) => string;
   onAdd: (item: MenuItem) => void;
+  onOptions: (item: MenuItem) => void;
   onRetry: () => void;
+  onRetryOptions: () => void;
+  onClose: () => void;
 }
 
+const focus =
+  "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-400";
+
 export default function MenuGrid({
-  restaurantName,
+  table,
   items,
+  lines,
   error,
+  optionsError,
   disabled,
+  customizableItems,
   formatMoney,
   onAdd,
+  onOptions,
   onRetry,
+  onRetryOptions,
+  onClose,
 }: Props) {
-  const [query, setQuery] = useState("");
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
+  const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const categories = [
     ...new Map(
       (items ?? []).map((item) => [item.category.id, item.category]),
     ).values(),
   ].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
-  const selected = category ?? categories[0]?.id ?? "";
-  const search = query.trim().toLowerCase();
+  const selected =
+    category === "" || categories.some(({ id }) => id === category)
+      ? category
+      : (categories[0]?.id ?? "");
+  const query = search.trim().toLowerCase();
   const visible = (items ?? []).filter((item) =>
-    search
-      ? item.name.toLowerCase().includes(search)
-      : selected === "" || item.category.id === selected,
+    query
+      ? `${item.name} ${item.category.name}`.toLowerCase().includes(query)
+      : !selected || item.category.id === selected,
   );
+  const count = lines.reduce((sum, line) => sum + line.quantity, 0);
+  const total =
+    lines.reduce(
+      (sum, line) =>
+        sum +
+        itemPriceInCents(line.menuItem.price, line.modifiers) * line.quantity,
+      0,
+    ) / 100;
+
+  useEffect(() => {
+    const opener = document.activeElement;
+    const element = dialog.current;
+    element?.showModal();
+    element?.querySelector<HTMLInputElement>("input")?.focus();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      element?.close();
+      document.body.style.overflow = overflow;
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+    };
+  }, []);
 
   return (
-    <section
-      aria-labelledby="waiter-menu"
-      className="min-w-0 rounded-2xl border border-zinc-700/80 bg-[#18191d]"
+    <dialog
+      id="waiter-menu-region"
+      ref={dialog}
+      aria-labelledby={titleId}
+      onCancel={(event) => {
+        event.preventDefault();
+        onClose();
+      }}
+      className="fixed inset-0 m-auto w-[calc(100%-1.5rem)] max-w-5xl overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] p-0 text-zinc-100 shadow-[0_30px_90px_rgba(0,0,0,0.65)] backdrop:bg-black/70 backdrop:backdrop-blur-md"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-2xl bg-linear-to-r from-[#1d3b31] via-[#222e29] to-[#232429] p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-200 text-emerald-950">
-            <Utensils aria-hidden="true" className="size-5" />
-          </span>
-          <div className="min-w-0">
-            <h2 id="waiter-menu" className="font-semibold text-white">
-              {restaurantName}
-            </h2>
-            <p className="text-xs text-emerald-100">Dine-in menu</p>
-          </div>
-        </div>
-        <label className="flex h-11 w-full items-center gap-2 rounded-xl border border-zinc-600 bg-zinc-950 px-3 sm:w-56">
-          <Search
-            aria-hidden="true"
-            className="size-4 shrink-0 text-emerald-200"
-          />
-          <span className="sr-only">Search menu</span>
-          <input
-            type="search"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search menu"
-            className="min-w-0 flex-1 bg-transparent text-sm text-white"
-          />
-        </label>
-      </div>
-      <div className="space-y-3 p-4">
-        {error ? (
-          <div
-            role="alert"
-            className="rounded-xl bg-rose-950 p-3 text-sm text-rose-100"
-          >
-            <p>{error}</p>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="min-h-10 font-semibold underline"
-            >
-              Retry menu
-            </button>
-          </div>
-        ) : !items ? (
-          <p role="status" className="text-sm text-zinc-300">
-            Loading menu…
-          </p>
-        ) : items.length ? (
-          <>
-            <div
-              role="group"
-              aria-label="Menu categories"
-              className="flex flex-wrap gap-2"
-            >
-              {[...categories, { id: "", name: "All items" }].map(
-                ({ id, name }) => (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={!search && id === selected}
-                    onClick={() => {
-                      setCategory(id);
-                      setQuery("");
-                    }}
-                    className={`min-h-10 rounded-lg border px-3 text-sm font-semibold ${!search && id === selected ? "border-emerald-200 bg-emerald-200 text-emerald-950" : "border-zinc-700 bg-[#232429] text-zinc-100 hover:border-emerald-300"}`}
-                  >
-                    {name}
-                  </button>
-                ),
-              )}
+      <div className="flex h-[min(760px,calc(100dvh-2rem))] flex-col">
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/80 to-cyan-400/60"
+        />
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-zinc-800/80 px-5 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="grid size-11 shrink-0 place-items-center rounded-2xl border border-emerald-400/20 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-400/10 text-emerald-400">
+              <Utensils size={18} aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="font-mono text-[9px] font-bold uppercase tracking-[0.2em] text-emerald-400">
+                Table {table}
+              </p>
+              <h2
+                id={titleId}
+                className="mt-1 text-sm font-semibold text-white"
+              >
+                Add items
+              </h2>
             </div>
-            {visible.length ? (
-              <ul className="grid max-h-[28rem] gap-2 overflow-y-auto p-1 min-[520px]:grid-cols-2 2xl:grid-cols-3">
-                {visible.map((item) => (
-                  <li key={item.id} className="min-w-0">
-                    <button
-                      type="button"
-                      disabled={disabled}
-                      onClick={() => onAdd(item)}
-                      className="flex min-h-20 w-full items-center justify-between gap-3 rounded-xl border border-zinc-700 bg-[#232429] p-3 text-left enabled:hover:border-emerald-300 disabled:opacity-60"
+          </div>
+          <button
+            type="button"
+            aria-label="Close menu"
+            onClick={onClose}
+            className={`grid size-9 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/80 text-zinc-400 hover:text-rose-400 ${focus}`}
+          >
+            <X size={16} aria-hidden />
+          </button>
+        </header>
+        <div className="shrink-0 border-b border-zinc-800/80 px-5 py-3 sm:px-6">
+          <label className="flex min-h-10 items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-950 px-3 focus-within:border-emerald-400/50">
+            <Search size={15} className="text-zinc-500" aria-hidden />
+            <span className="sr-only">Search the menu</span>
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search dishes or categories…"
+              className="min-w-0 flex-1 bg-transparent py-2 text-xs text-white outline-none placeholder:text-zinc-600"
+            />
+          </label>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+          <nav
+            aria-label="Menu categories"
+            className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-zinc-800/80 p-3 sm:w-44 sm:flex-col sm:overflow-y-auto sm:border-r sm:border-b-0"
+          >
+            {[...categories, { id: "", name: "All items" }].map(
+              ({ id, name }) => (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={!query && selected === id}
+                  onClick={() => {
+                    setSearch("");
+                    setCategory(id);
+                  }}
+                  className={`min-h-10 shrink-0 rounded-lg border px-3 text-left text-xs font-medium sm:shrink sm:break-words ${focus} ${!query && selected === id ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-300" : "border-transparent text-zinc-400 hover:bg-zinc-900 hover:text-white"}`}
+                >
+                  {name}
+                </button>
+              ),
+            )}
+          </nav>
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5">
+            {optionsError && (
+              <div
+                role="status"
+                className="mb-3 rounded-lg border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200"
+              >
+                {optionsError}{" "}
+                <button
+                  type="button"
+                  onClick={onRetryOptions}
+                  className={`ml-2 rounded underline ${focus}`}
+                >
+                  Retry options
+                </button>
+              </div>
+            )}
+            {error ? (
+              <div role="alert" className="text-xs text-rose-300">
+                {error}{" "}
+                <button
+                  type="button"
+                  onClick={onRetry}
+                  className={`ml-2 rounded underline ${focus}`}
+                >
+                  Retry menu
+                </button>
+              </div>
+            ) : !items ? (
+              <p role="status" className="p-4 text-xs text-zinc-400">
+                Loading menu…
+              </p>
+            ) : visible.length === 0 ? (
+              <p
+                role="status"
+                className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-xs text-zinc-500"
+              >
+                No dishes match this selection.
+              </p>
+            ) : (
+              <ul className="grid gap-3 md:grid-cols-2">
+                {visible.map((item) => {
+                  const quantity = lines
+                    .filter((line) => line.menuItem.id === item.id)
+                    .reduce((sum, line) => sum + line.quantity, 0);
+                  return (
+                    <li
+                      key={item.id}
+                      className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/40 transition-colors hover:border-emerald-400/30"
                     >
-                      <span className="min-w-0">
-                        <span className="block break-words text-sm font-semibold">
-                          {item.name}
-                        </span>
-                        <span className="text-sm tabular-nums text-emerald-200">
+                      <div className="flex items-start justify-between gap-3 px-4 pt-4">
+                        <div className="min-w-0">
+                          <p className="font-mono text-[8px] uppercase tracking-wider text-zinc-500">
+                            {item.category.name}
+                          </p>
+                          <h3 className="mt-1 break-words text-xs font-semibold leading-5 text-white">
+                            {item.name}
+                          </h3>
+                        </div>
+                        <span className="shrink-0 text-xs font-semibold tabular-nums text-emerald-400">
                           {formatMoney(item.price)}
                         </span>
-                      </span>
-                      <Plus
-                        aria-hidden="true"
-                        className="size-8 shrink-0 rounded-lg bg-teal-200 p-1.5 text-emerald-950"
-                      />
-                    </button>
-                  </li>
-                ))}
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-2 border-t border-zinc-800/70 px-3 py-2">
+                        {customizableItems.has(item.id) ? (
+                          <button
+                            type="button"
+                            disabled={disabled}
+                            onClick={() => onOptions(item)}
+                            className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg px-2 text-[10px] font-medium text-violet-300 hover:bg-violet-400/10 disabled:opacity-50 ${focus}`}
+                          >
+                            <SlidersHorizontal size={13} aria-hidden /> Options
+                          </button>
+                        ) : (
+                          <span className="px-1 text-[10px] text-zinc-500">
+                            {quantity
+                              ? `${quantity} in draft`
+                              : "Standard item"}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => onAdd(item)}
+                          aria-label={`Add ${item.name}`}
+                          className={`inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-emerald-400/10 px-3 text-[11px] font-semibold text-emerald-300 transition hover:bg-emerald-400 hover:text-zinc-950 disabled:opacity-50 ${focus}`}
+                        >
+                          <Plus size={14} aria-hidden /> Add
+                          {quantity > 0 ? ` · ${quantity}` : ""}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
-            ) : (
-              <p className="text-sm text-zinc-300">
-                No items match your search.
-              </p>
             )}
-          </>
-        ) : (
-          <p className="text-sm text-zinc-300">No menu items are available.</p>
-        )}
+          </div>
+        </div>
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-zinc-800 bg-zinc-950/60 px-5 py-3 sm:px-6">
+          <p role="status" aria-live="polite" className="text-xs text-zinc-400">
+            {count} {count === 1 ? "item" : "items"} in draft{" "}
+            <span className="ml-3 font-semibold tabular-nums text-emerald-300">
+              {formatMoney(total)}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className={`inline-flex min-h-10 items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 px-4 text-xs font-semibold text-zinc-950 hover:brightness-110 ${focus}`}
+          >
+            {count ? "Review items" : "Back to table"}{" "}
+            <ArrowRight size={14} aria-hidden />
+          </button>
+        </footer>
       </div>
-    </section>
+    </dialog>
   );
 }

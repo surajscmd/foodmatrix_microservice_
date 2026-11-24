@@ -1,0 +1,58 @@
+{{- if .Values.migrations.enabled }}
+{{- $root := . }}
+{{- range $name, $config := .Values.services }}
+{{- if $config.migrate }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $root.Release.Name }}-{{ $name }}-migrate
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  activeDeadlineSeconds: 300
+  backoffLimit: 2
+  template:
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      nodeSelector: {{- toYaml $root.Values.nodeSelector | nindent 8 }}
+      {{- if $root.Values.postgresCaConfigMap }}
+      volumes:
+        - name: postgres-ca
+          configMap:
+            name: {{ $root.Values.postgresCaConfigMap }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ printf "%s/%s:%s" $root.Values.imageRegistry $name $root.Values.imageTag | quote }}
+          imagePullPolicy: {{ $root.Values.imagePullPolicy }}
+          command:
+            - sh
+            - -ec
+            - |
+              export DATABASE_URL="${MIGRATION_DATABASE_URL:-$DATABASE_URL}"
+              exec ./node_modules/.bin/prisma migrate deploy --config "$PRISMA_CONFIG"
+          {{- if $root.Values.postgresCaConfigMap }}
+          volumeMounts:
+            - name: postgres-ca
+              mountPath: /etc/foodmatrix/postgres
+              readOnly: true
+          {{- end }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $config.secret }}
+                  key: DATABASE_URL
+            - name: MIGRATION_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $config.secret }}
+                  key: MIGRATION_DATABASE_URL
+                  optional: true
+          resources: {{- toYaml $root.Values.resources | nindent 12 }}
+{{- end }}
+{{- end }}
+{{- end }}

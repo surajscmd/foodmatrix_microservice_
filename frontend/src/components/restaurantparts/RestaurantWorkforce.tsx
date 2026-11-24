@@ -49,24 +49,22 @@ export default function RestaurantWorkforce() {
   const currency = restaurant.defaultCurrency || "INR";
 
   return (
-    <div className="@container space-y-4">
-      <header className={panel}>
-        <div className="flex items-center gap-3 border-b border-emerald-400/20 bg-linear-to-r from-teal-800 via-teal-950 to-slate-800 px-4 py-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-300 text-emerald-950">
-            <Users size={19} aria-hidden />
-          </span>
+    <div className="@container mx-auto max-w-[1500px] space-y-5 motion-safe:animate-fade-in">
+      <header className="space-y-5">
+        <div className="flex items-center gap-3 py-2">
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-white">
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
               Staff &amp; Payroll
             </h1>
-            <p className="mt-0.5 truncate text-xs text-teal-100">
-              {restaurant.name}
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Staff profiles, leave requests and payroll management
             </p>
           </div>
         </div>
         <nav
           aria-label="Workforce views"
-          className="flex flex-wrap gap-1 bg-[#18191d] p-2"
+          className="flex flex-wrap gap-2 rounded-xl border border-zinc-800 bg-zinc-950/80 p-2"
         >
           {(
             [
@@ -80,7 +78,7 @@ export default function RestaurantWorkforce() {
               type="button"
               aria-pressed={view === id}
               onClick={() => setView(id)}
-              className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium focus-visible:outline-2 focus-visible:outline-emerald-300 ${view === id ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : "border-transparent text-zinc-300 hover:bg-white/8"}`}
+              className={`inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-emerald-300 ${view === id ? "border-emerald-400 bg-emerald-400 text-zinc-950" : "border-transparent text-zinc-400 hover:border-zinc-700 hover:bg-zinc-900 hover:text-white"}`}
             >
               <Icon size={15} aria-hidden />
               {label}

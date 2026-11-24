@@ -12,8 +12,8 @@ import {
 
 const focus =
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300";
-const button = `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-sm font-medium text-zinc-100 enabled:hover:border-emerald-400/50 disabled:opacity-50 ${focus}`;
-const primary = `min-h-11 w-full rounded-xl bg-emerald-300 px-3 text-sm font-semibold text-emerald-950 enabled:hover:bg-emerald-200 disabled:opacity-50 ${focus}`;
+const button = `inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-semibold text-zinc-200 transition-colors enabled:hover:border-emerald-400/50 disabled:opacity-50 ${focus}`;
+const primary = `min-h-11 w-full rounded-xl bg-emerald-400 px-3 text-xs font-bold text-zinc-950 shadow-[0_6px_20px_rgba(52,211,153,0.15)] transition-colors enabled:hover:bg-emerald-300 disabled:opacity-50 ${focus}`;
 
 const statusStyles: Record<Order["status"], string> = {
   PENDING: "bg-amber-400/15 text-amber-200",
@@ -62,7 +62,7 @@ function orderContext(order: Order) {
 function StatusBadge({ status }: { status: Order["status"] }) {
   return (
     <span
-      className={`rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusStyles[status]}`}
+      className={`rounded-lg px-2.5 py-1 font-mono text-[9px] font-semibold uppercase tracking-wider ${statusStyles[status]}`}
     >
       {status.toLowerCase()}
     </span>
@@ -108,12 +108,12 @@ export function OpenOrders({
     <section
       aria-labelledby="pos-orders-title"
       aria-busy={loading}
-      className="space-y-3 rounded-2xl border border-sky-400/40 bg-slate-900 p-4 shadow-lg shadow-black/20"
+      className="space-y-3 rounded-2xl border border-sky-400/20 bg-gradient-to-b from-sky-500/[0.08] via-zinc-950/80 to-zinc-950/80 p-4 shadow-lg shadow-black/20"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2
           id="pos-orders-title"
-          className="flex items-center gap-2 text-base font-semibold text-white"
+          className="flex items-center gap-2 font-mono text-[11px] font-bold uppercase tracking-[0.14em] text-sky-200"
         >
           <ClipboardList aria-hidden="true" className="size-5 text-sky-300" />
           Orders
@@ -143,10 +143,10 @@ export function OpenOrders({
             onClick={() => {
               if (view !== value) onView(value);
             }}
-            className={`min-h-10 rounded-lg border px-3 text-sm font-medium disabled:opacity-50 ${focus} ${
+            className={`min-h-10 rounded-lg border px-3 text-xs font-semibold transition-colors disabled:opacity-50 ${focus} ${
               view === value
-                ? "border-sky-300 bg-sky-300 text-sky-950"
-                : "border-slate-600 bg-slate-800 text-slate-100 hover:border-sky-400"
+                ? "border-sky-400 bg-sky-400 text-zinc-950 shadow-[0_3px_12px_rgba(56,189,248,0.15)]"
+                : "border-zinc-700 bg-zinc-900 text-zinc-300 hover:border-sky-400/50"
             }`}
           >
             {label}
@@ -196,12 +196,12 @@ export function OpenOrders({
                       onClick={() => onSelect(order.id)}
                       className={`flex min-h-16 w-full flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 text-left disabled:opacity-60 ${focus} ${
                         selected
-                          ? "border-sky-300 bg-sky-950 ring-1 ring-inset ring-sky-400/40"
-                          : "border-slate-600 bg-slate-800 enabled:hover:border-sky-400"
+                          ? "border-sky-400/60 bg-sky-400/10 ring-1 ring-inset ring-sky-400/20"
+                          : "border-zinc-800 bg-zinc-900/60 transition-colors enabled:hover:border-sky-400/40 enabled:hover:bg-sky-400/5"
                       }`}
                     >
                       <span className="min-w-0">
-                        <span className="block text-sm font-semibold text-white">
+                        <span className="block text-xs font-semibold text-white">
                           #{order.orderNumber}
                         </span>
                         <span className="block break-words text-xs text-zinc-400">
@@ -513,7 +513,7 @@ export default function SettleDesk({
       {payments.length > 0 && (
         <ul
           aria-label="Payments recorded"
-          className="space-y-1 rounded-xl border border-slate-700 bg-slate-800 p-3 text-sm"
+          className="space-y-1 rounded-xl border border-zinc-800 bg-zinc-900/70 p-3 text-sm"
         >
           {payments.map((payment) => (
             <li key={payment.id} className="flex justify-between gap-3">
@@ -617,7 +617,7 @@ function PaymentForm({
 
   return (
     <form
-      className="space-y-3 rounded-xl border border-emerald-400/40 bg-emerald-950/60 p-3"
+      className="space-y-3 rounded-xl border border-emerald-400/25 bg-gradient-to-br from-emerald-500/15 to-zinc-950 p-3"
       onSubmit={(event) => {
         event.preventDefault();
         if (!busy && valid) onPayment(amount, method);

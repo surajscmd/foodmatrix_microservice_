@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, LoaderCircle, RefreshCw } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import RestaurantMenuEditDrawer from "@/elements/menu/RestaurantMenuEditDrawer";
 import RestaurantMenuFilters from "@/elements/restaurantmenu/RestaurantMenuFilters";
+import RestaurantMenuMetrics from "@/elements/restaurantmenu/RestaurantMenuMetrics";
 import RestaurantMenuPagination from "@/elements/restaurantmenu/RestaurantMenuPagination";
 import RestaurantMenuTable from "@/elements/restaurantmenu/RestaurantMenuTable";
 import useRestaurantMenuPage from "@/hooks/useRestaurantMenuPage";
@@ -22,7 +23,10 @@ export default function RestaurantMenuScreen() {
     user.managedRestaurantId !== restaurant.id
   ) {
     return (
-      <p role="alert" className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm text-zinc-300">
+      <p
+        role="alert"
+        className="rounded-xl border border-zinc-800 bg-zinc-950/60 p-4 text-sm text-zinc-300"
+      >
         Menu Management is available to the assigned restaurant admin.
       </p>
     );
@@ -63,18 +67,16 @@ function RestaurantMenuWorkspace({ restaurant }: { restaurant: Restaurant }) {
   );
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-300/20 bg-linear-to-r from-[#1e3e35] via-[#202e2d] to-[#222730] px-4 py-4 shadow-lg shadow-black/25 sm:px-5">
+    <div className="mx-auto max-w-[1500px] space-y-5 motion-safe:animate-fade-in">
+      <header className="flex flex-wrap items-center justify-between gap-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-300/40 bg-emerald-300/15 text-emerald-200">
-            <BookOpen className="size-5" aria-hidden="true" />
-          </span>
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold text-white">
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
               Restaurant menu
             </h1>
-            <p className="mt-0.5 break-words text-xs text-zinc-200">
-              {restaurant.name}
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Selling prices, item availability and menu categories
             </p>
           </div>
         </div>
@@ -84,14 +86,20 @@ function RestaurantMenuWorkspace({ restaurant }: { restaurant: Restaurant }) {
           disabled={refreshing}
           title="Refresh menu"
           aria-label="Refresh menu"
-          className="grid size-9 place-items-center rounded-lg border border-white/15 bg-black/15 text-zinc-200 transition enabled:hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
+          className="grid size-10 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/70 text-zinc-400 transition enabled:hover:border-emerald-400/30 enabled:hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-60"
         >
-          <RefreshCw className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`} aria-hidden="true" />
+          <RefreshCw
+            className={`size-4 ${refreshing ? "motion-safe:animate-spin" : ""}`}
+            aria-hidden="true"
+          />
         </button>
       </header>
 
       {(error || categoryError) && (
-        <div role="alert" className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+        <div
+          role="alert"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-400/25 bg-rose-400/10 px-4 py-3 text-sm text-rose-100"
+        >
           <p>{error || categoryError}</p>
           <button
             type="button"
@@ -103,12 +111,20 @@ function RestaurantMenuWorkspace({ restaurant }: { restaurant: Restaurant }) {
         </div>
       )}
       {notice && (
-        <p role="status" className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100">
+        <p
+          role="status"
+          className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-2.5 text-sm text-emerald-100"
+        >
           {notice}
         </p>
       )}
-      <div className="overflow-hidden rounded-2xl border border-zinc-700/75 bg-[#111217] shadow-lg shadow-black/20">
+      <RestaurantMenuMetrics counts={availabilityCounts} />
+
+      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
         <RestaurantMenuFilters
+          visibleRows={menu?.data.length ?? 0}
+          total={menu?.pagination.total}
+          loading={refreshing || searching}
           categories={categories}
           categoryId={query.categoryId}
           availability={query.availability}
@@ -124,7 +140,9 @@ function RestaurantMenuWorkspace({ restaurant }: { restaurant: Restaurant }) {
               items={menu.data}
               formatMoney={money.format}
               disabled={refreshing || searching || Boolean(error)}
-              filtered={Boolean(query.search || query.categoryId || query.availability)}
+              filtered={Boolean(
+                query.search || query.categoryId || query.availability,
+              )}
               onEdit={(item) => {
                 setNotice("");
                 setEditing(item);
@@ -140,11 +158,19 @@ function RestaurantMenuWorkspace({ restaurant }: { restaurant: Restaurant }) {
               />
             )}
           </>
-        ) : refreshing && (
-          <p role="status" className="flex min-h-32 items-center justify-center gap-2 px-4 text-sm text-zinc-300">
-            <LoaderCircle className="size-4 text-emerald-300 motion-safe:animate-spin" aria-hidden="true" />
-            Loading restaurant menu…
-          </p>
+        ) : (
+          refreshing && (
+            <p
+              role="status"
+              className="flex min-h-32 items-center justify-center gap-2 px-4 text-sm text-zinc-300"
+            >
+              <LoaderCircle
+                className="size-4 text-emerald-300 motion-safe:animate-spin"
+                aria-hidden="true"
+              />
+              Loading restaurant menu…
+            </p>
+          )
         )}
       </div>
 

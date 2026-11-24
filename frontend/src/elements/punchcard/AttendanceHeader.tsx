@@ -1,7 +1,6 @@
-import { Clock3, LogIn, RefreshCw, UserCheck, Users } from "lucide-react";
+import { LogIn, RefreshCw, TrendingUp, UserCheck, Users } from "lucide-react";
 
 interface AttendanceHeaderProps {
-  restaurantName: string;
   now: Date | null;
   timeZone: string;
   onDuty: number;
@@ -14,7 +13,6 @@ interface AttendanceHeaderProps {
 }
 
 export default function AttendanceHeader({
-  restaurantName,
   now,
   timeZone,
   onDuty,
@@ -26,52 +24,162 @@ export default function AttendanceHeader({
   onRefresh,
 }: AttendanceHeaderProps) {
   const metrics = [
-    { label: "On duty", value: onDuty, icon: Users, color: "bg-emerald-400/15 text-emerald-300" },
-    { label: "Ready to clock in", value: ready, icon: LogIn, color: "bg-teal-400/15 text-teal-300" },
-    { label: "Clocked out today", value: completed, icon: UserCheck, color: "bg-violet-400/15 text-violet-300" },
+    {
+      label: "On duty",
+      value: onDuty,
+      icon: Users,
+      color: "text-sky-400",
+      iconBg: "border-sky-500/10 bg-sky-500/10",
+      valueClass: "text-white",
+      accent: "from-sky-500/40 via-sky-500/10 to-transparent",
+      description: "staff currently clocked in",
+      suffix: "staff",
+      footer: "Current attendance",
+    },
+    {
+      label: "Ready to clock in",
+      value: ready,
+      icon: LogIn,
+      color: "text-emerald-400",
+      iconBg: "border-emerald-500/10 bg-emerald-500/10",
+      valueClass: "text-emerald-400",
+      accent: "from-emerald-500/40 via-emerald-500/10 to-transparent",
+      description: "scheduled staff available to start",
+      suffix: "staff",
+      footer: "Available for clock-in",
+    },
+    {
+      label: "Clocked out today",
+      value: completed,
+      icon: UserCheck,
+      color: "text-rose-400",
+      iconBg: "border-rose-500/10 bg-rose-500/10",
+      valueClass: completed > 0 ? "text-rose-400" : "text-white",
+      accent: "from-rose-500/40 via-rose-500/10 to-transparent",
+      description: "attendance shifts ended today",
+      suffix: "shifts",
+      footer: "Today's clock-outs",
+    },
   ];
 
   return (
-    <header className="overflow-hidden rounded-2xl border border-zinc-700/75 bg-zinc-950 shadow-lg shadow-black/20">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/20 bg-linear-to-r from-teal-800 to-slate-800 px-4 py-3">
+    <header className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-emerald-300 text-emerald-950">
-            <Clock3 size={19} aria-hidden />
-          </span>
+          <span aria-hidden className="h-4 w-1 rounded-full bg-emerald-400" />
           <div className="min-w-0">
-            <h1 className="text-sm font-semibold tracking-tight text-white">Punch Clock</h1>
-            <p className="mt-0.5 break-words text-xs text-teal-100">{restaurantName}</p>
+            <h1 className="font-mono text-[11px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+              Punch Clock
+            </h1>
+            <p className="mt-0.5 text-[10px] text-zinc-500">
+              Shift attendance, staff clock-ins and clock-outs
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {now && <div className="text-right">
-            <time dateTime={now.toISOString()} className="block text-sm font-semibold tabular-nums text-white">
-              {now.toLocaleTimeString("en-IN", { timeZone, hour: "numeric", minute: "2-digit" })}
-            </time>
-            <p className="text-xs text-slate-300">
-              {now.toLocaleDateString("en-IN", { timeZone, weekday: "short", day: "numeric", month: "short" })}
-            </p>
-          </div>}
+          {now && (
+            <div className="text-right">
+              <time
+                dateTime={now.toISOString()}
+                className="block font-mono text-xs font-semibold tabular-nums text-zinc-300"
+              >
+                {now.toLocaleTimeString("en-IN", {
+                  timeZone,
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </time>
+              <p className="mt-0.5 text-[10px] text-zinc-500">
+                {now.toLocaleDateString("en-IN", {
+                  timeZone,
+                  weekday: "short",
+                  day: "numeric",
+                  month: "short",
+                })}
+              </p>
+            </div>
+          )}
           <button
             type="button"
             disabled={refreshing || busy}
             onClick={onRefresh}
             title="Refresh attendance"
             aria-label="Refresh attendance"
-            className="grid size-9 place-items-center rounded-lg border border-white/20 bg-white/5 text-white hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-teal-300 disabled:opacity-50"
+            className="grid size-10 place-items-center rounded-xl border border-zinc-800 bg-zinc-900/70 text-zinc-400 transition-colors hover:border-emerald-400/30 hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50"
           >
-            <RefreshCw size={16} className={refreshing ? "motion-safe:animate-spin" : ""} aria-hidden />
+            <RefreshCw
+              size={16}
+              className={refreshing ? "motion-safe:animate-spin" : ""}
+              aria-hidden
+            />
           </button>
         </div>
       </div>
-      <dl className="grid divide-y divide-white/10 bg-[#18191d] @md:grid-cols-3 @md:divide-x @md:divide-y-0">
-        {metrics.map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="flex items-center gap-2.5 px-4 py-2.5">
-            <span className={`grid size-7 shrink-0 place-items-center rounded-lg ${color}`}><Icon size={14} aria-hidden /></span>
-            <dt className="flex-1 text-xs font-medium text-zinc-300">{label}</dt>
-            <dd className="text-sm font-semibold tabular-nums text-white">{showCounts ? value : "—"}</dd>
-          </div>
-        ))}
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        {metrics.map(
+          ({
+            label,
+            value,
+            icon: Icon,
+            color,
+            iconBg,
+            valueClass,
+            accent,
+            description,
+            suffix,
+            footer,
+          }) => (
+            <div
+              key={label}
+              className="group relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80 p-4 transition-all duration-300 hover:border-zinc-700 hover:bg-zinc-900/70 motion-safe:hover:-translate-y-0.5"
+            >
+              <div
+                aria-hidden
+                className={`pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b opacity-70 ${accent}`}
+              />
+              <dt className="relative flex items-start justify-between">
+                <span>
+                  <span className="font-mono text-[10px] font-bold uppercase tracking-[0.14em] text-zinc-500">
+                    {label}
+                  </span>
+                  <span className="mt-1 block text-[10px] text-zinc-600">
+                    {description}
+                  </span>
+                </span>
+                <span
+                  className={`ml-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${iconBg}`}
+                >
+                  <Icon className={`h-4 w-4 ${color}`} aria-hidden />
+                </span>
+              </dt>
+              <dd className="relative mt-5 flex items-end gap-2">
+                <span
+                  className={`text-3xl font-semibold tracking-tight tabular-nums ${valueClass}`}
+                >
+                  {showCounts ? value : "—"}
+                </span>
+                <span className="mb-1 font-mono text-[11px] uppercase tracking-wide text-zinc-500">
+                  {suffix}
+                </span>
+              </dd>
+              <dd className="relative mt-5 flex items-center justify-between border-t border-zinc-800/80 pt-3">
+                <span
+                  className={`font-mono text-[9px] uppercase tracking-wider ${color}`}
+                >
+                  {showCounts
+                    ? footer
+                    : refreshing
+                      ? "Loading attendance"
+                      : "Attendance unavailable"}
+                </span>
+                <TrendingUp
+                  className="h-3 w-3 text-zinc-700 transition-colors group-hover:text-zinc-500"
+                  aria-hidden
+                />
+              </dd>
+            </div>
+          ),
+        )}
       </dl>
     </header>
   );

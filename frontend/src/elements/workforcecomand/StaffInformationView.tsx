@@ -30,6 +30,8 @@ import {
   type Staff,
   type WageHistory,
 } from "@/lib/hr-api";
+import DetailMetricCard from "@/elements/shared/DetailMetricCard";
+import { Status as EmployeeStatusBadge } from "@/elements/restaurantworkforce/shared";
 
 interface StaffInformationViewProps {
   staffId: string;
@@ -205,12 +207,8 @@ function getCurrentMonthRange() {
   const now = new Date();
 
   return {
-    start: toDateInputValue(
-      new Date(now.getFullYear(), now.getMonth(), 1),
-    ),
-    end: toDateInputValue(
-      new Date(now.getFullYear(), now.getMonth() + 1, 0),
-    ),
+    start: toDateInputValue(new Date(now.getFullYear(), now.getMonth(), 1)),
+    end: toDateInputValue(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
   };
 }
 
@@ -258,9 +256,7 @@ export default function StaffInformationView({
     initialMonth.start,
   );
 
-  const [attendanceEndDate, setAttendanceEndDate] = useState(
-    initialMonth.end,
-  );
+  const [attendanceEndDate, setAttendanceEndDate] = useState(initialMonth.end);
 
   const [attendanceLoading, setAttendanceLoading] = useState(false);
 
@@ -268,9 +264,7 @@ export default function StaffInformationView({
   // SHIFT SCHEDULE STATE
   // ============================================================
 
-  const [shiftStartDate, setShiftStartDate] = useState(
-    initialMonth.start,
-  );
+  const [shiftStartDate, setShiftStartDate] = useState(initialMonth.start);
 
   const [shiftEndDate, setShiftEndDate] = useState(initialMonth.end);
 
@@ -284,9 +278,7 @@ export default function StaffInformationView({
   // LEAVE STATE
   // ============================================================
 
-  const [leaveStartDate, setLeaveStartDate] = useState(
-    initialMonth.start,
-  );
+  const [leaveStartDate, setLeaveStartDate] = useState(initialMonth.start);
 
   const [leaveEndDate, setLeaveEndDate] = useState(initialMonth.end);
 
@@ -300,13 +292,9 @@ export default function StaffInformationView({
   // PAYROLL STATE
   // ============================================================
 
-  const [payrollStartDate, setPayrollStartDate] = useState(
-    initialMonth.start,
-  );
+  const [payrollStartDate, setPayrollStartDate] = useState(initialMonth.start);
 
-  const [payrollEndDate, setPayrollEndDate] = useState(
-    initialMonth.end,
-  );
+  const [payrollEndDate, setPayrollEndDate] = useState(initialMonth.end);
 
   const [payrollLoading, setPayrollLoading] = useState(false);
 
@@ -375,10 +363,7 @@ export default function StaffInformationView({
       } catch (err) {
         if (cancelled) return;
 
-        console.error(
-          "Failed to load employee information:",
-          err,
-        );
+        console.error("Failed to load employee information:", err);
 
         setError(
           err instanceof Error
@@ -424,15 +409,11 @@ export default function StaffInformationView({
         setAttendanceLoading(true);
 
         const startDate = attendanceStartDate
-          ? new Date(
-              `${attendanceStartDate}T00:00:00`,
-            ).toISOString()
+          ? new Date(`${attendanceStartDate}T00:00:00`).toISOString()
           : undefined;
 
         const endDate = attendanceEndDate
-          ? new Date(
-              `${attendanceEndDate}T23:59:59.999`,
-            ).toISOString()
+          ? new Date(`${attendanceEndDate}T23:59:59.999`).toISOString()
           : undefined;
 
         const response = await getAttendance({
@@ -447,10 +428,7 @@ export default function StaffInformationView({
       } catch (err) {
         if (cancelled) return;
 
-        console.error(
-          "Failed to load employee attendance:",
-          err,
-        );
+        console.error("Failed to load employee attendance:", err);
 
         setAttendance([]);
       } finally {
@@ -465,11 +443,7 @@ export default function StaffInformationView({
     return () => {
       cancelled = true;
     };
-  }, [
-    staffId,
-    attendanceStartDate,
-    attendanceEndDate,
-  ]);
+  }, [staffId, attendanceStartDate, attendanceEndDate]);
 
   // ============================================================
   // LOAD SHIFT SCHEDULES
@@ -483,15 +457,9 @@ export default function StaffInformationView({
         return;
       }
 
-      if (
-        shiftStartDate &&
-        shiftEndDate &&
-        shiftStartDate > shiftEndDate
-      ) {
+      if (shiftStartDate && shiftEndDate && shiftStartDate > shiftEndDate) {
         setSchedules([]);
-        setShiftError(
-          "Start date cannot be after the end date.",
-        );
+        setShiftError("Start date cannot be after the end date.");
         return;
       }
 
@@ -500,15 +468,11 @@ export default function StaffInformationView({
         setShiftError(null);
 
         const startDate = shiftStartDate
-          ? new Date(
-              `${shiftStartDate}T00:00:00`,
-            ).toISOString()
+          ? new Date(`${shiftStartDate}T00:00:00`).toISOString()
           : undefined;
 
         const endDate = shiftEndDate
-          ? new Date(
-              `${shiftEndDate}T23:59:59.999`,
-            ).toISOString()
+          ? new Date(`${shiftEndDate}T23:59:59.999`).toISOString()
           : undefined;
 
         const response = await getShiftSchedules({
@@ -523,10 +487,7 @@ export default function StaffInformationView({
       } catch (err) {
         if (cancelled) return;
 
-        console.error(
-          "Failed to load employee shift schedules:",
-          err,
-        );
+        console.error("Failed to load employee shift schedules:", err);
 
         setSchedules([]);
 
@@ -547,11 +508,7 @@ export default function StaffInformationView({
     return () => {
       cancelled = true;
     };
-  }, [
-    staffId,
-    shiftStartDate,
-    shiftEndDate,
-  ]);
+  }, [staffId, shiftStartDate, shiftEndDate]);
 
   // ============================================================
   // LOAD LEAVES
@@ -565,15 +522,9 @@ export default function StaffInformationView({
         return;
       }
 
-      if (
-        leaveStartDate &&
-        leaveEndDate &&
-        leaveStartDate > leaveEndDate
-      ) {
+      if (leaveStartDate && leaveEndDate && leaveStartDate > leaveEndDate) {
         setLeaves([]);
-        setLeaveError(
-          "Start date cannot be after the end date.",
-        );
+        setLeaveError("Start date cannot be after the end date.");
         return;
       }
 
@@ -582,15 +533,11 @@ export default function StaffInformationView({
         setLeaveError(null);
 
         const startDate = leaveStartDate
-          ? new Date(
-              `${leaveStartDate}T00:00:00`,
-            ).toISOString()
+          ? new Date(`${leaveStartDate}T00:00:00`).toISOString()
           : undefined;
 
         const endDate = leaveEndDate
-          ? new Date(
-              `${leaveEndDate}T23:59:59.999`,
-            ).toISOString()
+          ? new Date(`${leaveEndDate}T23:59:59.999`).toISOString()
           : undefined;
 
         const response = await getLeaves({
@@ -605,17 +552,12 @@ export default function StaffInformationView({
       } catch (err) {
         if (cancelled) return;
 
-        console.error(
-          "Failed to load employee leave records:",
-          err,
-        );
+        console.error("Failed to load employee leave records:", err);
 
         setLeaves([]);
 
         setLeaveError(
-          err instanceof Error
-            ? err.message
-            : "Failed to load leave records.",
+          err instanceof Error ? err.message : "Failed to load leave records.",
         );
       } finally {
         if (!cancelled) {
@@ -629,11 +571,7 @@ export default function StaffInformationView({
     return () => {
       cancelled = true;
     };
-  }, [
-    staffId,
-    leaveStartDate,
-    leaveEndDate,
-  ]);
+  }, [staffId, leaveStartDate, leaveEndDate]);
 
   // ============================================================
   // LOAD PAYROLL
@@ -653,9 +591,7 @@ export default function StaffInformationView({
         payrollStartDate > payrollEndDate
       ) {
         setPayrollRuns([]);
-        setPayrollError(
-          "Start date cannot be after the end date.",
-        );
+        setPayrollError("Start date cannot be after the end date.");
         return;
       }
 
@@ -673,22 +609,15 @@ export default function StaffInformationView({
 
         // Payroll endpoint returns restaurant-level payroll runs.
         // Keep only payroll runs containing this employee.
-        const employeePayrollRuns = (
-          response.data ?? []
-        ).filter((run) =>
-          run.payslips?.some(
-            (payslip) => payslip.staffId === staffId,
-          ),
+        const employeePayrollRuns = (response.data ?? []).filter((run) =>
+          run.payslips?.some((payslip) => payslip.staffId === staffId),
         );
 
         setPayrollRuns(employeePayrollRuns);
       } catch (err) {
         if (cancelled) return;
 
-        console.error(
-          "Failed to load employee payroll:",
-          err,
-        );
+        console.error("Failed to load employee payroll:", err);
 
         setPayrollRuns([]);
 
@@ -709,12 +638,7 @@ export default function StaffInformationView({
     return () => {
       cancelled = true;
     };
-  }, [
-    staffId,
-    staff?.restaurantId,
-    payrollStartDate,
-    payrollEndDate,
-  ]);
+  }, [staffId, staff?.restaurantId, payrollStartDate, payrollEndDate]);
 
   // ============================================================
   // FILTERED ATTENDANCE
@@ -730,38 +654,25 @@ export default function StaffInformationView({
     }
 
     return attendance.filter((record) => {
-      const dateKey = getAttendanceDateKey(
-        record.clockInAt,
-      );
+      const dateKey = getAttendanceDateKey(record.clockInAt);
 
-      return (
-        dateKey >= attendanceStartDate &&
-        dateKey <= attendanceEndDate
-      );
+      return dateKey >= attendanceStartDate && dateKey <= attendanceEndDate;
     });
-  }, [
-    attendance,
-    attendanceStartDate,
-    attendanceEndDate,
-  ]);
+  }, [attendance, attendanceStartDate, attendanceEndDate]);
 
   // ============================================================
   // DERIVED DATA
   // ============================================================
 
   const completedAttendance = useMemo(
-    () =>
-      filteredAttendance.filter(
-        (record) => record.clockOutAt !== null,
-      ),
+    () => filteredAttendance.filter((record) => record.clockOutAt !== null),
     [filteredAttendance],
   );
 
   const totalHours = useMemo(
     () =>
       filteredAttendance.reduce(
-        (total, record) =>
-          total + numberValue(record.totalHours),
+        (total, record) => total + numberValue(record.totalHours),
         0,
       ),
     [filteredAttendance],
@@ -770,8 +681,7 @@ export default function StaffInformationView({
   const overtimeHours = useMemo(
     () =>
       filteredAttendance.reduce(
-        (total, record) =>
-          total + numberValue(record.overtimeHours),
+        (total, record) => total + numberValue(record.overtimeHours),
         0,
       ),
     [filteredAttendance],
@@ -789,9 +699,7 @@ export default function StaffInformationView({
   // Use the newest employee payslip from those payroll runs.
   const latestEmployeePayslip = useMemo(() => {
     for (const run of payrollRuns) {
-      const payslip = run.payslips?.find(
-        (item) => item.staffId === staffId,
-      );
+      const payslip = run.payslips?.find((item) => item.staffId === staffId);
 
       if (payslip) {
         return payslip;
@@ -809,14 +717,9 @@ export default function StaffInformationView({
     return (
       <div className="flex min-h-[500px] items-center justify-center">
         <div className="flex items-center gap-3 text-zinc-500">
-          <Loader2
-            className="animate-spin text-emerald-400"
-            size={18}
-          />
+          <Loader2 className="animate-spin text-emerald-400" size={18} />
 
-          <span className="text-xs">
-            Loading employee information...
-          </span>
+          <span className="text-xs">Loading employee information...</span>
         </div>
       </div>
     );
@@ -839,18 +742,14 @@ export default function StaffInformationView({
         </button>
 
         <div className="rounded-2xl border border-rose-500/20 bg-rose-500/5 p-8 text-center">
-          <XCircle
-            size={28}
-            className="mx-auto mb-3 text-rose-400"
-          />
+          <XCircle size={28} className="mx-auto mb-3 text-rose-400" />
 
           <p className="text-sm font-semibold text-rose-300">
             Unable to load employee
           </p>
 
           <p className="mt-1 text-xs text-zinc-500">
-            {error ??
-              "Employee information was not found."}
+            {error ?? "Employee information was not found."}
           </p>
         </div>
       </div>
@@ -862,134 +761,90 @@ export default function StaffInformationView({
   // ============================================================
 
   return (
-    <div className="space-y-6 animate-fade-in p-6">
+    <div className="@container space-y-6 p-6 motion-safe:animate-fade-in">
       {/* ======================================================
           HEADER
       ====================================================== */}
 
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-zinc-800 pb-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={onBack}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 p-2 text-zinc-400 transition hover:border-zinc-700 hover:bg-zinc-900 hover:text-white"
-            aria-label="Back to workforce"
+      <button
+        type="button"
+        onClick={onBack}
+        className="inline-flex min-h-9 items-center gap-2 rounded-lg px-2 text-xs font-medium text-zinc-300 hover:bg-white/8 hover:text-white focus-visible:outline-2 focus-visible:outline-emerald-300"
+      >
+        <ArrowLeft size={14} aria-hidden /> Back to workforce
+      </button>
+      <section
+        aria-labelledby="operations-employee-profile"
+        className="relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_12px_40px_rgba(0,0,0,0.15)]"
+      >
+        <div
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-cyan-400/40"
+        />
+        <div className="flex min-w-0 items-center gap-3 px-5 py-6 @xl:px-6">
+          <span
+            aria-hidden
+            className="grid size-14 shrink-0 place-items-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/15 via-cyan-400/10 to-violet-400/10 text-lg font-semibold uppercase text-emerald-300 shadow-[0_0_24px_rgba(52,211,153,0.06)]"
           >
-            <ArrowLeft size={16} />
-          </button>
-
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded border border-zinc-800 bg-zinc-900/50 px-2 py-0.5 font-mono text-[10px] text-zinc-400">
+            {staff.firstName[0]}
+            {staff.lastName[0]}
+          </span>
+          <div className="min-w-0">
+            <p className="mb-1.5 font-mono text-[9px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+              Employee profile
+            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <h2
+                id="operations-employee-profile"
+                className="break-words text-xl font-semibold tracking-tight text-white"
+              >
+                {staff.firstName} {staff.lastName}
+              </h2>
+              <EmployeeStatusBadge value={staff.status} />
+            </div>
+            <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-zinc-400">
+              <span>{staff.role.replaceAll("_", " ")}</span>
+              <span className="break-all rounded border border-white/10 bg-black/15 px-1.5 py-0.5 font-mono text-[11px] text-zinc-200">
                 {staff.employeeCode}
               </span>
-
-              <StatusBadge status={staff.status} />
-            </div>
-
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-white">
-              {staff.firstName} {staff.lastName}
-            </h2>
-
-            <p className="mt-0.5 text-xs text-zinc-500">
-              {staff.role}
             </p>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* ======================================================
           KPI
       ====================================================== */}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* ATTENDANCE */}
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Attendance Hours
-            </span>
-
-            <h4 className="mt-1 font-mono text-lg font-bold text-white">
-              {totalHours.toFixed(2)}h
-            </h4>
-
-            <p className="text-[10px] text-zinc-600">
-              {completedAttendance.length} completed shifts
-            </p>
-          </div>
-
-          <Clock3
-            className="text-emerald-400"
-            size={20}
-          />
-        </div>
-
-        {/* OVERTIME */}
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Overtime
-            </span>
-
-            <h4 className="mt-1 font-mono text-lg font-bold text-white">
-              {overtimeHours.toFixed(2)}h
-            </h4>
-
-            <p className="text-[10px] text-zinc-600">
-              Recorded overtime
-            </p>
-          </div>
-
-          <History
-            className="text-amber-400"
-            size={20}
-          />
-        </div>
-
-        {/* LATEST PAY */}
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Latest Net Pay
-            </span>
-
-            <h4 className="mt-1 font-mono text-lg font-bold text-emerald-400">
-              {money(latestEmployeePayslip?.netPay)}
-            </h4>
-
-            <p className="text-[10px] text-zinc-600">
-              Latest payroll record
-            </p>
-          </div>
-
-          <WalletCards
-            className="text-emerald-400"
-            size={20}
-          />
-        </div>
-
-        {/* LEAVE */}
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-900/50 p-4">
-          <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Leave
-            </span>
-
-            <h4 className="mt-1 font-mono text-lg font-bold text-white">
-              {approvedLeaves}
-            </h4>
-
-            <p className="text-[10px] text-zinc-600">
-              {pendingLeaves} pending
-            </p>
-          </div>
-
-          <CalendarDays
-            className="text-sky-400"
-            size={20}
-          />
-        </div>
+        <DetailMetricCard
+          title="Attendance hours"
+          value={`${totalHours.toFixed(2)}h`}
+          description={`${completedAttendance.length} completed shifts`}
+          icon={Clock3}
+          tone="emerald"
+        />
+        <DetailMetricCard
+          title="Overtime"
+          value={`${overtimeHours.toFixed(2)}h`}
+          description="Recorded overtime"
+          icon={History}
+          tone="amber"
+        />
+        <DetailMetricCard
+          title="Latest net pay"
+          value={money(latestEmployeePayslip?.netPay)}
+          description="Latest payroll record"
+          icon={WalletCards}
+          tone="violet"
+        />
+        <DetailMetricCard
+          title="Leave"
+          value={approvedLeaves}
+          description={`${pendingLeaves} pending`}
+          icon={CalendarDays}
+          tone="sky"
+        />
       </div>
 
       {/* ======================================================
@@ -1006,25 +861,16 @@ export default function StaffInformationView({
               EMPLOYEE INFORMATION
           ================================================== */}
 
-          <Section
-            title="Employee Information"
-            icon={<UserRound size={15} />}
-          >
+          <Section title="Employee Information" icon={<UserRound size={15} />}>
             <div className="grid grid-cols-1 gap-5 text-xs sm:grid-cols-2">
               <InfoItem
                 label="Employee Name"
                 value={`${staff.firstName} ${staff.lastName}`}
               />
 
-              <InfoItem
-                label="Employee Code"
-                value={staff.employeeCode}
-              />
+              <InfoItem label="Employee Code" value={staff.employeeCode} />
 
-              <InfoItem
-                label="Role"
-                value={staff.role}
-              />
+              <InfoItem label="Role" value={staff.role} />
 
               <InfoItem
                 label="Status"
@@ -1033,31 +879,19 @@ export default function StaffInformationView({
 
               <InfoItem
                 label="Restaurant"
-                value={
-                  restaurantName ??
-                  "Unknown restaurant"
-                }
+                value={restaurantName ?? "Unknown restaurant"}
               />
 
-              <InfoItem
-                label="Joined"
-                value={formatDate(staff.createdAt)}
-              />
+              <InfoItem label="Joined" value={formatDate(staff.createdAt)} />
 
               <InfoItem
                 label="Last Updated"
-                value={formatDateTime(
-                  staff.updatedAt,
-                )}
+                value={formatDateTime(staff.updatedAt)}
               />
 
               <InfoItem
                 label="Record State"
-                value={
-                  staff.deletedAt
-                    ? "Deleted"
-                    : "Active record"
-                }
+                value={staff.deletedAt ? "Deleted" : "Active record"}
               />
             </div>
           </Section>
@@ -1080,37 +914,27 @@ export default function StaffInformationView({
 
                   <InfoItem
                     label={
-                      currentWage.payType ===
-                      "SALARY"
+                      currentWage.payType === "SALARY"
                         ? "Salary"
                         : "Hourly Wage"
                     }
                     value={
-                      currentWage.payType ===
-                      "SALARY"
-                        ? money(
-                            currentWage.salaryAmount,
-                          )
-                        : money(
-                            currentWage.hourlyWage,
-                          )
+                      currentWage.payType === "SALARY"
+                        ? money(currentWage.salaryAmount)
+                        : money(currentWage.hourlyWage)
                     }
                   />
 
                   <InfoItem
                     label="Overtime Rate"
-                    value={money(
-                      currentWage.overtimeRate,
-                    )}
+                    value={money(currentWage.overtimeRate)}
                   />
                 </div>
 
                 <div className="mt-4 border-t border-zinc-800 pt-3 text-[10px] text-zinc-500">
                   Effective from{" "}
                   <span className="text-zinc-300">
-                    {formatDate(
-                      currentWage.effectiveStartDate,
-                    )}
+                    {formatDate(currentWage.effectiveStartDate)}
                   </span>
                 </div>
               </div>
@@ -1123,25 +947,15 @@ export default function StaffInformationView({
                 <table className="w-full min-w-[600px] text-left text-xs">
                   <thead>
                     <tr className="border-b border-zinc-800 text-[10px] uppercase tracking-wider text-zinc-600">
-                      <th className="pb-3">
-                        Pay Type
-                      </th>
+                      <th className="pb-3">Pay Type</th>
 
-                      <th className="pb-3">
-                        Rate / Salary
-                      </th>
+                      <th className="pb-3">Rate / Salary</th>
 
-                      <th className="pb-3">
-                        Overtime
-                      </th>
+                      <th className="pb-3">Overtime</th>
 
-                      <th className="pb-3">
-                        Effective
-                      </th>
+                      <th className="pb-3">Effective</th>
 
-                      <th className="pb-3">
-                        Ended
-                      </th>
+                      <th className="pb-3">Ended</th>
                     </tr>
                   </thead>
 
@@ -1151,38 +965,25 @@ export default function StaffInformationView({
                         key={wage.id}
                         className="border-b border-zinc-800/60 last:border-0"
                       >
-                        <td className="py-3 text-zinc-300">
-                          {wage.payType}
-                        </td>
+                        <td className="py-3 text-zinc-300">{wage.payType}</td>
 
                         <td className="py-3 font-mono text-white">
-                          {wage.payType ===
-                          "SALARY"
-                            ? money(
-                                wage.salaryAmount,
-                              )
-                            : money(
-                                wage.hourlyWage,
-                              )}
+                          {wage.payType === "SALARY"
+                            ? money(wage.salaryAmount)
+                            : money(wage.hourlyWage)}
                         </td>
 
                         <td className="py-3 font-mono text-zinc-400">
-                          {money(
-                            wage.overtimeRate,
-                          )}
+                          {money(wage.overtimeRate)}
                         </td>
 
                         <td className="py-3 text-zinc-400">
-                          {formatDate(
-                            wage.effectiveStartDate,
-                          )}
+                          {formatDate(wage.effectiveStartDate)}
                         </td>
 
                         <td className="py-3 text-zinc-500">
                           {wage.effectiveEndDate
-                            ? formatDate(
-                                wage.effectiveEndDate,
-                              )
+                            ? formatDate(wage.effectiveEndDate)
                             : "Current"}
                         </td>
                       </tr>
@@ -1197,10 +998,7 @@ export default function StaffInformationView({
               ATTENDANCE
           ================================================== */}
 
-          <Section
-            title="Attendance & Timecards"
-            icon={<Clock3 size={15} />}
-          >
+          <Section title="Attendance & Timecards" icon={<Clock3 size={15} />}>
             <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1209,8 +1007,8 @@ export default function StaffInformationView({
                   </p>
 
                   <p className="mt-1 text-[10px] text-zinc-600">
-                    Review this employee&apos;s
-                    attendance for the selected period
+                    Review this employee&apos;s attendance for the selected
+                    period
                   </p>
                 </div>
 
@@ -1224,9 +1022,7 @@ export default function StaffInformationView({
                       type="date"
                       value={attendanceStartDate}
                       onChange={(event) =>
-                        setAttendanceStartDate(
-                          event.target.value,
-                        )
+                        setAttendanceStartDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1246,9 +1042,7 @@ export default function StaffInformationView({
                       value={attendanceEndDate}
                       min={attendanceStartDate}
                       onChange={(event) =>
-                        setAttendanceEndDate(
-                          event.target.value,
-                        )
+                        setAttendanceEndDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1257,11 +1051,9 @@ export default function StaffInformationView({
               </div>
             </div>
 
-            {attendanceStartDate >
-            attendanceEndDate ? (
+            {attendanceStartDate > attendanceEndDate ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs text-rose-400">
-                Start date cannot be after
-                the end date.
+                Start date cannot be after the end date.
               </div>
             ) : attendanceLoading ? (
               <LoadingState label="Loading attendance..." />
@@ -1270,10 +1062,7 @@ export default function StaffInformationView({
             ) : (
               <>
                 <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  <KpiBox
-                    label="Shifts"
-                    value={filteredAttendance.length}
-                  />
+                  <KpiBox label="Shifts" value={filteredAttendance.length} />
 
                   <KpiBox
                     label="Completed"
@@ -1315,9 +1104,7 @@ export default function StaffInformationView({
                           className="border-b border-zinc-800/60 transition-colors last:border-0 hover:bg-zinc-950/60"
                         >
                           <td className="py-3 text-zinc-300">
-                            {formatDate(
-                              record.clockInAt,
-                            )}
+                            {formatDate(record.clockInAt)}
                           </td>
 
                           <td className="py-3 text-zinc-400">
@@ -1325,17 +1112,13 @@ export default function StaffInformationView({
                           </td>
 
                           <td className="py-3 font-mono text-zinc-300">
-                            {formatDateTime(
-                              record.clockInAt,
-                            )}
+                            {formatDateTime(record.clockInAt)}
                           </td>
 
                           <td className="py-3 font-mono">
                             {record.clockOutAt ? (
                               <span className="text-zinc-300">
-                                {formatDateTime(
-                                  record.clockOutAt,
-                                )}
+                                {formatDateTime(record.clockOutAt)}
                               </span>
                             ) : (
                               <span className="inline-flex items-center gap-1.5 text-amber-400">
@@ -1346,24 +1129,15 @@ export default function StaffInformationView({
                           </td>
 
                           <td className="py-3 font-mono font-semibold text-white">
-                            {numberValue(
-                              record.totalHours,
-                            ).toFixed(2)}
-                            h
+                            {numberValue(record.totalHours).toFixed(2)}h
                           </td>
 
                           <td className="py-3 font-mono text-zinc-400">
-                            {numberValue(
-                              record.regularHours,
-                            ).toFixed(2)}
-                            h
+                            {numberValue(record.regularHours).toFixed(2)}h
                           </td>
 
                           <td className="py-3 font-mono text-amber-400">
-                            {numberValue(
-                              record.overtimeHours,
-                            ).toFixed(2)}
-                            h
+                            {numberValue(record.overtimeHours).toFixed(2)}h
                           </td>
 
                           <td className="py-3">
@@ -1388,10 +1162,7 @@ export default function StaffInformationView({
               SHIFT SCHEDULE
           ================================================== */}
 
-          <Section
-            title="Shift Schedule"
-            icon={<CalendarDays size={15} />}
-          >
+          <Section title="Shift Schedule" icon={<CalendarDays size={15} />}>
             <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1400,8 +1171,7 @@ export default function StaffInformationView({
                   </p>
 
                   <p className="mt-1 text-[10px] text-zinc-600">
-                    View employee shifts for the
-                    selected period
+                    View employee shifts for the selected period
                   </p>
                 </div>
 
@@ -1415,9 +1185,7 @@ export default function StaffInformationView({
                       type="date"
                       value={shiftStartDate}
                       onChange={(event) =>
-                        setShiftStartDate(
-                          event.target.value,
-                        )
+                        setShiftStartDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1436,11 +1204,7 @@ export default function StaffInformationView({
                       type="date"
                       value={shiftEndDate}
                       min={shiftStartDate}
-                      onChange={(event) =>
-                        setShiftEndDate(
-                          event.target.value,
-                        )
-                      }
+                      onChange={(event) => setShiftEndDate(event.target.value)}
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
                   </div>
@@ -1458,9 +1222,7 @@ export default function StaffInformationView({
               <LoadingState label="Loading shift schedules..." />
             ) : shiftError ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
-                <p className="text-xs text-rose-400">
-                  {shiftError}
-                </p>
+                <p className="text-xs text-rose-400">{shiftError}</p>
               </div>
             ) : schedules.length === 0 ? (
               <EmptyState message="No scheduled shifts found for the selected period." />
@@ -1484,9 +1246,7 @@ export default function StaffInformationView({
                           </span>
 
                           <span className="text-xs font-medium text-zinc-300">
-                            {formatDate(
-                              schedule.scheduledStart,
-                            )}
+                            {formatDate(schedule.scheduledStart)}
                           </span>
                         </div>
 
@@ -1496,9 +1256,7 @@ export default function StaffInformationView({
                           </span>
 
                           <span className="font-mono text-xs text-white">
-                            {formatTime(
-                              schedule.scheduledStart,
-                            )}
+                            {formatTime(schedule.scheduledStart)}
                           </span>
                         </div>
 
@@ -1508,9 +1266,7 @@ export default function StaffInformationView({
                           </span>
 
                           <span className="font-mono text-xs text-white">
-                            {formatTime(
-                              schedule.scheduledEnd,
-                            )}
+                            {formatTime(schedule.scheduledEnd)}
                           </span>
                         </div>
 
@@ -1525,9 +1281,7 @@ export default function StaffInformationView({
                         </div>
 
                         <div className="text-right">
-                          <StatusBadge
-                            status={schedule.status}
-                          />
+                          <StatusBadge status={schedule.status} />
                         </div>
                       </div>
 
@@ -1539,37 +1293,24 @@ export default function StaffInformationView({
                             </p>
 
                             <p className="mt-1 text-[10px] text-zinc-500">
-                              {formatDate(
-                                schedule.scheduledStart,
-                              )}
+                              {formatDate(schedule.scheduledStart)}
                             </p>
                           </div>
 
-                          <StatusBadge
-                            status={schedule.status}
-                          />
+                          <StatusBadge status={schedule.status} />
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Clock3
-                            size={14}
-                            className="text-emerald-400"
-                          />
+                          <Clock3 size={14} className="text-emerald-400" />
 
                           <span className="font-mono text-xs text-zinc-300">
-                            {formatTime(
-                              schedule.scheduledStart,
-                            )}
+                            {formatTime(schedule.scheduledStart)}
                           </span>
 
-                          <span className="text-zinc-700">
-                            →
-                          </span>
+                          <span className="text-zinc-700">→</span>
 
                           <span className="font-mono text-xs text-zinc-300">
-                            {formatTime(
-                              schedule.scheduledEnd,
-                            )}
+                            {formatTime(schedule.scheduledEnd)}
                           </span>
                         </div>
                       </div>
@@ -1590,10 +1331,7 @@ export default function StaffInformationView({
               LEAVE HISTORY
           ================================================== */}
 
-          <Section
-            title="Leave History"
-            icon={<CalendarDays size={15} />}
-          >
+          <Section title="Leave History" icon={<CalendarDays size={15} />}>
             <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1602,8 +1340,7 @@ export default function StaffInformationView({
                   </p>
 
                   <p className="mt-1 text-[10px] text-zinc-600">
-                    View leave records overlapping
-                    the selected period
+                    View leave records overlapping the selected period
                   </p>
                 </div>
 
@@ -1617,9 +1354,7 @@ export default function StaffInformationView({
                       type="date"
                       value={leaveStartDate}
                       onChange={(event) =>
-                        setLeaveStartDate(
-                          event.target.value,
-                        )
+                        setLeaveStartDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1638,11 +1373,7 @@ export default function StaffInformationView({
                       type="date"
                       value={leaveEndDate}
                       min={leaveStartDate}
-                      onChange={(event) =>
-                        setLeaveEndDate(
-                          event.target.value,
-                        )
-                      }
+                      onChange={(event) => setLeaveEndDate(event.target.value)}
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
                   </div>
@@ -1660,9 +1391,7 @@ export default function StaffInformationView({
               <LoadingState label="Loading leave records..." />
             ) : leaveError ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
-                <p className="text-xs text-rose-400">
-                  {leaveError}
-                </p>
+                <p className="text-xs text-rose-400">{leaveError}</p>
               </div>
             ) : leaves.length === 0 ? (
               <EmptyState message="No leave records found for the selected period." />
@@ -1680,42 +1409,23 @@ export default function StaffInformationView({
                         </p>
 
                         <p className="mt-1 text-[10px] text-zinc-500">
-                          {formatDate(
-                            leave.startDate,
-                          )}{" "}
-                          →{" "}
-                          {formatDate(
-                            leave.endDate,
-                          )}
+                          {formatDate(leave.startDate)} →{" "}
+                          {formatDate(leave.endDate)}
                         </p>
                       </div>
 
-                      <StatusBadge
-                        status={leave.status}
-                      />
+                      <StatusBadge status={leave.status} />
                     </div>
 
                     <div className="mt-4 grid grid-cols-2 gap-4 border-t border-zinc-800 pt-4 sm:grid-cols-3">
                       <InfoItem
                         label="Paid Leave"
-                        value={
-                          leave.isPaidLeave
-                            ? "Yes"
-                            : "No"
-                        }
+                        value={leave.isPaidLeave ? "Yes" : "No"}
                       />
 
-                      <InfoItem
-                        label="Days"
-                        value={
-                          leave.totalDays ?? "—"
-                        }
-                      />
+                      <InfoItem label="Days" value={leave.totalDays ?? "—"} />
 
-                      <InfoItem
-                        label="Status"
-                        value={leave.status}
-                      />
+                      <InfoItem label="Status" value={leave.status} />
                     </div>
 
                     {leave.reason && (
@@ -1739,10 +1449,7 @@ export default function StaffInformationView({
               PAYROLL HISTORY
           ================================================== */}
 
-          <Section
-            title="Payroll History"
-            icon={<WalletCards size={15} />}
-          >
+          <Section title="Payroll History" icon={<WalletCards size={15} />}>
             <div className="mb-5 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                 <div>
@@ -1751,8 +1458,8 @@ export default function StaffInformationView({
                   </p>
 
                   <p className="mt-1 text-[10px] text-zinc-600">
-                    View this employee&apos;s payroll and complete
-                    payslip details for the selected period
+                    View this employee&apos;s payroll and complete payslip
+                    details for the selected period
                   </p>
                 </div>
 
@@ -1766,9 +1473,7 @@ export default function StaffInformationView({
                       type="date"
                       value={payrollStartDate}
                       onChange={(event) =>
-                        setPayrollStartDate(
-                          event.target.value,
-                        )
+                        setPayrollStartDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1788,9 +1493,7 @@ export default function StaffInformationView({
                       value={payrollEndDate}
                       min={payrollStartDate}
                       onChange={(event) =>
-                        setPayrollEndDate(
-                          event.target.value,
-                        )
+                        setPayrollEndDate(event.target.value)
                       }
                       className="h-9 rounded-lg border border-zinc-800 bg-zinc-900 px-3 text-xs text-zinc-300 outline-none transition hover:border-zinc-700 focus:border-emerald-500/40 focus:ring-1 focus:ring-emerald-500/10"
                     />
@@ -1809,20 +1512,16 @@ export default function StaffInformationView({
               <LoadingState label="Loading payroll records..." />
             ) : payrollError ? (
               <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
-                <p className="text-xs text-rose-400">
-                  {payrollError}
-                </p>
+                <p className="text-xs text-rose-400">{payrollError}</p>
               </div>
             ) : payrollRuns.length === 0 ? (
               <EmptyState message="No payroll runs found for the selected period." />
             ) : (
               <div className="space-y-4">
                 {payrollRuns.map((run) => {
-                  const employeePayslip =
-                    run.payslips?.find(
-                      (payslip) =>
-                        payslip.staffId === staffId,
-                    );
+                  const employeePayslip = run.payslips?.find(
+                    (payslip) => payslip.staffId === staffId,
+                  );
 
                   if (!employeePayslip) {
                     return null;
@@ -1841,19 +1540,12 @@ export default function StaffInformationView({
                               Payroll Period
                             </p>
 
-                            <StatusBadge
-                              status={run.status}
-                            />
+                            <StatusBadge status={run.status} />
                           </div>
 
                           <p className="mt-1 font-mono text-[10px] text-zinc-500">
-                            {formatDate(
-                              run.periodStartDate,
-                            )}{" "}
-                            →{" "}
-                            {formatDate(
-                              run.periodEndDate,
-                            )}
+                            {formatDate(run.periodStartDate)} →{" "}
+                            {formatDate(run.periodEndDate)}
                           </p>
 
                           <p className="mt-2 break-all font-mono text-[9px] text-zinc-700">
@@ -1886,9 +1578,7 @@ export default function StaffInformationView({
                             </p>
                           </div>
 
-                          <StatusBadge
-                            status={employeePayslip.status}
-                          />
+                          <StatusBadge status={employeePayslip.status} />
                         </div>
 
                         {/* HOURS */}
@@ -1924,23 +1614,17 @@ export default function StaffInformationView({
                           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                             <InfoItem
                               label="Regular Pay"
-                              value={money(
-                                employeePayslip.regularPay,
-                              )}
+                              value={money(employeePayslip.regularPay)}
                             />
 
                             <InfoItem
                               label="Overtime Pay"
-                              value={money(
-                                employeePayslip.overtimePay,
-                              )}
+                              value={money(employeePayslip.overtimePay)}
                             />
 
                             <InfoItem
                               label="Gross Pay"
-                              value={money(
-                                employeePayslip.grossPay,
-                              )}
+                              value={money(employeePayslip.grossPay)}
                             />
                           </div>
                         </div>
@@ -1954,25 +1638,19 @@ export default function StaffInformationView({
                           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                             <InfoItem
                               label="Tax Deductions"
-                              value={money(
-                                employeePayslip.taxDeductions,
-                              )}
+                              value={money(employeePayslip.taxDeductions)}
                             />
 
                             <InfoItem
                               label="Other Deductions"
-                              value={money(
-                                employeePayslip.otherDeductions,
-                              )}
+                              value={money(employeePayslip.otherDeductions)}
                             />
 
                             <InfoItem
                               label="Net Pay"
                               value={
                                 <span className="font-mono font-bold text-emerald-400">
-                                  {money(
-                                    employeePayslip.netPay,
-                                  )}
+                                  {money(employeePayslip.netPay)}
                                 </span>
                               }
                             />
@@ -1983,20 +1661,13 @@ export default function StaffInformationView({
                         <div className="mt-4 grid grid-cols-1 gap-4 border-t border-zinc-800 pt-4 sm:grid-cols-2">
                           <InfoItem
                             label="Payment Method"
-                            value={
-                              employeePayslip.paymentMethod ??
-                              "—"
-                            }
+                            value={employeePayslip.paymentMethod ?? "—"}
                           />
 
                           <InfoItem
                             label="Payslip Status"
                             value={
-                              <StatusBadge
-                                status={
-                                  employeePayslip.status
-                                }
-                              />
+                              <StatusBadge status={employeePayslip.status} />
                             }
                           />
                         </div>
@@ -2009,9 +1680,7 @@ export default function StaffInformationView({
                             </p>
 
                             <p className="mt-1 font-mono text-[10px] text-zinc-400">
-                              {formatDateTime(
-                                employeePayslip.createdAt,
-                              )}
+                              {formatDateTime(employeePayslip.createdAt)}
                             </p>
                           </div>
                         )}
@@ -2032,10 +1701,7 @@ export default function StaffInformationView({
             icon={<CheckCircle2 size={15} />}
           >
             <div className="space-y-2">
-              <RecordStatus
-                label="Employee record"
-                active={Boolean(staff)}
-              />
+              <RecordStatus label="Employee record" active={Boolean(staff)} />
 
               <RecordStatus
                 label="Current compensation"
@@ -2049,16 +1715,10 @@ export default function StaffInformationView({
 
               <RecordStatus
                 label="Shift schedules"
-                active={
-                  shiftLoading ||
-                  schedules.length > 0
-                }
+                active={shiftLoading || schedules.length > 0}
               />
 
-              <RecordStatus
-                label="Leave records"
-                active={leaves.length > 0}
-              />
+              <RecordStatus label="Leave records" active={leaves.length > 0} />
 
               <RecordStatus
                 label="Payroll records"
@@ -2076,38 +1736,20 @@ export default function StaffInformationView({
 // SMALL COMPONENTS
 // ============================================================
 
-function InfoItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: ReactNode;
-}) {
+function InfoItem({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="space-y-1">
-      <span className="block text-[10px] text-zinc-600">
-        {label}
-      </span>
+      <span className="block text-[10px] text-zinc-600">{label}</span>
 
-      <div className="text-xs font-medium text-zinc-200">
-        {value}
-      </div>
+      <div className="text-xs font-medium text-zinc-200">{value}</div>
     </div>
   );
 }
 
-function RecordStatus({
-  label,
-  active,
-}: {
-  label: string;
-  active: boolean;
-}) {
+function RecordStatus({ label, active }: { label: string; active: boolean }) {
   return (
     <div className="flex items-center justify-between rounded-xl border border-zinc-800 bg-zinc-950/40 px-3 py-2.5">
-      <span className="text-xs text-zinc-400">
-        {label}
-      </span>
+      <span className="text-xs text-zinc-400">{label}</span>
 
       {active ? (
         <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold text-emerald-400">
@@ -2124,18 +1766,11 @@ function RecordStatus({
   );
 }
 
-function LoadingState({
-  label,
-}: {
-  label: string;
-}) {
+function LoadingState({ label }: { label: string }) {
   return (
     <div className="flex min-h-[180px] items-center justify-center rounded-xl border border-zinc-800 bg-zinc-950/40">
       <div className="flex items-center gap-2 text-xs text-zinc-500">
-        <Loader2
-          size={15}
-          className="animate-spin text-emerald-400"
-        />
+        <Loader2 size={15} className="animate-spin text-emerald-400" />
 
         <span>{label}</span>
       </div>
@@ -2158,9 +1793,7 @@ function KpiBox({
         {label}
       </span>
 
-      <p
-        className={`mt-1 font-mono text-lg font-semibold ${valueClass}`}
-      >
+      <p className={`mt-1 font-mono text-lg font-semibold ${valueClass}`}>
         {value}
       </p>
     </div>

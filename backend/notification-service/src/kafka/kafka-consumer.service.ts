@@ -36,6 +36,7 @@ import type {
   EmployeeClockedOutEarlyEvent,
   LeaveAppliedEvent,
 } from './types/hr-events.js';
+import { kafkaSecurity } from './kafka-security.js';
 
 @Injectable()
 export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
@@ -46,6 +47,7 @@ export class KafkaConsumerService implements OnModuleInit, OnModuleDestroy {
   private closing = false;
 
   private readonly kafka = new Kafka({
+    ...kafkaSecurity(),
     clientId: 'notification-service-consumer',
 
     brokers: (

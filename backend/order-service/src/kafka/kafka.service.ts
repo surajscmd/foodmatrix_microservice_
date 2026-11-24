@@ -1,9 +1,11 @@
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { Kafka } from 'kafkajs';
+import { kafkaSecurity } from './kafka-security.js';
 
 @Injectable()
 export class KafkaService implements OnModuleDestroy {
   private readonly producer = new Kafka({
+    ...kafkaSecurity(),
     clientId: 'order-service',
     brokers: (
       process.env.KAFKA_BROKERS ||

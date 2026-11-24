@@ -5,13 +5,12 @@ import {
   saveShiftTemplate,
   type ShiftTemplate,
 } from "@/lib/hr-api";
+import { ErrorNote, Field } from "@/elements/restaurantworkforce/shared";
 import {
-  ErrorNote,
-  Field,
-  input,
-  primary,
-  secondary,
-} from "@/elements/restaurantworkforce/shared";
+  attendanceField as input,
+  attendancePrimary as primary,
+  attendanceButton as secondary,
+} from "./attendance-theme";
 import WorkforceFormDialog from "@/elements/restaurantworkforce/WorkforceFormDialog";
 
 export default function ShiftTemplateForm({
@@ -134,7 +133,7 @@ export default function ShiftTemplateForm({
             </select>
           </Field>
         </div>
-        <div className="space-y-2 rounded-xl border border-white/8 bg-zinc-950/50 p-3">
+        <div className="space-y-2 rounded-xl border border-zinc-800/80 bg-zinc-950/50 p-3">
           <p className="text-xs font-semibold text-white">Working hours</p>
           <p className="text-[11px] text-zinc-400">
             Add a time block for each part of a split shift. An end time earlier

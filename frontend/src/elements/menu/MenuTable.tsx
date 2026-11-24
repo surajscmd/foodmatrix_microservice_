@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
+  ClipboardList,
   Loader2,
   Pencil,
   Trash2,
@@ -327,7 +328,7 @@ export default function MenuTable({
 
   if (loading && items.length === 0) {
     return (
-      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+      <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
         <div className="flex min-h-[420px] items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-5 w-5 animate-spin text-emerald-400" />
@@ -366,7 +367,7 @@ export default function MenuTable({
   // ==========================================================
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
+    <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
       {/* Loading overlay */}
       {loading && items.length > 0 && (
         <div className="pointer-events-none absolute inset-0 z-20 bg-zinc-950/20 backdrop-blur-[1px]">
@@ -383,15 +384,21 @@ export default function MenuTable({
       )}
 
       {/* Table header and category filter */}
-      <div className="flex flex-col gap-3 border-b border-zinc-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold text-zinc-300">Menu Items</p>
-
-          <p className="mt-1 text-[10px] text-zinc-600">
-            {selectedCategory
-              ? `Showing ${filteredItems.length} items in selected category`
-              : `Showing ${filteredItems.length} of ${total} menu items`}
-          </p>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <ClipboardList size={17} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Menu Items
+            </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              {selectedCategory
+                ? `Showing ${filteredItems.length} items in selected category`
+                : `Showing ${filteredItems.length} of ${total} menu items`}
+            </p>
+          </div>
         </div>
 
         <select
@@ -450,7 +457,7 @@ export default function MenuTable({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1180px] text-left">
               <thead>
-                <tr className="border-b border-zinc-800/80 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-600">
+                <tr className="border-b border-zinc-800/80 bg-zinc-950/80 font-mono text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
                   <th className="px-5 py-3.5">Item</th>
                   <th className="px-5 py-3.5">Category</th>
                   <th className="px-5 py-3.5">Base Price</th>
@@ -462,7 +469,7 @@ export default function MenuTable({
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-zinc-900">
+              <tbody className="divide-y divide-zinc-800/70">
                 {filteredItems.map((item) => {
                   const isUpdating = updatingItemId === item.id;
                   const isDeactivating = deactivatingItemId === item.id;
@@ -508,7 +515,7 @@ export default function MenuTable({
                       {/* MENU ITEM ROW */}
                       <tr
                         onClick={() => onSelectMenuItem(item)}
-                        className="group cursor-pointer transition-all duration-200 hover:bg-zinc-900/60"
+                        className="group cursor-pointer transition-colors duration-200 hover:bg-zinc-900/50"
                       >
                         {/* ITEM */}
                         <td className="px-5 py-4">
@@ -841,7 +848,7 @@ export default function MenuTable({
                       ================================================= */}
 
                       {canEditSharedCatalog && isConfirmingDeactivate && (
-                        <tr className="border-b border-zinc-900">
+                        <tr className="border-b border-zinc-800/70">
                           <td colSpan={8} className="p-0">
                             <div className="border-t border-rose-500/10 bg-rose-500/[0.035] px-4 py-3">
                               <div className="flex items-center justify-between gap-4">

@@ -87,6 +87,7 @@ function Workspace({
 }) {
   const [section, setSection] = useState<Section>("stock");
   const [movementPage, setMovementPage] = useState(1);
+  const [movementLimit, setMovementLimit] = useState(20);
   const [revision, setRevision] = useState(0);
   const [data, setData] = useState<{
     key: string;
@@ -103,7 +104,7 @@ function Workspace({
   const [notice, setNotice] = useState("");
   const lock = useRef(false);
   const sectionRef = useRef<HTMLElement>(null);
-  const loadKey = `${section}:${movementPage}:${revision}`;
+  const loadKey = `${section}:${movementPage}:${movementLimit}:${revision}`;
   const refreshing = data?.key !== loadKey;
   const rows = data?.rows ?? {};
   const error = data?.errors[section];
@@ -147,7 +148,7 @@ function Workspace({
                 : {
                     movements: await getRestaurantStockMovements(
                       id,
-                      { page: movementPage, limit: 20 },
+                      { page: movementPage, limit: movementLimit },
                       options,
                     ),
                   };
@@ -168,7 +169,7 @@ function Workspace({
     }
     void load();
     return () => controller.abort();
-  }, [restaurant.id, section, movementPage, loadKey]);
+  }, [restaurant.id, section, movementPage, movementLimit, loadKey]);
 
   useEffect(() => {
     let active = true;
@@ -204,6 +205,7 @@ function Workspace({
     setActionUncertain(false);
     setNotice("");
     setForm(next);
+    if (next.type === "request") return;
     requestAnimationFrame(() => {
       sectionRef.current?.focus({ preventScroll: true });
       sectionRef.current?.scrollIntoView({ block: "nearest" });
@@ -240,9 +242,8 @@ function Workspace({
   }
 
   return (
-    <div className="mx-auto max-w-[1500px] space-y-4 text-zinc-100">
+    <div className="mx-auto max-w-[1500px] space-y-5 text-zinc-100 motion-safe:animate-fade-in">
       <InventoryHeader
-        restaurantName={restaurant.name}
         section={section}
         refreshing={refreshing}
         busy={busy}
@@ -270,6 +271,7 @@ function Workspace({
       {form && (
         <section ref={sectionRef} tabIndex={-1} className="scroll-mt-20">
           <FormPanel
+            modal={form.type === "request"}
             title={
               form.type === "request"
                 ? "New stock request"
@@ -420,42 +422,17 @@ function Workspace({
         />
       )}
       {section === "movements" && rows.movements && (
-        <>
-          <MovementTable
-            rows={rows.movements.data}
-            timezone={restaurant.timezone}
-          />
-          {(rows.movements.pagination.totalPages > 1 || movementPage > 1) && (
-            <nav
-              aria-label="Movement pages"
-              className="flex items-center justify-between gap-2"
-            >
-              <button
-                type="button"
-                className={button}
-                disabled={refreshing || movementPage <= 1}
-                onClick={() => setMovementPage((page) => page - 1)}
-              >
-                Previous
-              </button>
-              <span className="text-xs text-zinc-300">
-                Page {rows.movements.pagination.page} of{" "}
-                {rows.movements.pagination.totalPages}
-              </span>
-              <button
-                type="button"
-                className={button}
-                disabled={
-                  refreshing ||
-                  movementPage >= rows.movements.pagination.totalPages
-                }
-                onClick={() => setMovementPage((page) => page + 1)}
-              >
-                Next
-              </button>
-            </nav>
-          )}
-        </>
+        <MovementTable
+          rows={rows.movements.data}
+          timezone={restaurant.timezone}
+          pagination={rows.movements.pagination}
+          disabled={refreshing || Boolean(error) || busy || form !== null}
+          onPage={setMovementPage}
+          onLimit={(limit) => {
+            setMovementLimit(limit);
+            setMovementPage(1);
+          }}
+        />
       )}
     </div>
   );

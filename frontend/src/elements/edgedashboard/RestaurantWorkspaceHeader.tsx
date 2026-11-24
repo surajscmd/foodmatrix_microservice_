@@ -9,7 +9,6 @@ import {
   Utensils,
 } from "lucide-react";
 import type { Restaurant } from "@/utils/types/organization";
-import glass from "@/elements/branding/restaurant-glass.module.css";
 
 const stations = [
   {
@@ -17,7 +16,7 @@ const stations = [
     href: "/restaurant/pos",
     Icon: CreditCard,
     button:
-      "border-emerald-300/25 bg-[#26372f] text-emerald-50 hover:border-emerald-300/40 hover:bg-[#2d4338]",
+      "border-emerald-400/20 bg-emerald-400/10 text-emerald-300 hover:border-emerald-400/40 hover:bg-emerald-400/15",
     icon: "bg-emerald-300/10 text-emerald-200",
   },
   {
@@ -25,16 +24,16 @@ const stations = [
     href: "/restaurant/waiter",
     Icon: Utensils,
     button:
-      "border-sky-300/25 bg-[#263542] text-sky-50 hover:border-sky-300/40 hover:bg-[#304151]",
-    icon: "bg-sky-300/10 text-sky-200",
+      "border-zinc-700/80 bg-zinc-900/80 text-zinc-300 hover:border-emerald-400/30 hover:bg-emerald-400/5 hover:text-emerald-300",
+    icon: "bg-sky-400/10 text-sky-400",
   },
   {
     label: "Kitchen",
     href: "/restaurant/kitchen",
     Icon: ChefHat,
     button:
-      "border-amber-200/25 bg-[#363027] text-amber-50 hover:border-amber-200/40 hover:bg-[#43392d]",
-    icon: "bg-amber-200/10 text-amber-200",
+      "border-zinc-700/80 bg-zinc-900/80 text-zinc-300 hover:border-emerald-400/30 hover:bg-emerald-400/5 hover:text-emerald-300",
+    icon: "bg-amber-400/10 text-amber-400",
   },
 ];
 
@@ -56,24 +55,32 @@ export default function RestaurantWorkspaceHeader({
     .join(", ");
 
   return (
-    <header className={`${glass.surface} @container relative overflow-hidden rounded-2xl motion-safe:animate-slide-up`}>
+    <header className="@container group relative overflow-hidden rounded-3xl border border-zinc-800/90 bg-gradient-to-br from-[#0d1117] via-[#090b0f] to-[#07090c] shadow-[0_20px_55px_rgba(0,0,0,0.18)] motion-safe:animate-slide-up">
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-linear-to-r from-emerald-300/35 via-emerald-200/10 to-transparent"
+        className="pointer-events-none absolute inset-0 opacity-[0.025] [background-image:linear-gradient(to_right,#ffffff_1px,transparent_1px),linear-gradient(to_bottom,#ffffff_1px,transparent_1px)] [background-size:36px_36px]"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-emerald-500/[0.07] blur-3xl"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent"
       />
       <div className="grid @3xl:grid-cols-[minmax(0,1fr)_auto]">
-        <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3.5 px-4 py-4 sm:gap-4 sm:px-5 @3xl:px-6 @3xl:py-6">
-          <span className="grid size-10 shrink-0 place-items-center rounded-xl border border-emerald-200/25 bg-linear-to-br from-emerald-300/15 to-emerald-300/5 text-emerald-200 shadow-[0_2px_8px_#090f0d45,inset_0_1px_0_#d1fae517] @3xl:size-12">
+        <div className="relative grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3.5 px-5 py-6 sm:gap-4 sm:px-7 @3xl:py-8">
+          <span className="grid size-12 shrink-0 place-items-center rounded-2xl border border-emerald-400/25 bg-gradient-to-br from-emerald-400/15 via-emerald-500/5 to-cyan-400/10 text-emerald-300 shadow-[0_0_24px_rgba(52,211,153,0.08)]">
             <Store size={20} aria-hidden />
           </span>
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <h1 className="min-w-0 text-[1.25rem] leading-tight font-semibold tracking-tight text-zinc-50 wrap-anywhere sm:text-[1.5rem]">
-                {restaurant.name}
+              <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight text-white wrap-anywhere sm:text-2xl">
+                Restaurant workspace
               </h1>
               <span
-                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] leading-4 font-semibold ${active ? "border-emerald-300/20 bg-emerald-300/8 text-emerald-100/90" : "border-zinc-600 bg-zinc-800 text-zinc-200"}`}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 font-mono text-[9px] leading-4 font-semibold uppercase tracking-wider ${active ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-400" : "border-zinc-700 bg-zinc-800 text-zinc-400"}`}
               >
                 <span
                   aria-hidden
@@ -83,7 +90,7 @@ export default function RestaurantWorkspaceHeader({
               </span>
             </div>
 
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs leading-5 text-zinc-300">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] leading-5 text-zinc-500">
               {location && (
                 <p className="flex min-w-0 items-start gap-1.5">
                   <MapPin
@@ -112,13 +119,13 @@ export default function RestaurantWorkspaceHeader({
 
         <nav
           aria-label="Restaurant stations"
-          className="grid grid-cols-[repeat(auto-fit,minmax(4.75rem,1fr))] items-center gap-2 border-t border-emerald-100/10 bg-black/15 px-4 py-3 sm:px-5 @3xl:grid-cols-3 @3xl:border-t-0 @3xl:border-l"
+          className="relative grid grid-cols-[repeat(auto-fit,minmax(4.75rem,1fr))] items-center gap-2 border-t border-zinc-800/80 bg-zinc-950/40 px-5 py-4 sm:px-7 @3xl:grid-cols-3 @3xl:border-t-0 @3xl:border-l"
         >
           {stations.map(({ label, href, Icon, button, icon }) => (
             <Link
               key={href}
               href={href}
-              className={`group inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border px-2 text-xs font-semibold whitespace-nowrap shadow-[inset_0_1px_0_#ffffff0c] hover:shadow-[0_4px_12px_#09090b55] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 motion-safe:transition-[translate,background-color,border-color,box-shadow] motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 @md:justify-start @md:px-2.5 @3xl:min-h-12 ${button}`}
+              className={`group inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border px-2 font-mono text-[10px] font-semibold uppercase tracking-wider whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-300 motion-safe:transition-[translate,background-color,border-color,box-shadow] motion-safe:duration-200 motion-safe:hover:-translate-y-0.5 motion-safe:active:translate-y-0 @md:justify-start @md:px-3 ${button}`}
             >
               <span
                 className={`grid size-5 shrink-0 place-items-center rounded-md motion-safe:transition-transform motion-safe:duration-200 motion-safe:group-hover:scale-105 @sm:size-6 ${icon}`}

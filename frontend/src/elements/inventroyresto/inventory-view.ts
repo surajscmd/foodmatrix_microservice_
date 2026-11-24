@@ -1,13 +1,13 @@
 import type { PaginatedResult } from "@/lib/inventory-api";
 
 export const panel =
-  "overflow-hidden rounded-2xl border border-zinc-700/80 bg-[#18191d]";
+  "overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80 shadow-lg shadow-black/15";
 export const field =
-  "min-h-10 w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-zinc-100 focus-visible:outline-2 focus-visible:outline-emerald-300";
+  "min-h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 focus-visible:outline-2 focus-visible:outline-emerald-300";
 export const button =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-600 px-3 text-sm font-medium text-zinc-100 enabled:hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
+  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 text-xs font-medium text-zinc-200 transition-colors enabled:hover:border-emerald-400/30 enabled:hover:bg-zinc-800 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
 export const primary =
-  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-300 px-3 text-sm font-semibold text-emerald-950 enabled:hover:bg-emerald-200 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
+  "inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-emerald-400 to-cyan-400 px-3 text-xs font-semibold text-zinc-950 shadow-[0_4px_16px_rgba(52,211,153,0.1)] enabled:hover:brightness-110 focus-visible:outline-2 focus-visible:outline-emerald-300 disabled:opacity-50";
 
 const numbers = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 4 });
 export const quantity = (value: string | number) =>

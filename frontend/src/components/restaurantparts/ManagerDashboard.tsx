@@ -1,9 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import {
-  ArrowUpRight,
+  Activity,
   Bell,
   CalendarDays,
   ChefHat,
@@ -14,8 +13,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import {
+  DashboardPanel as Panel,
+  DashboardRows as Rows,
+  dashboardPanelClass as panelClass,
+  type DashboardTone as Tone,
+} from "@/elements/dashboard/DashboardPanel";
 import RevenueChart from "@/elements/edgedashboard/RevenueChart";
 import RestaurantWorkspaceHeader from "@/elements/edgedashboard/RestaurantWorkspaceHeader";
+import MetricCard from "@/elements/operations/MetricCard";
 import usePlatformFormatter from "@/hooks/usePlatformFormatter";
 import { getAttendance, getShiftSchedules } from "@/lib/hr-api";
 import { getRestaurantLowStock } from "@/lib/inventory-api";
@@ -23,19 +29,6 @@ import { getNotifications } from "@/lib/notification-api";
 import { orderApi } from "@/lib/order-api";
 import { useOrganizationStore } from "@/store/organization-store";
 import type { Restaurant } from "@/utils/types/organization";
-
-const panelClass = "min-w-0 rounded-2xl border border-zinc-800 bg-[#101219]";
-
-const tones = {
-  emerald: "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
-  sky: "border-sky-400/25 bg-sky-400/10 text-sky-300",
-  violet: "border-violet-400/25 bg-violet-400/10 text-violet-300",
-  amber: "border-amber-400/25 bg-amber-400/10 text-amber-300",
-  rose: "border-rose-400/25 bg-rose-400/10 text-rose-300",
-  neutral: "border-zinc-700 bg-zinc-800/60 text-zinc-300",
-};
-
-type Tone = keyof typeof tones;
 
 const orderStatus = {
   PENDING: { label: "Pending", tone: "amber" },
@@ -61,8 +54,11 @@ async function loadActivity(restaurantId: string, signal: AbortSignal) {
 
   const [orders, stock, attendance, shifts, alerts] = await Promise.all([
     orderApi.getDashboard(signal).catch(() => null),
-    getRestaurantLowStock(restaurantId, { page: 1, limit: 5 }, { signal })
-      .catch(() => null),
+    getRestaurantLowStock(
+      restaurantId,
+      { page: 1, limit: 5 },
+      { signal },
+    ).catch(() => null),
     getAttendance({ restaurantId }).catch(() => null),
     getShiftSchedules({
       restaurantId,
@@ -81,83 +77,6 @@ async function loadActivity(restaurantId: string, signal: AbortSignal) {
 }
 
 type Activity = Awaited<ReturnType<typeof loadActivity>>;
-
-function Badge({ label, tone }: { label: string; tone: Tone }) {
-  return (
-    <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tones[tone]}`}>
-      {label}
-    </span>
-  );
-}
-
-function Panel({
-  title,
-  icon: Icon,
-  tone,
-  href,
-  children,
-}: {
-  title: string;
-  icon: LucideIcon;
-  tone: Tone;
-  href?: string;
-  children: ReactNode;
-}) {
-  return (
-    <section className={panelClass}>
-      <div className="flex items-center justify-between gap-3 border-b border-zinc-800 px-4 py-3 sm:px-5">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${tones[tone]}`}>
-            <Icon aria-hidden="true" className="h-4 w-4" />
-          </span>
-          <h2 className="text-sm font-semibold text-zinc-100">{title}</h2>
-        </div>
-        {href && (
-          <Link
-            href={href}
-            aria-label={`View ${title}`}
-            className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded px-1 text-xs font-medium text-zinc-300 hover:text-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-400"
-          >
-            View
-            <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-          </Link>
-        )}
-      </div>
-      <div className="px-4 py-4 sm:px-5">{children}</div>
-    </section>
-  );
-}
-
-interface Row {
-  id: string;
-  title: string;
-  detail: string;
-  badge?: { label: string; tone: Tone };
-}
-
-function Rows({ items, empty }: { items?: Row[]; empty: string }) {
-  if (!items?.length) {
-    return (
-      <p className="rounded-xl border border-dashed border-zinc-700 px-3 py-4 text-sm text-zinc-400">
-        {items ? empty : "Data unavailable. Try refreshing."}
-      </p>
-    );
-  }
-
-  return (
-    <ul className="divide-y divide-zinc-800">
-      {items.map(({ id, title, detail, badge }) => (
-        <li key={id} className="flex flex-wrap items-start justify-between gap-2 py-3 first:pt-0 last:pb-0">
-          <div className="min-w-0 flex-1 basis-32">
-            <p className="break-words text-sm font-medium text-white">{title}</p>
-            <p className="mt-1 break-words text-xs leading-5 text-zinc-400">{detail}</p>
-          </div>
-          {badge && <Badge {...badge} />}
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 export default function ManagerDashboard() {
   const user = useOrganizationStore((state) => state.currentUser?.systemUser);
@@ -207,7 +126,7 @@ export default function ManagerDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-[1600px] space-y-5">
+    <div className="mx-auto max-w-[1600px] space-y-8 motion-safe:animate-fade-in">
       <RestaurantWorkspaceHeader
         restaurant={restaurant}
         accountName={[user.firstName, user.lastName].filter(Boolean).join(" ")}
@@ -215,7 +134,10 @@ export default function ManagerDashboard() {
       />
 
       {isManager && (
-        <RestaurantActivity key={`${user.id}:${restaurant.id}`} restaurant={restaurant} />
+        <RestaurantActivity
+          key={`${user.id}:${restaurant.id}`}
+          restaurant={restaurant}
+        />
       )}
     </div>
   );
@@ -225,7 +147,10 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
   const { formatDateTime } = usePlatformFormatter();
   const restaurantId = restaurant.id;
   const [revision, setRevision] = useState(0);
-  const [result, setResult] = useState<{ revision: number; data: Activity } | null>(null);
+  const [result, setResult] = useState<{
+    revision: number;
+    data: Activity;
+  } | null>(null);
 
   const loading = result?.revision !== revision;
   const data = result?.data;
@@ -254,84 +179,98 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
     {
       label: "Kitchen queue",
       value: data?.orders?.queueTotal,
+      description: "Orders awaiting completion",
       icon: ChefHat,
       tone: "sky",
-      surface: "border-sky-400/20 from-sky-950/70",
     },
     {
       label: "Staff clocked in",
       value: onDuty?.length,
+      description: "Staff currently on duty",
       icon: Users,
       tone: "violet",
-      surface: "border-violet-400/20 from-violet-950/70",
     },
     {
       label: "Low stock",
       value: data?.stock?.pagination.total,
+      description: "Ingredients at or below reorder level",
       icon: Package,
       tone: "amber",
-      surface: "border-amber-400/20 from-amber-950/55",
     },
     {
       label: "Unread alerts",
       value: data?.alerts?.pagination.total,
+      description: "Notifications awaiting review",
       icon: Bell,
       tone: "rose",
-      surface: "border-rose-400/20 from-rose-950/55",
     },
   ] satisfies Array<{
     label: string;
     value: number | undefined;
+    description: string;
     icon: LucideIcon;
-    tone: Tone;
-    surface: string;
+    tone: "sky" | "violet" | "amber" | "rose";
   }>;
 
   return (
-    <section aria-labelledby="restaurant-activity" aria-busy={loading} className="space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <h2 id="restaurant-activity" className="text-lg font-semibold text-white">
-          Restaurant activity
-        </h2>
+    <section
+      aria-labelledby="restaurant-activity"
+      aria-busy={loading}
+      className="space-y-5"
+    >
+      <div className="flex items-center justify-between gap-4 border-b border-zinc-800/80 pb-4">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/15 bg-emerald-400/[0.06] text-emerald-400">
+            <Activity className="size-4" aria-hidden />
+          </span>
+          <h2
+            id="restaurant-activity"
+            className="text-base font-semibold tracking-tight text-white sm:text-lg"
+          >
+            Restaurant activity
+          </h2>
+        </div>
         <button
           type="button"
           disabled={loading}
           onClick={() => setRevision((value) => value + 1)}
-          className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900 px-3 text-xs font-medium text-zinc-200 hover:border-emerald-400/40 hover:text-emerald-200 disabled:opacity-60"
+          className="inline-flex min-h-9 items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-400 transition-colors hover:border-emerald-400/30 hover:bg-emerald-400/5 hover:text-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-400 disabled:opacity-60"
         >
-          <RefreshCw aria-hidden="true" className={`h-4 w-4 ${loading ? "motion-safe:animate-spin" : ""}`} />
+          <RefreshCw
+            aria-hidden="true"
+            className={`h-4 w-4 ${loading ? "motion-safe:animate-spin" : ""}`}
+          />
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </div>
 
-      <dl className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map(({ label, value, icon: Icon, tone, surface }) => (
-          <div key={label} className={`min-w-0 rounded-2xl border bg-gradient-to-br to-[#101219] p-4 ${surface}`}>
-            <dt className="flex items-center gap-2.5 text-sm font-medium text-zinc-100">
-              <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg border ${tones[tone]}`}>
-                <Icon aria-hidden="true" className="h-4 w-4" />
-              </span>
-              {label}
-            </dt>
-            <dd className="mt-3 tabular-nums">
-              {value === undefined ? (
-                <span className="text-sm text-zinc-300">
-                  {data ? "Unavailable" : "Loading…"}
-                </span>
-              ) : (
-                <span className="text-3xl font-semibold tracking-tight text-white">
-                  {number.format(value)}
-                </span>
-              )}
-            </dd>
-          </div>
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {metrics.map(({ label, value, description, icon, tone }) => (
+          <MetricCard
+            key={label}
+            title={label}
+            value={
+              value === undefined
+                ? data
+                  ? "Unavailable"
+                  : "Loading…"
+                : number.format(value)
+            }
+            description={description}
+            icon={icon}
+            tone={tone}
+          />
         ))}
-      </dl>
+      </div>
 
       {data && (
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
-          <div className="min-w-0 space-y-4">
-            <Panel title="Net payments · Last 7 UTC days" icon={Wallet} tone="emerald">
+        <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(0,1fr)]">
+          <div className="min-w-0 space-y-6">
+            <Panel
+              title="Net payments · Last 7 UTC days"
+              icon={Wallet}
+              tone="emerald"
+            >
               {data.orders ? (
                 <RevenueChart
                   revenue={data.orders.revenue}
@@ -344,7 +283,12 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
               )}
             </Panel>
 
-            <Panel title="Kitchen queue" icon={ChefHat} tone="sky" href="/restaurant/kitchen">
+            <Panel
+              title="Kitchen queue"
+              icon={ChefHat}
+              tone="sky"
+              href="/restaurant/kitchen"
+            >
               <Rows
                 empty="No orders waiting for the kitchen."
                 items={data.orders?.queue.map((order) => ({
@@ -356,7 +300,12 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
               />
             </Panel>
 
-            <Panel title="Shifts · Next 24 hours" icon={CalendarDays} tone="violet" href="/restaurant/attendancereports">
+            <Panel
+              title="Shifts · Next 24 hours"
+              icon={CalendarDays}
+              tone="violet"
+              href="/restaurant/attendancereports"
+            >
               <Rows
                 empty="No shifts scheduled in the next 24 hours."
                 items={data.shifts?.data
@@ -371,8 +320,13 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
             </Panel>
           </div>
 
-          <div className="min-w-0 space-y-4">
-            <Panel title="Unread alerts" icon={Bell} tone="rose" href="/restaurant/alerts">
+          <div className="min-w-0 space-y-6">
+            <Panel
+              title="Unread alerts"
+              icon={Bell}
+              tone="rose"
+              href="/restaurant/alerts"
+            >
               <Rows
                 empty="No unread alerts."
                 items={data.alerts?.data.map((alert) => ({
@@ -384,16 +338,25 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
               />
             </Panel>
 
-            <Panel title="Low stock" icon={Package} tone="amber" href="/restaurant/inventory">
+            <Panel
+              title="Low stock"
+              icon={Package}
+              tone="amber"
+              href="/restaurant/inventory"
+            >
               <Rows
                 empty="No ingredients are at or below their reorder level."
                 items={data.stock?.data.map((stock) => {
-                  const unit = stock.ingredient?.uom ? ` ${stock.ingredient.uom}` : "";
+                  const unit = stock.ingredient?.uom
+                    ? ` ${stock.ingredient.uom}`
+                    : "";
                   const outOfStock = Number(stock.quantityOnHand) <= 0;
 
                   return {
                     id: stock.id,
-                    title: stock.ingredient?.name ?? `Ingredient ${stock.ingredientId}`,
+                    title:
+                      stock.ingredient?.name ??
+                      `Ingredient ${stock.ingredientId}`,
                     detail: `${stock.quantityOnHand}${unit} on hand · Reorder at ${stock.reorderLevel}${unit}`,
                     badge: outOfStock
                       ? { label: "Out of stock", tone: "rose" }
@@ -403,7 +366,12 @@ function RestaurantActivity({ restaurant }: { restaurant: Restaurant }) {
               />
             </Panel>
 
-            <Panel title="Clocked in" icon={Users} tone="violet" href="/restaurant/attendancereports">
+            <Panel
+              title="Clocked in"
+              icon={Users}
+              tone="violet"
+              href="/restaurant/attendancereports"
+            >
               <Rows
                 empty="No staff currently clocked in."
                 items={onDuty?.slice(0, 5).map((record) => ({

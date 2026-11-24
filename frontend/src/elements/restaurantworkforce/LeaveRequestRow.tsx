@@ -1,6 +1,12 @@
 import { ArrowUpRight, CalendarDays, ChevronDown } from "lucide-react";
 import type { LeaveRecord } from "@/lib/hr-api";
-import { dayLabel, primary, secondary, Status } from "./shared";
+import { dayLabel } from "./shared";
+import WorkforceTableStatus from "./WorkforceTableStatus";
+
+const secondary =
+  "inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-zinc-800 bg-zinc-950 px-2.5 text-[11px] font-medium text-zinc-400 transition-colors hover:border-emerald-500/30 hover:bg-zinc-900 hover:text-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-300";
+const primary =
+  "inline-flex min-h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 text-[11px] font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/20 focus-visible:outline-2 focus-visible:outline-emerald-300";
 
 export default function LeaveRequestRow({
   leave,
@@ -28,24 +34,24 @@ export default function LeaveRequestRow({
   const pay = leave.isPaidLeave ? "Paid" : "Unpaid";
 
   return (
-    <tr className="align-top bg-[#111217] even:bg-[#14161c] hover:bg-[#162522] focus-within:bg-[#162522]">
-      <th scope="row" className="px-3 py-3 font-normal @xl:px-4">
-        <div className="flex min-w-0 items-start gap-2.5">
+    <tr className="group align-top transition-colors duration-200 hover:bg-zinc-900/80 focus-within:bg-zinc-900/80">
+      <th scope="row" className="px-3 py-4 font-normal @xl:px-5">
+        <div className="flex min-w-0 items-start gap-3">
           {leave.staff && (
             <span
               aria-hidden
-              className="hidden size-8 shrink-0 place-items-center rounded-lg border border-teal-300/20 bg-teal-300/10 text-[11px] font-semibold uppercase text-teal-100 @md:grid"
+              className="hidden size-10 shrink-0 place-items-center rounded-xl border border-zinc-800 bg-zinc-900 text-[11px] font-semibold uppercase text-emerald-400 transition-colors group-hover:border-emerald-500/30 group-hover:bg-emerald-500/10 @md:grid"
             >
               {leave.staff.firstName[0]}
               {leave.staff.lastName[0]}
             </span>
           )}
           <div className="min-w-0">
-            <p className="break-words text-xs font-semibold text-white">
+            <p className="break-words text-sm font-medium leading-5 text-zinc-100">
               {name}
             </p>
             {leave.staff && (
-              <p className="mt-0.5 break-all font-mono text-[11px] text-zinc-400">
+              <p className="mt-0.5 break-all font-mono text-[10px] text-zinc-500">
                 {leave.staff.employeeCode}
               </p>
             )}
@@ -71,7 +77,7 @@ export default function LeaveRequestRow({
           </div>
         </div>
       </th>
-      <td className="hidden px-3 py-3 text-xs text-zinc-200 @xl:table-cell">
+      <td className="hidden px-3 py-4 text-xs text-zinc-200 @xl:table-cell">
         <div className="flex items-start gap-1.5">
           <CalendarDays
             size={13}
@@ -84,7 +90,7 @@ export default function LeaveRequestRow({
           <p className="mt-0.5 pl-5 text-[11px] text-zinc-400">{duration}</p>
         )}
       </td>
-      <td className="hidden break-words px-3 py-3 text-xs text-zinc-200 @xl:table-cell">
+      <td className="hidden break-words px-3 py-4 text-xs text-zinc-200 @xl:table-cell">
         {leave.type}
         <p
           className={
@@ -95,11 +101,11 @@ export default function LeaveRequestRow({
           {pay}
         </p>
       </td>
-      <td className="hidden px-3 py-3 @xl:table-cell">
+      <td className="hidden px-3 py-4 @xl:table-cell">
         <LeaveNotes leave={leave} emptyMarker />
       </td>
-      <td className="px-2 py-3">
-        <Status value={leave.status} />
+      <td className="px-2 py-4">
+        <WorkforceTableStatus value={leave.status} />
         <div className="mt-2 flex flex-col items-start gap-1 @xl:hidden">
           {pending && (
             <>
@@ -136,7 +142,7 @@ export default function LeaveRequestRow({
           )}
         </div>
       </td>
-      <td className="hidden px-3 py-3 @xl:table-cell">
+      <td className="hidden px-3 py-4 @xl:table-cell">
         <div className="flex flex-wrap justify-end gap-1.5">
           {pending && (
             <>

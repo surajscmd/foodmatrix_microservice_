@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 import AttendanceOverview, {
   type AttendanceTab,
@@ -12,6 +13,7 @@ import ShiftTemplates from "@/elements/staffattendance/ShiftTemplates";
 import EditShiftDialog from "@/elements/staffattendance/EditShiftDialog";
 import {
   monthQuery,
+  moveMonth,
   restaurantDate,
 } from "@/elements/staffattendance/report-dates";
 import {
@@ -57,7 +59,7 @@ export default function AttendanceReport() {
     <RestaurantReport
       key={restaurantId}
       restaurantId={restaurantId}
-      restaurantName={location.name}
+
       timeZone={location.timezone || "UTC"}
       canManageTemplates={user.role === "RESTAURANT_ADMIN"}
     />
@@ -66,12 +68,10 @@ export default function AttendanceReport() {
 
 function RestaurantReport({
   restaurantId,
-  restaurantName,
   timeZone,
   canManageTemplates,
 }: {
   restaurantId: string;
-  restaurantName: string;
   timeZone: string;
   canManageTemplates: boolean;
 }) {
@@ -167,9 +167,8 @@ function RestaurantReport({
   }
 
   return (
-    <div className="@container space-y-4">
+    <div className="@container mx-auto max-w-[1500px] space-y-5 motion-safe:animate-fade-in">
       <AttendanceOverview
-        restaurantName={restaurantName}
         tab={tab}
         onTabChange={setTab}
         savingSchedule={savingSchedule}
@@ -217,13 +216,29 @@ function RestaurantReport({
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-700/75 bg-zinc-950 px-4 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-950/80 px-4 py-3">
             <label
               htmlFor="attendance-period"
-              className="text-xs font-medium text-zinc-300"
+              className="font-mono text-[10px] font-semibold uppercase tracking-wider text-zinc-500"
             >
               {tab === "roster" ? "Roster date" : "Report month"}
             </label>
+            <button
+              type="button"
+              aria-label={tab === "roster" ? "Previous day" : "Previous month"}
+              className="grid size-9 place-items-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-emerald-400/30 hover:text-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-300"
+              onClick={() =>
+                setDay(
+                  tab === "roster"
+                    ? new Date(Date.parse(`${day}T00:00:00Z`) - 86_400_000)
+                        .toISOString()
+                        .slice(0, 10)
+                    : `${moveMonth(month, -1)}-01`,
+                )
+              }
+            >
+              <ChevronLeft size={15} aria-hidden />
+            </button>
             <input
               id="attendance-period"
               type={tab === "roster" ? "date" : "month"}
@@ -239,8 +254,24 @@ function RestaurantReport({
                         : `${value}-01`,
                   );
               }}
-              className="h-9 rounded-lg border border-zinc-700 bg-zinc-900 px-2.5 text-sm text-zinc-100 scheme-dark focus:border-emerald-400 focus:outline-none"
+              className="h-9 rounded-lg border border-zinc-700 bg-zinc-950 px-2.5 text-xs text-zinc-100 scheme-dark focus:border-emerald-400 focus:outline-none"
             />
+            <button
+              type="button"
+              aria-label={tab === "roster" ? "Next day" : "Next month"}
+              className="grid size-9 place-items-center rounded-lg border border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-emerald-400/30 hover:text-emerald-300 focus-visible:outline-2 focus-visible:outline-emerald-300"
+              onClick={() =>
+                setDay(
+                  tab === "roster"
+                    ? new Date(Date.parse(`${day}T00:00:00Z`) + 86_400_000)
+                        .toISOString()
+                        .slice(0, 10)
+                    : `${moveMonth(month, 1)}-01`,
+                )
+              }
+            >
+              <ChevronRight size={15} aria-hidden />
+            </button>
             {tab === "roster" && (
               <button
                 type="button"
@@ -304,6 +335,7 @@ function RestaurantReport({
                 day={day}
                 timeZone={timeZone}
                 onDayChange={setDay}
+                onOpenRoster={() => setTab("roster")}
               />
             ))}
         </>

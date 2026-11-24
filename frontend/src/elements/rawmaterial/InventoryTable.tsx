@@ -72,15 +72,21 @@ export default function InventoryTable({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900/50">
-      <div className="flex flex-col gap-3 border-b border-zinc-800 p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-semibold text-zinc-300">Warehouse Stock</p>
-
-          <p className="mt-1 text-[10px] text-zinc-600">
-            {filteredItems.length} matching records · {items.length} warehouse
-            records
-          </p>
+    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950/80">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/15 bg-linear-to-r from-emerald-500/15 via-emerald-500/5 to-zinc-950 px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="grid size-9 shrink-0 place-items-center rounded-xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+            <Boxes size={17} aria-hidden />
+          </span>
+          <div className="min-w-0">
+            <h2 className="font-mono text-[11px] font-semibold uppercase tracking-wider text-zinc-300">
+              Warehouse Stock
+            </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              {filteredItems.length} matching records · {items.length} warehouse
+              records
+            </p>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -173,7 +179,7 @@ export default function InventoryTable({
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1050px] text-left">
             <thead>
-              <tr className="border-b border-zinc-800/80 font-mono text-[9px] font-bold uppercase tracking-[0.14em] text-zinc-600">
+              <tr className="border-b border-zinc-800/80 bg-zinc-950/80 font-mono text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
                 <th className="px-5 py-3.5">Ingredient</th>
                 <th className="px-5 py-3.5">Stock Record</th>
                 <th className="px-5 py-3.5">Available Balance</th>
@@ -183,14 +189,14 @@ export default function InventoryTable({
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-zinc-900">
+            <tbody className="divide-y divide-zinc-800/70">
               {visibleItems.map((item) => {
                 const available = Number(item.quantityOnHand) > 0;
 
                 return (
                   <tr
                     key={item.id}
-                    className="group transition hover:bg-zinc-900/60"
+                    className="group transition-colors hover:bg-zinc-900/50"
                   >
                     <td className="px-5 py-4">
                       <div className="flex items-center gap-3">
