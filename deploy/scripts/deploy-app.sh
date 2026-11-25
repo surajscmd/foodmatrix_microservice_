@@ -6,6 +6,8 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 : "${KAFKA_BROKERS:?Set the private Kafka bootstrap brokers}"
 : "${VALUES_FILE:?Set the environment Helm values file path}"
 
+[[ "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]] || { echo 'IMAGE_TAG must be a full Git SHA.' >&2; exit 1; }
+[[ -f "$VALUES_FILE" ]] || { echo 'Environment values file is missing.' >&2; exit 1; }
 helm upgrade --install foodmatrix "$root/helm/foodmatrix" \
   --namespace foodmatrix --values "$VALUES_FILE" \
   --set-string "imageRegistry=$IMAGE_REGISTRY" \

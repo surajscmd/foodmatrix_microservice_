@@ -134,6 +134,17 @@ describe('Order workflows (e2e)', () => {
       .send(dto);
   }
 
+  it('exposes anonymous liveness and database readiness probes', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ready' });
+  });
+
   it('creates an open table order and applies a second request once despite a retry', async () => {
     const dto = tableOrder();
     await createOrder(dto).expect(201);

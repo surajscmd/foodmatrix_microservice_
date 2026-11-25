@@ -96,17 +96,20 @@ spec:
           resources: {{- toYaml $root.Values.resources | nindent 12 }}
           startupProbe:
             httpGet:
-              path: {{ default "/" $config.probePath }}
+              path: {{ default "/health/ready" $config.probePath }}
               port: http
             periodSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 36
           readinessProbe:
             httpGet:
-              path: {{ default "/" $config.probePath }}
+              path: {{ default "/health/ready" $config.probePath }}
               port: http
             periodSeconds: 10
+            timeoutSeconds: 3
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: {{ default "/health/live" $config.probePath }}
               port: http
             periodSeconds: 15
           securityContext:

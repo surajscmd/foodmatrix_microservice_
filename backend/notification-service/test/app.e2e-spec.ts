@@ -1,3 +1,4 @@
+import { HealthController } from '../src/health.controller';
 import { type INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { randomUUID } from 'node:crypto';
@@ -68,7 +69,7 @@ describe('Notification workflows', () => {
 
     const module = await Test.createTestingModule({
       imports: [PrismaModule, NotificationModule, SocketModule],
-      controllers: [AppController],
+      controllers: [AppController, HealthController],
       providers: [AppService, NotificationDeliveryService],
     }).compile();
     app = module.createNestApplication();
@@ -84,6 +85,17 @@ describe('Notification workflows', () => {
   afterAll(async () => {
     jest.restoreAllMocks();
     await app?.close();
+  });
+
+  it('exposes anonymous liveness and database readiness probes', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ready' });
   });
 
   it('authorizes listings, individual reads, and read updates by audience', async () => {

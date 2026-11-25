@@ -345,3 +345,14 @@ it('reassigns roles and locations within authorized scope and invalidates the ol
     .expect(200);
   await me(updated).expect(401);
 });
+
+it('exposes anonymous liveness and database readiness probes', async () => {
+  await request(app.getHttpServer())
+    .get('/health/live')
+    .expect(200)
+    .expect({ status: 'ok' });
+  await request(app.getHttpServer())
+    .get('/health/ready')
+    .expect(200)
+    .expect({ status: 'ready' });
+});

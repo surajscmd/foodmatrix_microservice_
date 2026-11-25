@@ -59,6 +59,17 @@ describe('HR HTTP API', () => {
     queryRaw.mockReset().mockResolvedValue([]);
   });
 
+  it('exposes anonymous liveness and database readiness probes', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ready' });
+  });
+
   it('/ (GET)', () => {
     return request(app.getHttpServer())
       .get('/')

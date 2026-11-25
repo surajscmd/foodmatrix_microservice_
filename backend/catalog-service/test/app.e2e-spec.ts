@@ -93,6 +93,17 @@ describe('Catalog HTTP API', () => {
     await app?.close();
   });
 
+  it('exposes anonymous liveness and database readiness probes', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ready' });
+  });
+
   it('requires Organization-backed sessions for workspace routes', async () => {
     await http(null).get('/').expect(200);
     await http(null).get('/menu-items').expect(401);

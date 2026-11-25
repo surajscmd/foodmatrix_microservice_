@@ -1,3 +1,4 @@
+import { HealthController } from './health.controller.js';
 import { AuthModule } from './auth/auth.module.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -33,7 +34,7 @@ import { SchedulerModule } from './modules/schedule/scheduler.module.js';
     StockMovementModule,
     SchedulerModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}

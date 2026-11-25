@@ -7,3 +7,8 @@
 **/.env.*
 .git
 tmp
+**/.aws
+**/.codex
+**/.agents
+**/secrets
+**/*private*.pem

@@ -133,6 +133,17 @@ describe('Inventory workflows', () => {
     return 'Bearer ' + actor;
   }
 
+  it('exposes anonymous liveness and database readiness probes', async () => {
+    await request(app.getHttpServer())
+      .get('/health/live')
+      .expect(200)
+      .expect({ status: 'ok' });
+    await request(app.getHttpServer())
+      .get('/health/ready')
+      .expect(200)
+      .expect({ status: 'ready' });
+  });
+
   it('checks bearer sessions and location scope even on direct service calls', async () => {
     await api().get('/').expect(200);
     await api()

@@ -1,3 +1,4 @@
+import { HealthController } from './health.controller.js';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 
@@ -21,7 +22,7 @@ import { RestaurantModule } from './modules/restaurant/restaurant.module.js';
     FranchiseModule,
     RestaurantModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, HealthController],
   providers: [AppService],
 })
 export class AppModule {}
