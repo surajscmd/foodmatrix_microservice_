@@ -9,12 +9,30 @@ set -euo pipefail
 CLUSTER="foodmatrix-staging"
 REGION="ap-south-1"
 
-# ── Detect kubectl: use local if available, else route through Jenkins container
+# ── Detect kubectl (local → .exe → Jenkins container)
 if command -v kubectl &>/dev/null; then
   KUBECTL="kubectl"
-else
-  echo "   ℹ kubectl not found locally — using Jenkins container"
+elif command -v kubectl.exe &>/dev/null; then
+  KUBECTL="kubectl.exe"
+elif command -v docker.exe &>/dev/null; then
+  echo "   ℹ Using Jenkins container for kubectl"
+  KUBECTL="docker.exe exec foodmatrix-jenkins kubectl"
+elif command -v docker &>/dev/null; then
+  echo "   ℹ Using Jenkins container for kubectl"
   KUBECTL="docker exec foodmatrix-jenkins kubectl"
+else
+  echo "❌ kubectl not found. Install kubectl or start Docker Desktop."
+  exit 1
+fi
+
+# ── Detect aws CLI (native → .exe)
+if command -v aws &>/dev/null; then
+  AWS="aws"
+elif command -v aws.exe &>/dev/null; then
+  AWS="aws.exe"
+else
+  echo "❌ aws CLI not found."
+  exit 1
 fi
 
 echo "⏸  Pausing Foodmatrix..."
@@ -25,14 +43,14 @@ $KUBECTL scale deployment --all -n foodmatrix --replicas=0
 echo "   ✓ Pods scaled down"
 
 # ── 2. Find nodegroup automatically
-NODEGROUP=$(aws eks list-nodegroups \
+NODEGROUP=$($AWS eks list-nodegroups \
   --cluster-name "$CLUSTER" \
   --region "$REGION" \
   --query "nodegroups[0]" \
   --output text)
 
 echo "→ Scaling nodegroup '$NODEGROUP' to 0 (shuts down EC2)..."
-aws eks update-nodegroup-config \
+$AWS eks update-nodegroup-config \
   --cluster-name "$CLUSTER" \
   --nodegroup-name "$NODEGROUP" \
   --scaling-config minSize=0,maxSize=3,desiredSize=0 \
@@ -43,7 +61,7 @@ echo "   ✓ EC2 node will shut down in ~1-2 min"
 echo ""
 read -r -p "→ Stop RDS database too? (saves ~\$0.02/hr, 7-day max pause) [y/N]: " STOP_RDS
 if [[ "$STOP_RDS" =~ ^[Yy]$ ]]; then
-  RDS_ID=$(aws rds describe-db-instances \
+  RDS_ID=$($AWS rds describe-db-instances \
     --region "$REGION" \
     --query "DBInstances[?contains(DBInstanceIdentifier,'foodmatrix')].DBInstanceIdentifier | [0]" \
     --output text)
@@ -52,7 +70,7 @@ if [[ "$STOP_RDS" =~ ^[Yy]$ ]]; then
     echo "   ⚠ No RDS instance found with 'foodmatrix' in name. Skipping."
   else
     echo "→ Stopping RDS: $RDS_ID"
-    aws rds stop-db-instance --db-instance-identifier "$RDS_ID" --region "$REGION" > /dev/null
+    $AWS rds stop-db-instance --db-instance-identifier "$RDS_ID" --region "$REGION" > /dev/null
     echo "   ✓ RDS stopping (takes ~1-2 min)"
   fi
 else
