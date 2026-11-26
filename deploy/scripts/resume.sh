@@ -37,21 +37,10 @@ fi
 
 echo "▶  Resuming Foodmatrix..."
 
-# ── 1. Find nodegroup automatically
-NODEGROUP=$($AWS eks list-nodegroups \
-  --cluster-name "$CLUSTER" \
-  --region "$REGION" \
-  --query "nodegroups[0]" \
-  --output text)
-
-# ── 2. Scale EC2 node back up
-echo "→ Scaling nodegroup '$NODEGROUP' to 1..."
-$AWS eks update-nodegroup-config \
-  --cluster-name "$CLUSTER" \
-  --nodegroup-name "$NODEGROUP" \
-  --scaling-config minSize=1,maxSize=3,desiredSize=1 \
-  --region "$REGION" > /dev/null
-echo "   ✓ EC2 node starting (takes ~3-5 min)..."
+# ── 1. EKS Auto mode — node auto-starts when pods are scheduled
+#    (No traditional nodegroup to scale; EKS Auto handles it)
+echo "→ EKS Auto mode: node will auto-provision when pods are scheduled"
+echo "   ✓ No manual node scaling needed"
 
 # ── 3. Optionally start RDS
 echo ""

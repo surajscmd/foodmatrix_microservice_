@@ -42,20 +42,9 @@ echo "→ Scaling all deployments to 0..."
 $KUBECTL scale deployment --all -n foodmatrix --replicas=0
 echo "   ✓ Pods scaled down"
 
-# ── 2. Find nodegroup automatically
-NODEGROUP=$($AWS eks list-nodegroups \
-  --cluster-name "$CLUSTER" \
-  --region "$REGION" \
-  --query "nodegroups[0]" \
-  --output text)
-
-echo "→ Scaling nodegroup '$NODEGROUP' to 0 (shuts down EC2)..."
-$AWS eks update-nodegroup-config \
-  --cluster-name "$CLUSTER" \
-  --nodegroup-name "$NODEGROUP" \
-  --scaling-config minSize=0,maxSize=3,desiredSize=0 \
-  --region "$REGION" > /dev/null
-echo "   ✓ EC2 node will shut down in ~1-2 min"
+# ── 2. EKS Auto mode — node auto-terminates when pods = 0
+#    (No traditional nodegroup to scale; EKS Auto handles it)
+echo "→ EKS Auto mode: node will auto-terminate in ~2-5 min (no pods running)"
 
 # ── 3. Optionally stop RDS
 echo ""
