@@ -28,16 +28,20 @@ pipeline {
         stage('Checkout') {
             steps {
                 deleteDir()
-                checkout scm
                 script {
+                    def scmVars = checkout scm
+                    def rawBranch = env.BRANCH_NAME ?: scmVars?.GIT_BRANCH ?: env.GIT_BRANCH ?: ''
+                    if (!rawBranch) {
+                        rawBranch = sh(script: "git for-each-ref --points-at HEAD --format='%(refname:short)' refs/remotes/origin | head -n 1", returnStdout: true).trim()
+                    }
                     env.IMAGE_TAG = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
-                    env.RESOLVED_BRANCH = (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '')
+                    env.RESOLVED_BRANCH = rawBranch.replaceFirst('^refs/remotes/origin/', '').replaceFirst('^origin/', '')
                     if (params.DEPLOY_STAGING && !params.PUBLISH_IMAGES) {
                         error('Deployment requires PUBLISH_IMAGES so this run tests and publishes its own commit.')
                     }
                     if ((params.PUBLISH_IMAGES || params.DEPLOY_STAGING) &&
                         (env.RESOLVED_BRANCH != 'main' || env.CHANGE_ID)) {
-                        error("Publishing and deployment are restricted to trusted main branch builds (resolved=${env.RESOLVED_BRANCH}).")
+                        error("Publishing and deployment are restricted to trusted main branch builds (resolved=${env.RESOLVED_BRANCH}, raw=${rawBranch}).")
                     }
                 }
             }
