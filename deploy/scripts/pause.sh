@@ -9,11 +9,19 @@ set -euo pipefail
 CLUSTER="foodmatrix-staging"
 REGION="ap-south-1"
 
+# ── Detect kubectl: use local if available, else route through Jenkins container
+if command -v kubectl &>/dev/null; then
+  KUBECTL="kubectl"
+else
+  echo "   ℹ kubectl not found locally — using Jenkins container"
+  KUBECTL="docker exec foodmatrix-jenkins kubectl"
+fi
+
 echo "⏸  Pausing Foodmatrix..."
 
 # ── 1. Scale all pods to 0 first (clean shutdown)
 echo "→ Scaling all deployments to 0..."
-kubectl scale deployment --all -n foodmatrix --replicas=0
+$KUBECTL scale deployment --all -n foodmatrix --replicas=0
 echo "   ✓ Pods scaled down"
 
 # ── 2. Find nodegroup automatically

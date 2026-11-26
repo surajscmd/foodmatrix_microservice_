@@ -9,6 +9,14 @@ set -euo pipefail
 CLUSTER="foodmatrix-staging"
 REGION="ap-south-1"
 
+# ── Detect kubectl: use local if available, else route through Jenkins container
+if command -v kubectl &>/dev/null; then
+  KUBECTL="kubectl"
+else
+  echo "   ℹ kubectl not found locally — using Jenkins container"
+  KUBECTL="docker exec foodmatrix-jenkins kubectl"
+fi
+
 echo "▶  Resuming Foodmatrix..."
 
 # ── 1. Find nodegroup automatically
@@ -59,7 +67,7 @@ fi
 echo ""
 echo "→ Waiting for EKS node to be Ready..."
 for i in $(seq 1 24); do
-  NODE_STATUS=$(kubectl get nodes --no-headers 2>/dev/null | awk '{print $2}' | head -1)
+  NODE_STATUS=$($KUBECTL get nodes --no-headers 2>/dev/null | awk '{print $2}' | head -1)
   if [[ "$NODE_STATUS" == "Ready" ]]; then
     echo "   ✓ Node is Ready!"
     break
@@ -70,14 +78,14 @@ done
 
 # ── 5. Scale pods back up
 echo "→ Scaling all deployments back to 1..."
-kubectl scale deployment --all -n foodmatrix --replicas=1
+$KUBECTL scale deployment --all -n foodmatrix --replicas=1
 echo "   ✓ Pods starting"
 
 # ── 6. Wait for pods to be Running
 echo "→ Waiting for pods to be Running..."
-kubectl rollout status deployment -n foodmatrix --timeout=180s 2>/dev/null || true
+$KUBECTL rollout status deployment -n foodmatrix --timeout=180s 2>/dev/null || true
 
 echo ""
 echo "✅ Foodmatrix is live!"
 echo ""
-kubectl get pods -n foodmatrix
+$KUBECTL get pods -n foodmatrix
