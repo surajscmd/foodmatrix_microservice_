@@ -1,9 +1,5 @@
 pipeline {
     agent { label 'foodmatrix-ci' }
-    triggers {
-        githubPush()
-        pollSCM('* * * * *')
-    }
     options {
         timestamps()
         disableConcurrentBuilds()

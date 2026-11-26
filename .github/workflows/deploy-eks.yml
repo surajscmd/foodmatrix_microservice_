@@ -1,0 +1,337 @@
+name: Deploy FoodMatrix to AWS EKS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      rebuild_all:
+        description: Rebuild and push all 8 images even if unchanged
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-foodmatrix-staging
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-south-1
+  EKS_CLUSTER_NAME: foodmatrix-staging
+  ECR_REGISTRY: 035136507772.dkr.ecr.ap-south-1.amazonaws.com
+  IMAGE_REGISTRY: 035136507772.dkr.ecr.ap-south-1.amazonaws.com/foodmatrix
+  AWS_ROLE_ARN: arn:aws:iam::035136507772:role/foodmatrix-github-actions-deploy
+  NEXT_TELEMETRY_DISABLED: "1"
+
+jobs:
+  plan:
+    name: Plan changed services
+    runs-on: ubuntu-latest
+    outputs:
+      current_tag: ${{ steps.diff.outputs.current_tag }}
+      build_services: ${{ steps.diff.outputs.build_services }}
+      copy_services: ${{ steps.diff.outputs.copy_services }}
+      deploy_needed: ${{ steps.diff.outputs.deploy_needed }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Determine changed services since deployed SHA
+        id: diff
+        run: |
+          set -euo pipefail
+          ALL_SERVICES=(
+            frontend
+            kong
+            organization-service
+            hr-service
+            catalog-service
+            order-service
+            inventory-service
+            notification-service
+          )
+          CURRENT_TAG="$(kubectl -n foodmatrix get deployment frontend -o jsonpath='{.spec.template.spec.containers[0].image}' | awk -F: '{print $NF}' || true)"
+          echo "Currently deployed tag: ${CURRENT_TAG:-<none>}"
+
+          REBUILD_ALL="${{ inputs.rebuild_all == true }}"
+          if [[ "$REBUILD_ALL" != "true" && -n "$CURRENT_TAG" ]] && git cat-file -e "${CURRENT_TAG}^{commit}" 2>/dev/null; then
+            CHANGED="$(git diff --name-only "$CURRENT_TAG" HEAD)"
+          else
+            REBUILD_ALL="true"
+            CHANGED=""
+          fi
+
+          BUILD=()
+          COPY=()
+
+          is_changed() {
+            local pattern="$1"
+            [[ "$REBUILD_ALL" == "true" ]] && return 0
+            echo "$CHANGED" | grep -qE "$pattern"
+          }
+
+          if is_changed '^(frontend/|deploy/images/frontend\.Dockerfile|\.dockerignore$)'; then
+            BUILD+=(frontend)
+          else
+            COPY+=(frontend)
+          fi
+
+          if is_changed '^(backend/kong/|deploy/images/kong\.Dockerfile|\.dockerignore$)'; then
+            BUILD+=(kong)
+          else
+            COPY+=(kong)
+          fi
+
+          for svc in organization-service hr-service catalog-service order-service inventory-service notification-service; do
+            if is_changed "^(backend/$svc/|deploy/images/backend\.Dockerfile|deploy/scripts/kafka-topics\.cjs|\.dockerignore$)"; then
+              BUILD+=("$svc")
+            else
+              COPY+=("$svc")
+            fi
+          done
+
+          DEPLOY_NEEDED="false"
+          if [[ "${#BUILD[@]}" -gt 0 || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            DEPLOY_NEEDED="true"
+          elif echo "$CHANGED" | grep -qE '^(deploy/helm/|deploy/scripts/(deploy-app|smoke-test)\.sh)'; then
+            DEPLOY_NEEDED="true"
+          fi
+
+          build_json=$(printf '%s\n' "${BUILD[@]}" | jq -R . | jq -s -c .)
+          copy_json=$(printf '%s\n' "${COPY[@]}" | jq -R . | jq -s -c .)
+          [[ "${#BUILD[@]}" -eq 0 ]] && build_json='[]'
+          [[ "${#COPY[@]}" -eq 0 ]] && copy_json='[]'
+
+          echo "current_tag=$CURRENT_TAG" >> "$GITHUB_OUTPUT"
+          echo "build_services=$build_json" >> "$GITHUB_OUTPUT"
+          echo "copy_services=$copy_json" >> "$GITHUB_OUTPUT"
+          echo "deploy_needed=$DEPLOY_NEEDED" >> "$GITHUB_OUTPUT"
+          echo "Build matrix: $build_json | Re-tag unchanged: $copy_json | Deploy needed: $DEPLOY_NEEDED"
+
+  test-and-build:
+    name: Test & build (${{ matrix.service }})
+    needs: plan
+    if: needs.plan.outputs.build_services != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.plan.outputs.build_services) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 22
+        if: matrix.service != 'kong'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Test frontend
+        if: matrix.service == 'frontend'
+        working-directory: frontend
+        run: |
+          npm ci
+          npx next typegen
+          npm run lint
+          npx tsc --noEmit
+          npm run build -- --webpack
+
+      - name: Test backend service (${{ matrix.service }})
+        if: matrix.service != 'frontend' && matrix.service != 'kong'
+        run: |
+          set -euo pipefail
+          svc="${{ matrix.service }}"
+          pw="$(node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))')"
+          pg="ci-pg-$svc"
+          trap 'docker rm -fv "$pg" >/dev/null 2>&1 || true' EXIT
+          docker run -d --name "$pg" -e "POSTGRES_PASSWORD=$pw" -p 127.0.0.1:5432:5432 postgres:17-alpine >/dev/null
+          for i in {1..60}; do
+            if docker exec "$pg" pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          export DATABASE_URL="postgresql://postgres:$pw@127.0.0.1:5432/postgres"
+          export ORGANIZATION_TEST_DATABASE_URL="$DATABASE_URL"
+          export CATALOG_TEST_DATABASE_URL="$DATABASE_URL"
+          export ORDER_TEST_DATABASE_URL="$DATABASE_URL"
+          export INVENTORY_TEST_DATABASE_URL="$DATABASE_URL"
+          export NOTIFICATION_TEST_DATABASE_URL="$DATABASE_URL"
+          export BETTER_AUTH_SECRET="$pw"
+          export INTERNAL_API_KEY="$pw"
+
+          cd "backend/$svc"
+          npm ci
+          cfg=prisma.config.ts
+          if [[ "$svc" == "inventory-service" || "$svc" == "notification-service" ]]; then
+            cfg=prisma7.config.ts
+          fi
+          npx prisma generate --config "$cfg"
+          npx eslint 'src/**/*.ts' 'test/**/*.ts'
+          npx tsc --noEmit
+          npm test -- --runInBand
+          npm run test:e2e
+          npm run build
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Check if immutable image tag already exists in ECR
+        id: exists
+        run: |
+          if aws ecr describe-images --region "$AWS_REGION" --repository-name "foodmatrix/${{ matrix.service }}" --image-ids "imageTag=${{ github.sha }}" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.exists.outputs.found != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Resolve Dockerfile and build args
+        if: steps.exists.outputs.found != 'true'
+        id: meta
+        run: |
+          svc="${{ matrix.service }}"
+          if [[ "$svc" == "frontend" || "$svc" == "kong" ]]; then
+            echo "dockerfile=deploy/images/$svc.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "build_args=" >> "$GITHUB_OUTPUT"
+          elif [[ "$svc" == "inventory-service" || "$svc" == "notification-service" ]]; then
+            echo "dockerfile=deploy/images/backend.Dockerfile" >> "$GITHUB_OUTPUT"
+            {
+              echo "build_args<<EOF"
+              echo "SERVICE=$svc"
+              echo "PRISMA_CONFIG=prisma7.config.ts"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "dockerfile=deploy/images/backend.Dockerfile" >> "$GITHUB_OUTPUT"
+            echo "build_args=SERVICE=$svc" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push image to ECR
+        if: steps.exists.outputs.found != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ steps.meta.outputs.dockerfile }}
+          platforms: linux/amd64
+          provenance: false
+          push: true
+          tags: ${{ env.IMAGE_REGISTRY }}/${{ matrix.service }}:${{ github.sha }}
+          build-args: ${{ steps.meta.outputs.build_args }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  retag-unchanged:
+    name: Re-tag unchanged ECR images
+    needs: [plan, test-and-build]
+    if: always() && needs.plan.outputs.deploy_needed == 'true' && needs.plan.outputs.copy_services != '[]' && (needs.test-and-build.result == 'success' || needs.test-and-build.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Copy ECR image manifests for unchanged services
+        run: |
+          set -euo pipefail
+          SRC_TAG="${{ needs.plan.outputs.current_tag }}"
+          DST_TAG="${{ github.sha }}"
+          for svc in $(echo '${{ needs.plan.outputs.copy_services }}' | jq -r '.[]'); do
+            if aws ecr describe-images --region "$AWS_REGION" --repository-name "foodmatrix/$svc" --image-ids "imageTag=$DST_TAG" >/dev/null 2>&1; then
+              echo "Tag $DST_TAG already exists for $svc"
+              continue
+            fi
+            MANIFEST="$(aws ecr batch-get-image --region "$AWS_REGION" --repository-name "foodmatrix/$svc" --image-ids "imageTag=$SRC_TAG" \
+              --accepted-media-types application/vnd.docker.distribution.manifest.v2+json application/vnd.docker.distribution.manifest.list.v2+json application/vnd.oci.image.manifest.v1+json application/vnd.oci.image.index.v1+json \
+              --query 'images[0].imageManifest' --output text)"
+            if [[ -n "$MANIFEST" && "$MANIFEST" != "None" ]]; then
+              aws ecr put-image --region "$AWS_REGION" --repository-name "foodmatrix/$svc" --image-tag "$DST_TAG" --image-manifest "$MANIFEST" >/dev/null
+              echo "Re-tagged $svc:$SRC_TAG -> $DST_TAG"
+            else
+              echo "Fallback building $svc:$DST_TAG"
+              bash deploy/scripts/build-image.sh "$svc" "$IMAGE_REGISTRY/$svc:$DST_TAG" --push
+            fi
+          done
+
+  deploy:
+    name: Helm deploy & smoke test
+    needs: [plan, test-and-build, retag-unchanged]
+    if: always() && needs.plan.outputs.deploy_needed == 'true' && (needs.test-and-build.result == 'success' || needs.test-and-build.result == 'skipped') && (needs.retag-unchanged.result == 'success' || needs.retag-unchanged.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Lint Helm chart
+        run: |
+          helm lint deploy/helm/foodmatrix \
+            --set "imageRegistry=$IMAGE_REGISTRY" \
+            --set "imageTag=${{ github.sha }}" \
+            --set "kafkaBrokers=kafka.foodmatrix.svc.cluster.local:9092"
+
+      - name: Deploy with Helm and run smoke test
+        run: |
+          set -euo pipefail
+          VALUES_FILE="$(mktemp)"
+          trap 'rm -f "$VALUES_FILE"' EXIT
+          helm -n foodmatrix get values foodmatrix -o yaml > "$VALUES_FILE"
+          LIVE_TUNNEL="$(kubectl -n foodmatrix logs deploy/cloudflared --tail=200 2>/dev/null | grep -Eo 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -n 1 || true)"
+          if [[ -n "$LIVE_TUNNEL" ]]; then
+            sed -i "s|^publicOrigin:.*|publicOrigin: $LIVE_TUNNEL|" "$VALUES_FILE"
+            SMOKE_BASE_URL="$LIVE_TUNNEL"
+          else
+            SMOKE_BASE_URL="$(awk '/^publicOrigin:/{print $2}' "$VALUES_FILE" | tr -d '"')"
+          fi
+          KAFKA_BROKERS="$(awk '/^kafkaBrokers:/{print $2}' "$VALUES_FILE" | tr -d '"')"
+          export IMAGE_TAG="${{ github.sha }}"
+          export KAFKA_BROKERS="${KAFKA_BROKERS:-kafka.foodmatrix.svc.cluster.local:9092}"
+          export VALUES_FILE
+          export SMOKE_BASE_URL
+          bash deploy/scripts/deploy-app.sh
+          bash deploy/scripts/smoke-test.sh
