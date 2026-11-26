@@ -35,6 +35,21 @@ variable "database_instance_class" {
   default = "db.t4g.small"
 }
 
+variable "database_allocated_storage" {
+  type    = number
+  default = 30
+}
+
+variable "database_backup_retention_period" {
+  type    = number
+  default = 7
+}
+
+variable "database_skip_final_snapshot" {
+  type    = bool
+  default = false
+}
+
 variable "multi_az" {
   type    = bool
   default = false

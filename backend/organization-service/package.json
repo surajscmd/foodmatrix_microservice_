@@ -20,6 +20,7 @@
     "test:debug": "node --experimental-vm-modules --inspect-brk ./node_modules/jest/bin/jest.js --runInBand",
     "test:e2e": "node test/run-e2e.mjs",
     "db:migrate": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
     "db:bootstrap": "tsx prisma/bootstrap-admin.ts",
     "contract:emit": "prisma-next contract emit"
   },

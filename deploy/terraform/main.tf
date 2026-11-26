@@ -80,7 +80,7 @@ resource "aws_db_instance" "postgres" {
   engine_version              = "17"
   instance_class              = var.database_instance_class
   storage_type                = "gp3"
-  allocated_storage           = 30
+  allocated_storage           = var.database_allocated_storage
   max_allocated_storage       = 200
   storage_encrypted           = true
   username                    = "matrixadmin"
@@ -89,10 +89,10 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids      = [aws_security_group.database.id]
   publicly_accessible         = false
   multi_az                    = var.multi_az
-  backup_retention_period     = 7
+  backup_retention_period     = var.database_backup_retention_period
   deletion_protection         = var.protect_database
-  skip_final_snapshot         = false
-  final_snapshot_identifier   = "${local.name}-final"
+  skip_final_snapshot         = var.database_skip_final_snapshot
+  final_snapshot_identifier   = var.database_skip_final_snapshot ? null : "${local.name}-final"
 }
 
 resource "aws_ecr_repository" "images" {
