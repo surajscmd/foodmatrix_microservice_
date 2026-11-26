@@ -2,8 +2,10 @@ import Link from "next/link";
 import {
   ArrowUpRight,
   ChefHat,
+  Clock,
   CreditCard,
   MapPin,
+  Coins,
   Store,
   UserRound,
   Utensils,
@@ -44,13 +46,25 @@ export default function RestaurantWorkspaceHeader({
 }: {
   restaurant: Pick<
     Restaurant,
-    "name" | "city" | "state" | "country" | "status"
+    | "name"
+    | "address"
+    | "city"
+    | "state"
+    | "country"
+    | "timezone"
+    | "defaultCurrency"
+    | "status"
   >;
   accountName: string;
   isManager: boolean;
 }) {
   const active = restaurant.status === "ACTIVE";
-  const location = [restaurant.city, restaurant.state, restaurant.country]
+  const location = [
+    restaurant.address,
+    restaurant.city,
+    restaurant.state,
+    restaurant.country,
+  ]
     .filter(Boolean)
     .join(", ");
 
@@ -77,7 +91,7 @@ export default function RestaurantWorkspaceHeader({
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
               <h1 className="min-w-0 text-xl leading-tight font-semibold tracking-tight text-white wrap-anywhere sm:text-2xl">
-                Restaurant workspace
+                {restaurant.name || "Restaurant name unavailable"}
               </h1>
               <span
                 className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-2 py-1 font-mono text-[9px] leading-4 font-semibold uppercase tracking-wider ${active ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-400" : "border-zinc-700 bg-zinc-800 text-zinc-400"}`}
@@ -99,6 +113,28 @@ export default function RestaurantWorkspaceHeader({
                     aria-hidden
                   />
                   <span className="wrap-anywhere">{location}</span>
+                </p>
+              )}
+              {restaurant.timezone && (
+                <p className="flex min-w-0 items-start gap-1.5">
+                  <Clock
+                    size={13}
+                    className="mt-0.5 shrink-0 text-zinc-400"
+                    aria-hidden
+                  />
+                  <span className="wrap-anywhere">{restaurant.timezone}</span>
+                </p>
+              )}
+              {restaurant.defaultCurrency && (
+                <p className="flex min-w-0 items-start gap-1.5">
+                  <Coins
+                    size={13}
+                    className="mt-0.5 shrink-0 text-zinc-400"
+                    aria-hidden
+                  />
+                  <span className="wrap-anywhere">
+                    {restaurant.defaultCurrency}
+                  </span>
                 </p>
               )}
               <p className="flex min-w-0 items-start gap-1.5">
