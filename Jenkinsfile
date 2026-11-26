@@ -29,7 +29,10 @@ pipeline {
             steps {
                 deleteDir()
                 script {
-                    def scmVars = checkout scm
+                    def scmVars = null
+                    retry(3) {
+                        scmVars = checkout scm
+                    }
                     def rawBranch = env.BRANCH_NAME ?: scmVars?.GIT_BRANCH ?: env.GIT_BRANCH ?: ''
                     if (!rawBranch) {
                         rawBranch = sh(script: "git for-each-ref --points-at HEAD --format='%(refname:short)' refs/remotes/origin | head -n 1", returnStdout: true).trim()
