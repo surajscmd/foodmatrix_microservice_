@@ -1,0 +1,35 @@
+services:
+  jenkins:
+    build:
+      context: ..
+      dockerfile: jenkins/Dockerfile
+    image: foodmatrix-jenkins:latest
+    container_name: foodmatrix-jenkins
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:50000:50000"
+    group_add:
+      - "0"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AWS_REGION: ap-south-1
+      AWS_SDK_LOAD_CONFIG: "1"
+    volumes:
+      - foodmatrix-jenkins-home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${USERPROFILE:-$HOME}/.aws:/var/jenkins_home/.aws:ro
+
+  jenkins-webhook-tunnel:
+    image: cloudflare/cloudflared:2025.2.1
+    container_name: foodmatrix-jenkins-tunnel
+    profiles: ["webhook"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "--url", "http://jenkins:8080"]
+    depends_on:
+      - jenkins
+
+volumes:
+  foodmatrix-jenkins-home:
+    external: true

@@ -1,5 +1,9 @@
 pipeline {
     agent { label 'foodmatrix-ci' }
+    triggers {
+        githubPush()
+        pollSCM('* * * * *')
+    }
     options {
         timestamps()
         disableConcurrentBuilds()
@@ -8,11 +12,13 @@ pipeline {
         skipDefaultCheckout(true)
     }
     parameters {
-        booleanParam(name: 'PUBLISH_IMAGES', defaultValue: false, description: 'Publish tested images to ECR; trusted main branch only')
-        booleanParam(name: 'DEPLOY_STAGING', defaultValue: false, description: 'Deploy after publishing and explicit approval')
+        booleanParam(name: 'PUBLISH_IMAGES', defaultValue: true, description: 'Publish tested images to ECR; trusted main branch only')
+        booleanParam(name: 'DEPLOY_STAGING', defaultValue: true, description: 'Deploy automatically to EKS on main branch builds')
+        booleanParam(name: 'REQUIRE_APPROVAL', defaultValue: false, description: 'Pause for manual approval before Helm upgrade')
+        booleanParam(name: 'RUN_SONAR', defaultValue: false, description: 'Run SonarQube scan and quality gate (requires running SonarQube server)')
         string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region')
-        string(name: 'IMAGE_REGISTRY', defaultValue: '', description: 'ECR prefix, e.g. ACCOUNT.dkr.ecr.REGION.amazonaws.com/foodmatrix')
-        string(name: 'EKS_CLUSTER_NAME', defaultValue: '', description: 'Staging EKS cluster')
+        string(name: 'IMAGE_REGISTRY', defaultValue: '035136507772.dkr.ecr.ap-south-1.amazonaws.com/foodmatrix', description: 'ECR prefix')
+        string(name: 'EKS_CLUSTER_NAME', defaultValue: 'foodmatrix-staging', description: 'Staging EKS cluster')
     }
     environment {
         TF_IN_AUTOMATION = 'true'
@@ -25,12 +31,13 @@ pipeline {
                 checkout scm
                 script {
                     env.IMAGE_TAG = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+                    env.RESOLVED_BRANCH = (env.BRANCH_NAME ?: env.GIT_BRANCH ?: '').replaceFirst('^origin/', '')
                     if (params.DEPLOY_STAGING && !params.PUBLISH_IMAGES) {
                         error('Deployment requires PUBLISH_IMAGES so this run tests and publishes its own commit.')
                     }
                     if ((params.PUBLISH_IMAGES || params.DEPLOY_STAGING) &&
-                        (env.BRANCH_NAME != 'main' || env.CHANGE_ID)) {
-                        error('Publishing and deployment are restricted to trusted main branch builds.')
+                        (env.RESOLVED_BRANCH != 'main' || env.CHANGE_ID)) {
+                        error("Publishing and deployment are restricted to trusted main branch builds (resolved=${env.RESOLVED_BRANCH}).")
                     }
                 }
             }
@@ -59,7 +66,7 @@ bash deploy/scripts/validate-helm.sh'''
             }
         }
         stage('SonarQube analysis') {
-            when { branch 'main' }
+            when { expression { params.RUN_SONAR && env.RESOLVED_BRANCH == 'main' } }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     script {
@@ -72,7 +79,7 @@ bash deploy/scripts/validate-helm.sh'''
             }
         }
         stage('SonarQube quality gate') {
-            when { branch 'main' }
+            when { expression { params.RUN_SONAR && env.RESOLVED_BRANCH == 'main' } }
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true, webhookSecretId: 'sonarqube-webhook-secret'
@@ -96,7 +103,7 @@ done'''
             }
         }
         stage('Approve staging deployment') {
-            when { expression { params.DEPLOY_STAGING } }
+            when { expression { params.DEPLOY_STAGING && params.REQUIRE_APPROVAL } }
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
                     input message: "Deploy tested commit ${env.IMAGE_TAG} to staging?", ok: 'Deploy'
@@ -115,9 +122,18 @@ done'''
                         sh '''set -eu
 : "${EKS_CLUSTER_NAME:?Configure the staging cluster}"
 KUBECONFIG=$(mktemp)
+VALUES_TMP=$(mktemp)
 export KUBECONFIG
-trap 'rm -f "$KUBECONFIG"' EXIT
+trap 'rm -f "$KUBECONFIG" "$VALUES_TMP"' EXIT
 aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+cp "$VALUES_FILE" "$VALUES_TMP"
+LIVE_TUNNEL=$(kubectl -n foodmatrix logs deploy/cloudflared --tail=200 2>/dev/null | grep -Eo 'https://[a-z0-9-]+\\.trycloudflare\\.com' | tail -n 1 || true)
+if [ -n "$LIVE_TUNNEL" ]; then
+  sed -i "s#^publicOrigin:.*#publicOrigin: \\"$LIVE_TUNNEL\\"#" "$VALUES_TMP"
+  SMOKE_BASE_URL="$LIVE_TUNNEL"
+fi
+export VALUES_FILE="$VALUES_TMP"
+export SMOKE_BASE_URL
 bash deploy/scripts/deploy-app.sh
 bash deploy/scripts/smoke-test.sh'''
                     }

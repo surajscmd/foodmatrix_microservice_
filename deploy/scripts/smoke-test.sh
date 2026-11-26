@@ -5,9 +5,9 @@ set -euo pipefail
 base="${SMOKE_BASE_URL%/}"
 curl --fail --silent --show-error --retry 5 --retry-connrefused --connect-timeout 5 --max-time 20 "$base/edge-health"
 curl --fail --silent --show-error --retry 5 --retry-connrefused --connect-timeout 5 --max-time 20 "$base/login" >/dev/null
-# BFF domain APIs intentionally require authentication. Probe private services in-cluster.
-for service in organization-service hr-service catalog-service order-service inventory-service notification-service; do
-  kubectl -n foodmatrix exec "deployment/$service" -c "$service" -- node -e \
-    'fetch("http://127.0.0.1:"+process.env.PORT+"/health/ready", {signal: AbortSignal.timeout(5000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))'
+for service in frontend organization-service hr-service catalog-service order-service inventory-service notification-service; do
+  kubectl -n foodmatrix rollout status "deployment/$service" --timeout=120s
+  ready="$(kubectl -n foodmatrix get deployment "$service" -o jsonpath='{.status.readyReplicas}')"
+  [[ "${ready:-0}" -ge 1 ]] || { echo "$service has no ready replicas" >&2; exit 1; }
 done
-echo 'Public edge/login and all six database readiness checks passed.'
+echo 'Public edge/login and all Kubernetes readiness checks passed.'

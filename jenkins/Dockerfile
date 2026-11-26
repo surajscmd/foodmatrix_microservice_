@@ -2,13 +2,30 @@ FROM jenkins/jenkins:lts-jdk21
 
 USER root
 
-# Install basic tools
+# Install basic tools, xz-utils, and AWS CLI v2
 RUN apt-get update \
-    && apt-get install -y ca-certificates curl git jq unzip awscli
+    && apt-get install -y ca-certificates curl git jq unzip xz-utils \
+    && curl -fsSLo /tmp/awscliv2.zip "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" \
+    && unzip -q /tmp/awscliv2.zip -d /tmp \
+    && /tmp/aws/install \
+    && rm -rf /tmp/aws /tmp/awscliv2.zip
 
-# Install Node.js 22.x
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y nodejs
+# Install Node.js 22.x (checksum-verified official tarball)
+ARG NODE_VERSION=22.14.0
+RUN set -eux; \
+    arch="$(dpkg --print-architecture)"; \
+    case "$arch" in \
+      amd64) node_arch=x64 ;; \
+      arm64) node_arch=arm64 ;; \
+      *) echo "Unsupported arch: $arch" >&2; exit 1 ;; \
+    esac; \
+    cd /tmp; \
+    curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-${node_arch}.tar.xz"; \
+    curl -fsSLO "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt"; \
+    grep " node-v${NODE_VERSION}-linux-${node_arch}.tar.xz$" SHASUMS256.txt | sha256sum -c -; \
+    tar -xJf "node-v${NODE_VERSION}-linux-${node_arch}.tar.xz" -C /usr/local --strip-components=1; \
+    rm -rf /tmp/*; \
+    node -v; npm -v
 
 # Install Docker CLI
 RUN install -m 0755 -d /etc/apt/keyrings \
