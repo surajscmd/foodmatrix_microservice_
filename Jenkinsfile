@@ -133,7 +133,7 @@ aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
 cp "$VALUES_FILE" "$VALUES_TMP"
 LIVE_TUNNEL=$(kubectl -n foodmatrix logs deploy/cloudflared --tail=200 2>/dev/null | grep -Eo 'https://[a-z0-9-]+\\.trycloudflare\\.com' | tail -n 1 || true)
 if [ -n "$LIVE_TUNNEL" ]; then
-  sed -i "s#^publicOrigin:.*#publicOrigin: \\"$LIVE_TUNNEL\\"#" "$VALUES_TMP"
+  sed -i "s|^publicOrigin:.*|publicOrigin: $LIVE_TUNNEL|" "$VALUES_TMP"
   SMOKE_BASE_URL="$LIVE_TUNNEL"
 fi
 export VALUES_FILE="$VALUES_TMP"

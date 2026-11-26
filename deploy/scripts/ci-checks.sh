@@ -57,6 +57,7 @@ done
 (
   cd "$root/frontend"
   npm ci
+  npx next typegen
   npm run lint
   npx tsc --noEmit
   npm run build -- --webpack
