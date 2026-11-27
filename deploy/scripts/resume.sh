@@ -106,3 +106,9 @@ else
 fi
 echo ""
 $KUBECTL get pods -n foodmatrix
+
+TUNNEL_URL=$($KUBECTL logs -n foodmatrix deployment/cloudflared --tail=50 2>/dev/null | tr -d '\r' | grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' | tail -1 || true)
+if [[ -n "$TUNNEL_URL" ]]; then
+  echo ""
+  echo "🌐 Public URL: $TUNNEL_URL"
+fi
