@@ -37,3 +37,7 @@ Thumbs.db
 # Temporary
 tmp/
 temp/
+
+# Local credentials & access guides
+foodmatrix-access-guide.md
+foodmatrix-ids-and-passwords.pdf

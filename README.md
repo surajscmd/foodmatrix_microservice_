@@ -94,3 +94,41 @@ From `frontend`, use `npm run lint`, `npx tsc --noEmit` and `npm run build`.
 | [Notification schema](backend/notification-service/prisma/schema.prisma) | Notifications and durable socket delivery                                          |
 
 Keep real credentials, authentication secrets, bootstrap passwords and internal API keys out of version control. Configuration examples are placeholders.
+
+## Cloud deployment and DevOps
+
+FoodMatrix runs on **AWS EKS (`foodmatrix-staging`, `ap-south-1`, EKS Auto Mode)** with **Amazon RDS PostgreSQL**, **Amazon ECR**, in-cluster **Kafka**, **Kong**, and a **Cloudflare Tunnel** (`cloudflared`) for public HTTPS ingress.
+
+### Automatic CI/CD (GitHub Actions)
+
+[`.github/workflows/deploy-eks.yml`](.github/workflows/deploy-eks.yml) deploys automatically on every push to `main`:
+
+1. Authenticates to AWS via **IAM OIDC** (no static AWS keys stored in GitHub).
+2. Diffs changed paths against the currently deployed commit tag so only modified services run `test-and-build` in parallel; unchanged services are fast-retagged server-side in ECR (`retag-unchanged`).
+3. Runs `helm upgrade --atomic` into the `foodmatrix` namespace and verifies the live deployment with [`deploy/scripts/smoke-test.sh`](deploy/scripts/smoke-test.sh).
+
+### Manual CI/CD and SonarQube (Local Docker Desktop)
+
+- **Jenkins (`jenkins/docker-compose.yml`):** Configured for manual `Build with Parameters` runs on `matrix-ci` (no GitHub webhooks or polling). Enable `RUN_SONAR` to run `sonar-scanner` against local SonarQube and enforce the Quality Gate (`-Dsonar.qualitygate.wait=true`) before building and deploying.
+- **SonarQube (`sonarqube/docker-compose.yml`):** Runs locally with PostgreSQL 17 and [`sonar-project.properties`](sonar-project.properties) (`sonar.projectKey=foodmatrix`), scanning `frontend` and all six backend services. Requires a local gitignored `sonarqube/.env` (`SONAR_DB_PASSWORD`).
+
+### Observability stack (EKS `monitoring` namespace)
+
+Installed via [`deploy/scripts/install-observability.sh`](deploy/scripts/install-observability.sh) with `observability.enabled=true` and `observability.kongServiceMonitor=true` on the `foodmatrix` Helm release:
+
+| Tool | What it does |
+| --- | --- |
+| Prometheus | Metrics collector. Scrapes every pod, EC2 node, and Kong every few seconds to record CPU, RAM, restarts, and HTTP traffic numbers. |
+| Alertmanager | Alarm system. Watches Prometheus rules (from `deploy/observability/alerts.yaml`) and fires alerts if a deployment goes down or pods keep crashing. |
+| Loki | Log storage. Stores all `console.log` / error logs from your backend services and frontend in one searchable place. |
+| OTel Logs (`otel-logs-agent`) | Log shipper. Runs on every EC2 node, reads container log files, and sends them to Loki. |
+| Tempo | Trace storage. Stores request journeys (e.g., Frontend → Kong → Order Service → Postgres) so you can see where a slow request spent time. |
+| OTel Operator + Gateway | Auto-tracker. Automatically attaches OpenTelemetry to your Node.js pods (sampling `10%` of requests) and forwards metrics/traces to Prometheus and Tempo. |
+| Grafana | Dashboard UI. Connects to Prometheus, Loki, Tempo, Alertmanager, and AWS CloudWatch (RDS metrics) in one browser UI (`kubectl port-forward -n monitoring svc/grafana 3000:80`). |
+
+### AWS cost control (pause and resume)
+
+| Script | Purpose |
+| --- | --- |
+| [`deploy/scripts/pause.sh`](deploy/scripts/pause.sh) | Scales all deployments and statefulsets in `foodmatrix` and `monitoring` to `0` (so EKS Auto Mode terminates EC2 nodes) and optionally stops the RDS instance. |
+| [`deploy/scripts/resume.sh`](deploy/scripts/resume.sh) | Optionally starts RDS (waiting if it is still stopping), scales `foodmatrix` and `monitoring` back to `1` so EKS Auto Mode provisions nodes, waits for readiness, and prints the active `trycloudflare.com` URL. |
