@@ -68,24 +68,16 @@ terraform -chdir=deploy/terraform validate
 bash deploy/scripts/validate-helm.sh'''
             }
         }
-        stage('SonarQube analysis') {
+        stage('SonarQube analysis & quality gate') {
             when { expression { params.RUN_SONAR && env.RESOLVED_BRANCH == 'main' } }
             steps {
                 withSonarQubeEnv('SonarQube') {
                     script {
                         def scannerHome = tool 'sonar-scanner'
                         withEnv(["SCANNER_HOME=${scannerHome}"]) {
-                            sh '"$SCANNER_HOME/bin/sonar-scanner"'
+                            sh '"$SCANNER_HOME/bin/sonar-scanner" -Dsonar.qualitygate.wait=true -Dsonar.qualitygate.timeout=900'
                         }
                     }
-                }
-            }
-        }
-        stage('SonarQube quality gate') {
-            when { expression { params.RUN_SONAR && env.RESOLVED_BRANCH == 'main' } }
-            steps {
-                timeout(time: 15, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true, webhookSecretId: 'sonarqube-webhook-secret'
                 }
             }
         }
