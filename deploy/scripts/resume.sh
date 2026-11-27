@@ -80,6 +80,13 @@ if [[ -n "$($KUBECTL get statefulset -n foodmatrix --no-headers 2>/dev/null | tr
   $KUBECTL scale statefulset --all -n foodmatrix --replicas=1
 fi
 $KUBECTL scale deployment --all -n foodmatrix --replicas=1
+if $KUBECTL get namespace monitoring &>/dev/null; then
+  echo "→ Scaling monitoring namespace back to 1..."
+  $KUBECTL scale deployment --all -n monitoring --replicas=1 2>/dev/null || true
+  if [[ -n "$($KUBECTL get statefulset -n monitoring --no-headers 2>/dev/null | tr -d '\r')" ]]; then
+    $KUBECTL scale statefulset --all -n monitoring --replicas=1 2>/dev/null || true
+  fi
+fi
 echo "   ✓ Pods scheduled (EKS Auto mode will provision an EC2 node automatically)"
 
 # ── 3. Wait for node to be Ready

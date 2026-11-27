@@ -43,6 +43,13 @@ $KUBECTL scale deployment --all -n foodmatrix --replicas=0
 if [[ -n "$($KUBECTL get statefulset -n foodmatrix --no-headers 2>/dev/null | tr -d '\r')" ]]; then
   $KUBECTL scale statefulset --all -n foodmatrix --replicas=0
 fi
+if $KUBECTL get namespace monitoring &>/dev/null; then
+  echo "→ Scaling monitoring namespace to 0..."
+  $KUBECTL scale deployment --all -n monitoring --replicas=0 2>/dev/null || true
+  if [[ -n "$($KUBECTL get statefulset -n monitoring --no-headers 2>/dev/null | tr -d '\r')" ]]; then
+    $KUBECTL scale statefulset --all -n monitoring --replicas=0 2>/dev/null || true
+  fi
+fi
 echo "   ✓ Pods scaled down"
 
 # ── 2. EKS Auto mode — node auto-terminates when pods = 0
