@@ -38,8 +38,11 @@ fi
 echo "⏸  Pausing Foodmatrix..."
 
 # ── 1. Scale all pods to 0 first (clean shutdown)
-echo "→ Scaling all deployments to 0..."
+echo "→ Scaling all deployments and statefulsets to 0..."
 $KUBECTL scale deployment --all -n foodmatrix --replicas=0
+if [[ -n "$($KUBECTL get statefulset -n foodmatrix --no-headers 2>/dev/null | tr -d '\r')" ]]; then
+  $KUBECTL scale statefulset --all -n foodmatrix --replicas=0
+fi
 echo "   ✓ Pods scaled down"
 
 # ── 2. EKS Auto mode — node auto-terminates when pods = 0
@@ -53,14 +56,24 @@ if [[ "$STOP_RDS" =~ ^[Yy]$ ]]; then
   RDS_ID=$($AWS rds describe-db-instances \
     --region "$REGION" \
     --query "DBInstances[?contains(DBInstanceIdentifier,'foodmatrix')].DBInstanceIdentifier | [0]" \
-    --output text)
+    --output text | tr -d '\r')
 
   if [[ "$RDS_ID" == "None" || -z "$RDS_ID" ]]; then
     echo "   ⚠ No RDS instance found with 'foodmatrix' in name. Skipping."
   else
-    echo "→ Stopping RDS: $RDS_ID"
-    $AWS rds stop-db-instance --db-instance-identifier "$RDS_ID" --region "$REGION" > /dev/null
-    echo "   ✓ RDS stopping (takes ~1-2 min)"
+    RDS_STATUS=$($AWS rds describe-db-instances \
+      --db-instance-identifier "$RDS_ID" \
+      --region "$REGION" \
+      --query "DBInstances[0].DBInstanceStatus" \
+      --output text | tr -d '\r')
+
+    if [[ "$RDS_STATUS" == "available" ]]; then
+      echo "→ Stopping RDS: $RDS_ID"
+      $AWS rds stop-db-instance --db-instance-identifier "$RDS_ID" --region "$REGION" > /dev/null
+      echo "   ✓ RDS stopping (takes ~1-2 min)"
+    else
+      echo "   ✓ RDS is already '$RDS_STATUS' — no action needed"
+    fi
   fi
 else
   echo "   → RDS left running"
